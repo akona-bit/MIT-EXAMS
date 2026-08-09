@@ -1,0 +1,11 @@
+venv/
+node_modules/
+__pycache__/
+*.pyc
+*.db
+.env
+.DS_Store
+uploads/
+backups/
+.agents/
+.gemini/
