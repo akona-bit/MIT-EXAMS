@@ -14,7 +14,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-from app.api.v1 import auth, knowledge, questions, matrix, exams, grading, omr, statistics, admin
+from app.api.v1 import auth, knowledge, questions, matrix, exams, grading, omr, statistics, admin, obsidian
 
 # Configure CORS
 app.add_middleware(
@@ -34,6 +34,7 @@ app.include_router(grading.router, prefix="/api/v1/grading", tags=["Grading"])
 app.include_router(omr.router, prefix="/api/v1/omr", tags=["OMR"])
 app.include_router(statistics.router, prefix="/api/v1/statistics", tags=["Statistics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(obsidian.router, prefix="/api/v1/obsidian", tags=["Obsidian"])
 
 @app.get("/api/health", tags=["Health"])
 async def health_check():

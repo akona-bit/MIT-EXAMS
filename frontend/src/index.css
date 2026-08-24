@@ -1,3 +1,49 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    background: #f7f8fa;
+  }
+
+  body {
+    @apply antialiased text-neutral-900 bg-neutral-50;
+    min-width: 320px;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2;
+  }
+}
+
+.student-shell {
+  background-color: #f7f8fa;
+  background-image:
+    linear-gradient(#eef0f3 1px, transparent 1px),
+    linear-gradient(90deg, #eef0f3 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Custom Scrollbar for a premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral-400;
+}

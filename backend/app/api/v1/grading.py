@@ -17,6 +17,9 @@ class CttScoreResponse(BaseModel):
     ctt_score_part2: float
     ctt_score_part3: float
     ctt_score_part4: float
+    raw_total_score: float
+    score_method: str
+    item_scores: dict[str, int]
 
 @router.post("/submissions/{submission_id}/score", response_model=CttScoreResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER", "STUDENT"]))])
 async def score_submission(submission_id: int, db: AsyncSession = Depends(get_db)):
@@ -30,6 +33,9 @@ async def score_submission(submission_id: int, db: AsyncSession = Depends(get_db
         "ctt_score_part2": result.ctt_score_part2,
         "ctt_score_part3": result.ctt_score_part3,
         "ctt_score_part4": result.ctt_score_part4
+        ,"raw_total_score": result.raw_total_score
+        ,"score_method": result.score_method
+        ,"item_scores": result.item_scores
     }
 
 @router.post("/exams/{exam_id}/run-irt", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])

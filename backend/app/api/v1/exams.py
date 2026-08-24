@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
@@ -5,7 +6,7 @@ from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
@@ -18,6 +19,25 @@ from app.services.generator import generate_original_exam, generate_shuffled_for
 from app.services.exam_session import publish_exam, assign_participants, get_or_assign_exam_form, get_exam_session_info, autosave_answers, submit_exam, log_tracking_event
 
 router = APIRouter()
+
+
+@router.get("/")
+async def get_exams(skip: int = 0, limit: int = 100, status: str | None = None, db: AsyncSession = Depends(get_db)):
+    filters = []
+    if status:
+        filters.append(Exam.status == status)
+
+    total_result = await db.execute(select(func.count()).select_from(Exam).where(*filters))
+    total = total_result.scalar_one()
+    result = await db.execute(
+        select(Exam)
+        .where(*filters)
+        .order_by(Exam.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return {"items": result.scalars().all(), "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
+
 
 @router.post("/generate", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def generate_exam(req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
@@ -42,6 +62,48 @@ async def generate_exam(req: GenerateExamRequest, db: AsyncSession = Depends(get
     result = await db.execute(select(Exam).where(Exam.id == exam.id))
     return result.scalars().first()
 
+
+@router.get("/{exam_id}", response_model=ExamResponse)
+async def get_exam(exam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    exam = result.scalars().first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    return exam
+
+
+@router.post("/{exam_id}/generate", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def generate_forms_for_exam(exam_id: int, form_count: int = 4, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ExamForm).where(
+        ExamForm.exam_id == exam_id,
+        ExamForm.is_original == True
+    ))
+    original_form = result.scalars().first()
+    if not original_form:
+        raise HTTPException(status_code=404, detail="Original exam form not found")
+
+    await generate_shuffled_forms(db, original_form, form_count)
+    forms_result = await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))
+    return forms_result.scalars().all()
+
+
+@router.post("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def publish_exam_with_defaults(exam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    exam = result.scalars().first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    start_time = datetime.now(timezone.utc)
+    config = ExamPublishRequest(
+        start_time=start_time,
+        end_time=start_time + timedelta(minutes=exam.duration_minutes),
+        duration_minutes=exam.duration_minutes,
+        show_score_mode=exam.show_score_mode,
+        show_answer_mode=exam.show_answer_mode,
+    )
+    return await publish_exam(db, exam_id, config)
+
 @router.put("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def config_and_publish_exam(exam_id: int, config: ExamPublishRequest, db: AsyncSession = Depends(get_db)):
     return await publish_exam(db, exam_id, config)
@@ -49,6 +111,11 @@ async def config_and_publish_exam(exam_id: int, config: ExamPublishRequest, db: 
 @router.post("/{exam_id}/participants", response_model=List[ExamParticipantResponse], dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def add_participants(exam_id: int, req: ExamParticipantCreate, db: AsyncSession = Depends(get_db)):
     return await assign_participants(db, exam_id, req.user_ids)
+
+
+@router.post("/{exam_id}/assign", response_model=List[ExamParticipantResponse], dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def assign_participants_compat(exam_id: int, user_ids: List[int], db: AsyncSession = Depends(get_db)):
+    return await assign_participants(db, exam_id, user_ids)
 
 @router.post("/{exam_id}/start", dependencies=[Depends(RequireRole(["STUDENT"]))])
 async def start_exam(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):

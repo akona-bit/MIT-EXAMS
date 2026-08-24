@@ -3,23 +3,27 @@
 > Agent PHẢI cập nhật file này (tick checkbox + thêm dòng nhật ký) sau mỗi task hoàn thành. Đây là nguồn thông tin duy nhất để biết dự án đang ở đâu — không suy đoán từ code, luôn đọc file này trước khi bắt đầu phiên mới.
 
 ## Trạng thái tổng quan
+
 **Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH (BACKEND)
-**Cập nhật lần cuối:** 2026-08-09
+**Cập nhật lần cuối:** 2026-08-22
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
 ### Giai đoạn 0 — Nền tảng hạ tầng
+
 - [x] Cấu trúc thư mục backend/frontend
 - [x] Docker Compose (postgres, redis)
 - [x] FastAPI skeleton + healthcheck
 - [x] Alembic init
 
 ### Giai đoạn 1 — Auth & Phân quyền
+
 - [x] Bảng User, Role
 - [x] Đăng ký/đăng nhập + JWT
 - [x] RBAC middleware
 
 ### Giai đoạn 2 — Ngân hàng câu hỏi & Ngữ liệu
+
 - [x] Schema Question/Answer/KnowledgeNode/Resource
 - [x] CRUD API
 - [ ] Admin UI cơ bản
@@ -27,12 +31,14 @@
 - [ ] Versioning câu hỏi
 
 ### Giai đoạn 3 — Ma trận & Sinh đề
+
 - [x] Schema Matrix/Topic/Concept/Skill
 - [x] ExamForm (Cấu trúc đề)
 - [x] Logic sinh đề tự động (rút trích câu hỏi)
 - [x] Tích hợp skill xáo câu/đáp án (sinh nhiều mã đề)
 
 ### Giai đoạn 4 — Quản lý Kỳ thi
+
 - [x] Schema Exam/ExamForm/ExamFormQuestion/ExamFormAnswer
 - [x] Cấu hình Phiên thi (Thời gian, điểm số)
 - [x] ExamParticipant (Danh sách dự thi)
@@ -40,6 +46,7 @@
 - [ ] Admin UI quản lý kỳ thi
 
 ### Giai đoạn 5 — Thi Online
+
 - [ ] Giao diện phòng thi (`StudentExamShell`, `QuestionNavGrid`)
 - [x] Cơ chế Timer (đồng bộ server, đếm ngược client)
 - [x] API nộp bài (Submit) và Autosave (offline-first)
@@ -47,23 +54,27 @@
 - [x] Giới hạn 1 thiết bị/1 phiên thi (Device Fingerprinting)
 
 ### Giai đoạn 6 — Chấm điểm
+
 - [x] Mapping vị trí→câu gốc
 - [x] Tính CTT ngay sau khi nộp bài
 - [x] Tích hợp `irt_engine` (Celery task)
 - [x] Quy đổi điểm thực 0-300/phần
 
 ### Giai đoạn 7 — OMR (Thi Offline)
+
 - [x] Hỗ trợ upload ảnh/PDF qua `OmrBatchUploader`
 - [x] Pipeline OpenCV cơ bản (Mô phỏng bóc tách SBD, Mã đề, 120 câu hỏi)
 - [x] Hàng đợi review thủ công cho ô tô mờ/không chắc chắn (`OmrSheetStatus.NEEDS_REVIEW`)
 
 ### Giai đoạn 8 — Thống kê & Dashboard
+
 - [x] KPI cards + phổ điểm
 - [x] Phân tích câu hỏi (cảnh báo misfit)
 - [x] So sánh chất lượng đề
-- [ ] Export Excel (Đã thống nhất tạm hoãn để giảm dependency nặng)
+- [x] Export Excel tổng hợp kỳ thi (backend; file chi tiết từng thí sinh và UI còn tiếp tục)
 
 ### Giai đoạn 9 — Hoàn thiện
+
 - [x] Backup định kỳ (Qua API `/api/v1/admin/backup-db`)
 - [x] Rate limiting endpoint nộp bài (`slowapi` 5/min)
 - [x] Audit log/nhật ký hoạt động (Bảng `AuditLog`)
@@ -71,6 +82,13 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-08-23` — Bổ sung chế độ tạo node kiến thức thủ công trong Knowledge Vault, biến Obsidian Local REST API thành tùy chọn; frontend build đạt.
+- `2026-08-23` — Triển khai lát cắt chấm và xuất Excel: mapping submission theo mã đề về câu gốc, vector C1-C120 `1/0/-1`, điểm CTT theo 4 phần, endpoint `/api/v1/statistics/exams/{exam_id}/export.xlsx`, migration Supabase `7d6d4f2a1c90`. API health và OpenAPI route export đã xác nhận; IRT MMLE thật vẫn chưa tích hợp.
+- `2026-08-23` — Sửa migration PostgreSQL: tạo enum `examstatus` tường minh trước khi thêm cột `exam.status`, bổ sung `asyncpg` vào requirements. Alembic đã chạy thành công toàn bộ trên Supabase, revision hiện tại `4c449bf29194 (head)`.
+- `2026-08-23` — Cải thiện UI/UX student home: thêm nền pattern nhẹ, focus state toàn cục, retry khi lỗi tải kỳ thi, hiển thị khung giờ và tinh chỉnh hierarchy/card interaction. `npm run build` đạt; lint còn lỗi tồn tại ở các module cũ.
+- `2026-08-23` — Kiểm tra toàn bộ web: frontend build đạt, backend compile đạt, dev server frontend/API phản hồi HTTP 200; bổ sung cấu hình ESLint 9 nhưng lint còn lỗi type/unused vars trong code hiện hữu. Supabase chưa provision vì chưa có project connection string.
+- `2026-08-22` — Bắt đầu cải tiến fullstack theo hướng Obsidian-first: thêm `/auth/me`, `/knowledge/tree`, `/knowledge/graph`, bổ sung endpoint tương thích frontend cho questions/matrix/exams; nâng trang Obsidian thành Knowledge Vault có cây kiến thức, node detail, graph links và sync form; thêm quy ước `memory-bank/obsidian-ai-memory.md`. Đã chạy `npm run build` frontend và `python -m compileall backend\app` thành công.
+- `2026-08-22` — Kiểm kê trạng thái web hiện tại: đọc memory-bank, frontend, backend API/model/service; xác nhận backend có nhiều module nghiệp vụ, frontend admin mới ở mức khung/danh sách cơ bản và đang lệch nhiều hợp đồng API. Chưa tick thêm checklist vì chưa triển khai/sửa chức năng.
 - `2026-08-09` — Hoàn thành Backend Giai đoạn 9 (Hoàn thiện): Bổ sung AuditLog ghi nhận thao tác Admin, tích hợp Rate Limiting bằng slowapi cho API nộp bài, thêm logic chặn kết nối của học sinh bị đánh dấu is_banned, hỗ trợ API backup DB. Dự án Backend đã hoàn tất toàn bộ tiến trình.
 - `2026-08-09` — Hoàn thành Backend Giai đoạn 8 (Thống kê): Tạo API trả về dữ liệu phổ điểm, KPI chung và bảng phân tích chất lượng câu hỏi (tự động gắn cờ cảnh báo câu quá khó/quá dễ/độ phân biệt kém). — `api/v1/statistics.py`
 - `2026-08-09` — Hoàn thành Backend Giai đoạn 7 (OMR): Thiết lập Celery task xử lý ảnh, tạo OMREngine mô phỏng bóc tách fill_ratio, APIs cho upload PDF/ảnh và Review thủ công. — `models/omr.py`, `services/omr/pipeline.py`, `api/v1/omr.py`
@@ -83,4 +101,5 @@
 - `2026-08-09` — Hoàn thành Giai đoạn 0: Cấu trúc thư mục, Docker Compose, FastAPI skeleton, Vite React setup. — `backend/`, `frontend/`, `docker-compose.yml`
 
 ## Vấn đề đang mở / cần quyết định
+
 - Bảng tên tiếng Anh chính thức cho các entity ERD gốc tiếng Việt đã đề xuất trong `architecture.md` (phụ lục) — cần người dùng xác nhận trước khi dùng làm chuẩn cứng.

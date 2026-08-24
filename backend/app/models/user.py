@@ -16,6 +16,7 @@ class Role(Base):
 
 class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    full_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=True)
     email: Mapped[str] = mapped_column(String(150), unique=True, index=True, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255))

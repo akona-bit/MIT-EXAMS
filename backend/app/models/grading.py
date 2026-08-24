@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Float
+from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -23,6 +23,9 @@ class ExamResult(Base):
     
     # Total scaled score (0-1200)
     total_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    raw_total_score: Mapped[float] = mapped_column(Float, default=0.0)
+    item_scores: Mapped[dict] = mapped_column(JSON, default=dict)
+    score_method: Mapped[str] = mapped_column(String(20), default="CTT")
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     

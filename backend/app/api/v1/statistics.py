@@ -1,4 +1,11 @@
+from datetime import datetime, timezone
+from io import BytesIO
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Dict, Any
@@ -6,10 +13,95 @@ from typing import List, Dict, Any
 from app.db.database import get_db
 from app.api.dependencies import RequireRole
 from app.models.grading import ExamResult
-from app.models.exam import ExamSubmission, Exam, ExamForm, ExamFormQuestion
+from app.models.exam import ExamSubmission, ExamParticipant, Exam, ExamForm, ExamFormQuestion
 from app.models.question import Question
 
 router = APIRouter()
+
+
+@router.get("/exams/{exam_id}/export.xlsx", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def export_exam_results(exam_id: int, db: AsyncSession = Depends(get_db)):
+    exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    exam = exam_result.scalars().first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    submissions_result = await db.execute(
+        select(ExamSubmission)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .options(
+            selectinload(ExamSubmission.participant).selectinload(ExamParticipant.user),
+            selectinload(ExamSubmission.participant).selectinload(ExamParticipant.exam_form),
+        )
+        .where(ExamParticipant.exam_id == exam_id)
+        .order_by(ExamSubmission.id)
+    )
+    submissions = submissions_result.scalars().all()
+    result_ids = [submission.id for submission in submissions]
+    results_by_submission: dict[int, ExamResult] = {}
+    if result_ids:
+        results_result = await db.execute(
+            select(ExamResult).where(ExamResult.exam_submission_id.in_(result_ids))
+        )
+        results_by_submission = {
+            result.exam_submission_id: result for result in results_result.scalars().all()
+        }
+
+    headers = [
+        "STT", "SBD", "Họ tên", "Email", "Mã đề", "Điểm mục tiêu",
+        "Điểm CTT (0-120)", "Điểm IRT (0-1200)", "Đã chấm", "Điểm phần 1",
+        "Điểm phần 2", "Điểm phần 3", "Điểm phần 4",
+    ] + [f"C{i}" for i in range(1, 121)]
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Kết quả"
+    sheet.append(headers)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1B45B3")
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"
+
+    for index, submission in enumerate(submissions, start=1):
+        participant = submission.participant
+        user = participant.user if participant else None
+        result = results_by_submission.get(submission.id)
+        item_scores = result.item_scores if result and result.item_scores else {}
+        ctt_total = result.raw_total_score if result else None
+        irt_total = result.total_score if result else None
+        row = [
+            index,
+            participant.sbd if participant else None,
+            user.full_name if user and user.full_name else user.username if user else None,
+            user.email if user else None,
+            participant.exam_form.code if participant and participant.exam_form else None,
+            participant.target_score if participant else None,
+            ctt_total,
+            irt_total,
+            bool(result),
+            result.ctt_score_part1 if result else None,
+            result.ctt_score_part2 if result else None,
+            result.ctt_score_part3 if result else None,
+            result.ctt_score_part4 if result else None,
+        ] + [item_scores.get(str(question_number), -1) for question_number in range(1, 121)]
+        sheet.append(row)
+
+    widths = {"A": 8, "B": 14, "C": 26, "D": 30, "E": 12}
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+    for column in range(6, len(headers) + 1):
+        sheet.column_dimensions[get_column_letter(column)].width = 13
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"mit-exams-{exam_id}-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 @router.get("/exams/{exam_id}/overview", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):

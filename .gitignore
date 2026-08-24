@@ -9,3 +9,6 @@ uploads/
 backups/
 .agents/
 .gemini/
+
+.vercel
+.env*

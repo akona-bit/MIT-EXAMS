@@ -4,6 +4,7 @@ from datetime import datetime
 
 # Shared properties
 class UserBase(BaseModel):
+    full_name: Optional[str] = None
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     is_active: bool = True

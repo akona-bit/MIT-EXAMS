@@ -1,25 +1,61 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
 from app.models.user import User
-from app.models.question import Question, Answer, QuestionStatus
+from app.models.question import Question, Answer, QuestionStatus, QuestionType
 from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate
 from app.api.dependencies import RequireRole, get_current_active_user
 
 router = APIRouter()
 
-@router.get("/", response_model=List[QuestionResponse])
+@router.get("/")
 async def get_questions(
-    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    knowledge_node_id: int | None = None,
+    status: QuestionStatus | None = None,
+    level: int | None = None,
+    question_type: QuestionType | None = None,
+    db: AsyncSession = Depends(get_db),
 ):
+    filters = []
+    if knowledge_node_id is not None:
+        filters.append(Question.knowledge_node_id == knowledge_node_id)
+    if status is not None:
+        filters.append(Question.status == status)
+    if level is not None:
+        filters.append(Question.level == level)
+    if question_type is not None:
+        filters.append(Question.type == question_type)
+
+    total_result = await db.execute(select(func.count()).select_from(Question).where(*filters))
+    total = total_result.scalar_one()
+
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers)).offset(skip).limit(limit)
+        select(Question)
+        .options(selectinload(Question.answers))
+        .where(*filters)
+        .order_by(Question.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
-    return result.scalars().all()
+    items = result.scalars().all()
+    return {"items": items, "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
+
+
+@router.get("/{question_id}", response_model=QuestionResponse)
+async def get_question(question_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Question).options(selectinload(Question.answers)).where(Question.id == question_id)
+    )
+    question = result.scalars().first()
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return question
 
 @router.post("/", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def create_question(
@@ -142,6 +178,17 @@ async def update_question(
         res = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.id == existing_q.id))
         return res.scalars().first()
 
+
+@router.delete("/{question_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def delete_question(question_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Question).where(Question.id == question_id))
+    question = result.scalars().first()
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    await db.delete(question)
+    await db.commit()
+    return None
+
 @router.post("/{question_id}/review", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "MODERATOR"]))])
 async def review_question(
     question_id: int,
@@ -156,3 +203,8 @@ async def review_question(
     question.status = QuestionStatus.APPROVED if approve else QuestionStatus.REJECTED
     await db.commit()
     return question
+
+
+@router.post("/{question_id}/approve", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "MODERATOR"]))])
+async def approve_question(question_id: int, db: AsyncSession = Depends(get_db)):
+    return await review_question(question_id=question_id, approve=True, db=db)

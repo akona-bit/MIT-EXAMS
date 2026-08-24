@@ -56,6 +56,7 @@
 - `omr/` — nhận ảnh, gọi OpenCV pipeline, hàng đợi review thủ công
 - `stats/` — dashboard, so sánh chất lượng đề qua các đợt
 - `security/` — audit log, giám sát thoát tab, chặn copy-paste (phối hợp frontend)
+- `obsidian_memory/` — đồng bộ vault Obsidian, import cây `KnowledgeNode`, câu hỏi từ frontmatter, và cung cấp tree/graph cho frontend. Quy ước chi tiết ở `memory-bank/obsidian-ai-memory.md`.
 
 ## Luồng dữ liệu chính
 

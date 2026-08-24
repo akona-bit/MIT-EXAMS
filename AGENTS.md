@@ -3,7 +3,7 @@
 > File này được đọc đầu tiên bởi bất kỳ agent nào (Gemini 3.1 Pro trên Antigravity, hoặc agent khác) khi bắt đầu phiên làm việc trong repo này. Nó đóng vai trò "kim chỉ nam" — mọi quyết định kỹ thuật phải nhất quán với nội dung ở đây và trong thư mục `memory-bank/`.
 
 ## Dự án là gì (tóm tắt 30 giây)
-
+[[CLAUDE]]
 Xây dựng MIT EXAMS, một nền tảng quản lý ngân hàng câu hỏi và tổ chức thi trắc nghiệm trực tuyến quy mô lớn, tương tự Azota.vn, chuyên biệt cho các kỳ thi dạng ĐGNL (120 câu, 4 phần, thang điểm 0-300/phần). Hệ thống bao gồm: sinh đề tự động từ ma trận đặc tả, tổ chức thi online/offline (OMR), chấm điểm bằng IRT 2PL/CTT, và thống kê/phân tích chất lượng đề thi.
 
 Chi tiết đầy đủ: đọc `memory-bank/project-overview.md` trước khi làm bất kỳ task nào.

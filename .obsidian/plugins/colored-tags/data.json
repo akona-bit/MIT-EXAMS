@@ -1,0 +1,40 @@
+{
+  "palette": {
+    "seed": 0,
+    "selected": "adaptive-soft",
+    "custom": "e12729-f37324-f8cc1b-72b043-007f4e"
+  },
+  "mixColors": true,
+  "transition": true,
+  "accessibility": {
+    "highTextContrast": false
+  },
+  "knownTags": {
+    "0f2966": 1,
+    "1a1f29": 2,
+    "1b45b3": 3,
+    "1ba672": 4,
+    "2d6cff": 5,
+    "2d9bff": 6,
+    "4a5261": 7,
+    "7fa8ff": 8,
+    "8a93a3": 9,
+    "all": 10,
+    "append": 11,
+    "c7ccd4": 12,
+    "d9e6ff": 13,
+    "e5484d": 14,
+    "eef0f3": 15,
+    "eef4ff": 16,
+    "f5a623": 17,
+    "f7f8fa": 18,
+    "ff0000": 19,
+    "ffffff": 20,
+    "name": 21,
+    "pymupdf": 22,
+    "setdefaults": 23,
+    "typescript": 24
+  },
+  "tagColors": {},
+  "_version": 4
+}
