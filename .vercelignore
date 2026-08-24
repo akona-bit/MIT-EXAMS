@@ -1,0 +1,19 @@
+# Ignore backend, virtual environments, caches and large generated folders
+backend/
+venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+node_modules/
+frontend/node_modules/
+frontend/dist/
+backend/.venv/
+.env
+.env.*
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+*.sqlite3
+mit_exams.db
