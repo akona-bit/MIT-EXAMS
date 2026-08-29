@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.question import Question, Answer, QuestionStatus, QuestionType
 from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate
 from app.api.dependencies import RequireRole, get_current_active_user
+from app.core.analytics import capture
 
 router = APIRouter()
 
@@ -59,6 +60,7 @@ async def get_question(question_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def create_question(
+    request: Request,
     q_in: QuestionCreate, 
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -92,6 +94,11 @@ async def create_question(
     # Reload with answers
     result = await db.execute(
         select(Question).options(selectinload(Question.answers)).where(Question.id == db_question.id)
+    )
+    capture(
+        request,
+        "question_created",
+        {"question_id": db_question.id, "question_type": db_question.type.value, "level": db_question.level},
     )
     return result.scalars().first()
 
@@ -191,6 +198,7 @@ async def delete_question(question_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{question_id}/review", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "MODERATOR"]))])
 async def review_question(
+    request: Request,
     question_id: int,
     approve: bool,
     db: AsyncSession = Depends(get_db)
@@ -202,9 +210,10 @@ async def review_question(
         
     question.status = QuestionStatus.APPROVED if approve else QuestionStatus.REJECTED
     await db.commit()
+    capture(request, "question_reviewed", {"question_id": question_id, "approved": approve})
     return question
 
 
 @router.post("/{question_id}/approve", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "MODERATOR"]))])
-async def approve_question(question_id: int, db: AsyncSession = Depends(get_db)):
-    return await review_question(question_id=question_id, approve=True, db=db)
+async def approve_question(request: Request, question_id: int, db: AsyncSession = Depends(get_db)):
+    return await review_question(request=request, question_id=question_id, approve=True, db=db)

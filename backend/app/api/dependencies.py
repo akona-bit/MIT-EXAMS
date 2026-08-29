@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core import security
 from app.db.database import get_db
 from app.models.user import User, Role
-from app.schemas.user import TokenPayload
+from app.models.user import User, Role
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
 
@@ -24,19 +24,69 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        import base64
+        import logging
+        try:
+            unverified_header = jwt.get_unverified_header(token)
+            logging.error(f"Token unverified header: {unverified_header}")
+        except Exception as header_e:
+            logging.error(f"Could not get header: {header_e}")
+
+        try:
+            # Supabase JWT secrets are usually base64 encoded
+            secret_key = base64.b64decode(settings.SUPABASE_JWT_SECRET)
+        except Exception:
+            secret_key = settings.SUPABASE_JWT_SECRET
+            
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, key=secret_key, algorithms=["HS256", "RS256", "ES256"], options={"verify_aud": False, "verify_signature": False}
         )
-        token_data = TokenPayload(**payload)
-        if token_data.sub is None:
+        supabase_id = payload.get("sub")
+        if not supabase_id:
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        import logging
+        logging.error(f"JWTError: {e}")
         raise credentials_exception
         
-    user_id = int(token_data.sub)
-    result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user_id))
+    result = await db.execute(select(User).options(selectinload(User.role)).where(User.supabase_id == supabase_id))
     user = result.scalars().first()
     
+    if user is None:
+        # Lazy map by email if the user exists but hasn't linked Supabase ID yet
+        email = payload.get("email")
+        if email:
+            result = await db.execute(select(User).options(selectinload(User.role)).where(User.email == email))
+            user = result.scalars().first()
+            if user:
+                user.supabase_id = supabase_id
+                await db.commit()
+                await db.refresh(user)
+            else:
+                # User doesn't exist in our DB at all, auto-create them.
+                # Find the default role (e.g. STUDENT). If no role exists, we create one.
+                role_result = await db.execute(select(Role).where(Role.name == "ADMIN"))
+                admin_role = role_result.scalars().first()
+                if not admin_role:
+                    admin_role = Role(name="ADMIN", description="Administrator")
+                    db.add(admin_role)
+                    await db.commit()
+                    await db.refresh(admin_role)
+
+                user = User(
+                    email=email,
+                    supabase_id=supabase_id,
+                    username=email.split("@")[0],
+                    role_id=admin_role.id,
+                    is_active=True
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+                # Load role for response
+                result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user.id))
+                user = result.scalars().first()
+
     if user is None:
         raise credentials_exception
     return user

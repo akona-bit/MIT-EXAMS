@@ -99,3 +99,103 @@ async def delete_matrix(matrix_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(matrix)
     await db.commit()
     return {"message": "Matrix deleted"}
+
+from app.schemas.exam import GenerateExamRequest
+from app.models.exam import ExamGenerationRun, ExamGenerationStatus, Exam, ExamForm, ExamFormQuestion, ExamStatus
+from app.services.exam_matrix_generator import load_pool_from_db, parse_matrix_rules, generate_multiple_versions
+
+@router.post("/{matrix_id}/generate", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
+    # Validate Matrix
+    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix_id))
+    matrix = result.scalars().first()
+    if not matrix:
+        raise HTTPException(status_code=404, detail="Matrix not found")
+        
+    # Validate Exam
+    exam_result = await db.execute(select(Exam).where(Exam.id == req.exam_id))
+    exam = exam_result.scalars().first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+        
+    # Create ExamGenerationRun (status RUNNING initially, but we don't have RUNNING enum, so just create later)
+    
+    # Load rules and pool
+    pool = await load_pool_from_db(db, matrix.rules)
+    matrix_cells = await parse_matrix_rules(db, matrix.rules)
+    
+    # Generate
+    reports = generate_multiple_versions(
+        matrix=matrix_cells,
+        pool=pool,
+        n_versions=req.number_of_forms,
+        distinct_questions=req.distinct_questions
+    )
+    
+    # Check if FAILED
+    failed_report = next((r for r in reports if not r.ok), None)
+    if not reports or failed_report:
+        shortages = []
+        if failed_report:
+            for s in failed_report.shortages:
+                shortages.append(f"{s.cell.topic} > {s.cell.concept} > {s.cell.skill}: missing {s.shortage}")
+        
+        # Log failure
+        gen_run = ExamGenerationRun(
+            matrix_id=matrix.id,
+            num_forms=req.number_of_forms,
+            distinct_questions=req.distinct_questions,
+            status=ExamGenerationStatus.FAILED,
+            error_details=shortages
+        )
+        db.add(gen_run)
+        await db.commit()
+        raise HTTPException(status_code=422, detail={"message": "Failed to generate exam due to shortage", "shortages": shortages})
+        
+    # SUCCESS
+    gen_run = ExamGenerationRun(
+        matrix_id=matrix.id,
+        num_forms=req.number_of_forms,
+        distinct_questions=req.distinct_questions,
+        status=ExamGenerationStatus.SUCCESS,
+        error_details=None
+    )
+    db.add(gen_run)
+    await db.flush() # To get gen_run.id
+    
+    import random
+    
+    for i, report in enumerate(reports):
+        form_code = f"M{i+1:03d}"
+        exam_form = ExamForm(
+            exam_id=exam.id,
+            code=form_code,
+            is_original=(i == 0)
+        )
+        db.add(exam_form)
+        await db.flush() # To get exam_form.id
+        
+        # Attach questions
+        # We need to map selected_ids back to cell results to store matrix_rule_id
+        question_to_rule_id = {}
+        for cell_res in report.cell_results:
+            for q_id in cell_res.selected_ids:
+                question_to_rule_id[q_id] = cell_res.cell.matrix_rule_id
+                
+        # Shuffle questions for this form
+        shuffled_ids = list(report.selected_ids)
+        random.shuffle(shuffled_ids)
+        
+        for pos, q_id in enumerate(shuffled_ids):
+            efq = ExamFormQuestion(
+                exam_form_id=exam_form.id,
+                question_id=q_id,
+                position=pos + 1,
+                part=1, # simplified
+                matrix_rule_id=question_to_rule_id.get(q_id),
+                exam_generation_run_id=gen_run.id
+            )
+            db.add(efq)
+            
+    await db.commit()
+    return {"message": "Generation successful", "run_id": gen_run.id, "forms_generated": req.number_of_forms}

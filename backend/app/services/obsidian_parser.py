@@ -1,6 +1,6 @@
 import yaml
 import re
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.question import Question, Answer, KnowledgeNode, QuestionType, QuestionStatus
@@ -39,26 +39,33 @@ class ObsidianParser:
             
         return current_node
 
-    async def parse_and_import(self, filename: str, content: str) -> Dict[str, Any]:
-        # Split frontmatter
-        parts = content.split('---')
-        if len(parts) < 3:
+    async def parse_and_import(
+        self,
+        filename: str,
+        content: str,
+        parent_question_id: int | None = None,
+    ) -> Dict[str, Any]:
+        frontmatter_match = re.match(r"^\ufeff?---\s*\n(?P<frontmatter>.*?)\n---\s*(?:\n|$)(?P<body>[\s\S]*)$", content)
+        if not frontmatter_match:
             return {"status": "skipped", "reason": "No valid YAML frontmatter"}
-            
-        frontmatter_str = parts[1]
-        body = '---'.join(parts[2:]).strip()
+
+        frontmatter_str = frontmatter_match.group("frontmatter")
+        body = frontmatter_match.group("body").strip()
         
         try:
             metadata = yaml.safe_load(frontmatter_str)
         except Exception as e:
             return {"status": "error", "reason": f"YAML parse error: {str(e)}"}
+
+        if not isinstance(metadata, dict):
+            return {"status": "error", "reason": "Frontmatter must be a YAML object"}
             
         if metadata.get('type') != 'question':
             return {"status": "skipped", "reason": "Not a question file"}
             
         # Extract knowledge node
         kn_path = metadata.get('knowledge_node')
-        if not kn_path:
+        if not isinstance(kn_path, str) or not kn_path.strip():
             return {"status": "error", "reason": "Missing knowledge_node in frontmatter"}
             
         kn_node = await self.get_or_create_knowledge_node(kn_path)
@@ -91,25 +98,41 @@ class ObsidianParser:
             
         # Create Question
         q_level = metadata.get('level', 1)
+        if isinstance(q_level, bool) or not isinstance(q_level, int) or not 1 <= q_level <= 4:
+            return {"status": "error", "reason": "level must be an integer from 1 to 4"}
+
         q_type_str = metadata.get('question_type', 'SINGLE_CHOICE')
         try:
             q_type = QuestionType(q_type_str)
         except ValueError:
-            q_type = QuestionType.SINGLE_CHOICE
+            return {"status": "error", "reason": f"Unsupported question_type: {q_type_str}"}
+
+        if not question_lines or not '\n'.join(question_lines).strip():
+            return {"status": "error", "reason": "Question content is empty"}
+
+        if len(answers) < 2:
+            return {"status": "error", "reason": "At least two answers are required"}
+
+        correct_count = sum(1 for answer in answers if answer["is_correct"])
+        if q_type == QuestionType.SINGLE_CHOICE and correct_count != 1:
+            return {"status": "error", "reason": "SINGLE_CHOICE requires exactly one correct answer"}
+        if q_type == QuestionType.MULTIPLE_CHOICE and correct_count < 1:
+            return {"status": "error", "reason": "MULTIPLE_CHOICE requires at least one correct answer"}
             
         question = Question(
             content='\n'.join(question_lines).strip(),
             level=q_level,
             type=q_type,
-            status=QuestionStatus.APPROVED, # Default to approved for synced files?
+            status=QuestionStatus.PENDING,
             knowledge_node_id=kn_node.id,
-            creator_id=self.creator_id
+            creator_id=self.creator_id,
+            parent_question_id=parent_question_id,
         )
         self.db.add(question)
         await self.db.flush()
         
         # Create Answers
-        for idx, ans_dict in enumerate(answers):
+        for idx, ans_dict in enumerate(answers, start=1):
             ans = Answer(
                 question_id=question.id,
                 content=ans_dict["content"],
@@ -118,4 +141,10 @@ class ObsidianParser:
             )
             self.db.add(ans)
             
-        return {"status": "success", "question_id": question.id}
+        wikilinks = sorted(set(re.findall(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]", body)))
+        return {
+            "status": "success",
+            "question_id": question.id,
+            "source_file": filename,
+            "wikilinks": wikilinks,
+        }

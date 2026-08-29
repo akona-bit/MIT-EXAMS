@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
@@ -8,6 +8,7 @@ import shutil
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
+from app.core.analytics import capture
 from app.models.omr import OmrJob, OmrSheet, OmrJobStatus, OmrSheetStatus
 from app.models.user import User
 from app.services.omr.tasks import process_omr_sheet_task
@@ -17,6 +18,7 @@ UPLOAD_DIR = "uploads/omr_sheets"
 
 @router.post("/upload")
 async def upload_omr_sheets(
+    request: Request,
     exam_id: int, 
     files: List[UploadFile] = File(...), 
     db: AsyncSession = Depends(get_db), 
@@ -58,6 +60,7 @@ async def upload_omr_sheets(
         # Trigger Celery Task
         process_omr_sheet_task.delay(sheet.id)
         
+    capture(request, "omr_upload_started", {"exam_id": exam_id, "job_id": job.id, "file_count": len(files)})
     return {"message": "Upload successful, processing started.", "job_id": job.id}
 
 @router.get("/jobs/{job_id}")
@@ -86,6 +89,7 @@ async def get_omr_sheet(sheet_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/sheets/{sheet_id}/confirm")
 async def confirm_omr_sheet(
+    request: Request,
     sheet_id: int, 
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -108,4 +112,5 @@ async def confirm_omr_sheet(
     # (Simulated for now)
     
     await db.commit()
+    capture(request, "omr_sheet_confirmed", {"sheet_id": sheet_id, "job_id": sheet.job_id})
     return {"message": "Sheet confirmed successfully"}

@@ -39,7 +39,8 @@ Nội dung câu hỏi ở đây.
 - `knowledge_node` dạng đường dẫn `/` được import thành cây `KnowledgeNode`.
 - Mỗi đoạn trong path là một node: Topic -> Concept -> Skill -> Note nếu sâu hơn.
 - File có `type: question` được import thành `Question` và `Answer`.
-- Câu hỏi sync từ Obsidian hiện được đánh dấu `APPROVED` để dùng được trong sinh đề.
+- Câu hỏi sync từ Obsidian được đánh dấu `PENDING` để đi qua workflow kiểm duyệt trước khi dùng trong sinh đề.
+- Sync response giữ `source_file` và các `wikilinks` đã trích xuất để service lưu metadata/link ở phase tiếp theo.
 
 ## API liên kết frontend/backend
 

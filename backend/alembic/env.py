@@ -17,12 +17,13 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 from app.models.base import Base
 from app.models.user import User, Role
-from app.models.question import KnowledgeNode, Resource, Question, Answer
+from app.models.question import KnowledgeNode, Resource, Question, Answer, QuestionSubItem
 from app.models.exam import Matrix, MatrixRule, Exam, ExamForm, ExamFormQuestion, ExamFormAnswer, ExamParticipant, ExamSubmission, ExamSubmissionAnswer, ExamTrackingLog
 from app.models.grading import ExamResult, IrtTask
 from app.models.grading import ExamResult, IrtTask
 from app.models.omr import OmrJob, OmrSheet
 from app.models.audit import AuditLog
+from app.models.obsidian import ObsidianSyncRun, ObsidianFile
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:

@@ -19,8 +19,10 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=True)
     email: Mapped[str] = mapped_column(String(150), unique=True, index=True, nullable=True)
-    hashed_password: Mapped[str] = mapped_column(String(255))
+    supabase_id: Mapped[str | None] = mapped_column(String(36), unique=True, index=True, nullable=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_view_answers: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"))
     role: Mapped["Role"] = relationship(back_populates="users", lazy="selectin")

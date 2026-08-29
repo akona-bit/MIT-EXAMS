@@ -11,6 +11,8 @@ class MatrixRuleBase(BaseModel):
     level: int = 1
     count: int = 1
     part: int = 1
+    target_irt_b: Optional[float] = None
+    position: int = 0
 
 class MatrixRuleCreate(MatrixRuleBase):
     pass
@@ -24,6 +26,7 @@ class MatrixRuleResponse(MatrixRuleBase):
 class MatrixBase(BaseModel):
     name: str
     description: Optional[str] = None
+    subject: Optional[str] = None
 
 class MatrixCreate(MatrixBase):
     rules: List[MatrixRuleCreate]
@@ -36,10 +39,9 @@ class MatrixResponse(MatrixBase):
 
 # --- Exam Generation Request ---
 class GenerateExamRequest(BaseModel):
-    matrix_id: int
-    exam_name: str
-    exam_description: Optional[str] = None
+    exam_id: int
     number_of_forms: int = 1
+    distinct_questions: bool = False
 
 # --- Exam Config Request ---
 class ExamPublishRequest(BaseModel):

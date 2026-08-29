@@ -71,3 +71,25 @@ async def backup_database(db: AsyncSession = Depends(get_db), current_user: User
     await log_audit(db, current_user.id, AuditAction.BACKUP_DB, "System", None, f"Created database backup: {backup_filename}")
     
     return {"message": "Database backed up successfully", "file": backup_filename}
+
+from pydantic import BaseModel
+
+class UserAccessUpdate(BaseModel):
+    can_view_answers: bool
+
+@router.get("/users", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_users(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).order_by(User.id.desc()))
+    users = result.scalars().all()
+    return [{"id": u.id, "email": u.email, "username": u.username, "can_view_answers": u.can_view_answers} for u in users]
+
+@router.put("/users/{user_id}/access", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def update_user_access(user_id: int, req: UserAccessUpdate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.can_view_answers = req.can_view_answers
+    await db.commit()
+    return {"id": user.id, "can_view_answers": user.can_view_answers}

@@ -27,6 +27,10 @@ class ResourceCreate(ResourceBase):
 class ResourceResponse(ResourceBase):
     id: int
     uploader_id: int
+    original_name: str
+    mime_type: Optional[str] = None
+    size_bytes: int
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 # --- Answer Schemas ---
@@ -34,6 +38,7 @@ class AnswerBase(BaseModel):
     content: str
     is_correct: bool = False
     position: int = 0
+    sub_item_id: Optional[int] = None  # nếu đáp án thuộc về một ý con
 
 class AnswerCreate(AnswerBase):
     pass
@@ -43,6 +48,23 @@ class AnswerResponse(AnswerBase):
     question_id: int
     model_config = ConfigDict(from_attributes=True)
 
+# --- QuestionSubItem Schemas ---
+class QuestionSubItemBase(BaseModel):
+    label: str
+    prompt: Optional[str] = None
+    position: int = 0
+    point_weight: float = 0.25
+    kind: str = "tf"  # "tf" / "single" / "multi"
+
+class QuestionSubItemCreate(QuestionSubItemBase):
+    answers: Optional[List[AnswerCreate]] = None
+
+
+class QuestionSubItemResponse(QuestionSubItemBase):
+    id: int
+    answers: List[AnswerResponse] = []
+    model_config = ConfigDict(from_attributes=True)
+
 # --- Question Schemas ---
 class QuestionBase(BaseModel):
     content: str
@@ -50,9 +72,11 @@ class QuestionBase(BaseModel):
     type: QuestionType = QuestionType.SINGLE_CHOICE
     knowledge_node_id: int
     resource_id: Optional[int] = None
+    scoring_config: Optional[dict] = None
 
 class QuestionCreate(QuestionBase):
-    answers: List[AnswerCreate]
+    answers: List[AnswerCreate] = []
+    sub_items: Optional[List[QuestionSubItemCreate]] = None
 
 class QuestionUpdate(BaseModel):
     content: Optional[str] = None
@@ -60,7 +84,9 @@ class QuestionUpdate(BaseModel):
     type: Optional[QuestionType] = None
     knowledge_node_id: Optional[int] = None
     resource_id: Optional[int] = None
+    scoring_config: Optional[dict] = None
     answers: Optional[List[AnswerCreate]] = None
+    sub_items: Optional[List[QuestionSubItemCreate]] = None
 
 class QuestionResponse(QuestionBase):
     id: int
@@ -69,5 +95,6 @@ class QuestionResponse(QuestionBase):
     parent_question_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
-    answers: List[AnswerResponse]
+    answers: List[AnswerResponse] = []
+    sub_items: List[QuestionSubItemResponse] = []
     model_config = ConfigDict(from_attributes=True)

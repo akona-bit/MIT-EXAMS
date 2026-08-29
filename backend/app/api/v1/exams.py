@@ -17,6 +17,7 @@ from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.services.generator import generate_original_exam, generate_shuffled_forms
 from app.services.exam_session import publish_exam, assign_participants, get_or_assign_exam_form, get_exam_session_info, autosave_answers, submit_exam, log_tracking_event
+from app.core.analytics import capture
 
 router = APIRouter()
 
@@ -40,7 +41,7 @@ async def get_exams(skip: int = 0, limit: int = 100, status: str | None = None, 
 
 
 @router.post("/generate", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def generate_exam(req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
+async def generate_exam(request: Request, req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
     # 1. Lấy Ma trận
     result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == req.matrix_id))
     matrix = result.scalars().first()
@@ -60,7 +61,13 @@ async def generate_exam(req: GenerateExamRequest, db: AsyncSession = Depends(get
         
     # Tải lại exam để trả về đúng format
     result = await db.execute(select(Exam).where(Exam.id == exam.id))
-    return result.scalars().first()
+    generated_exam = result.scalars().first()
+    capture(
+        request,
+        "exam_generated",
+        {"exam_id": exam.id, "requested_form_count": req.number_of_forms},
+    )
+    return generated_exam
 
 
 @router.get("/{exam_id}", response_model=ExamResponse)
@@ -86,9 +93,15 @@ async def generate_forms_for_exam(exam_id: int, form_count: int = 4, db: AsyncSe
     forms_result = await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))
     return forms_result.scalars().all()
 
+@router.get("/{exam_id}/forms", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def get_exam_forms(exam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))
+    forms = result.scalars().all()
+    return [{"id": f.id, "code": f.code, "is_original": f.is_original, "created_at": f.created_at} for f in forms]
+
 
 @router.post("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def publish_exam_with_defaults(exam_id: int, db: AsyncSession = Depends(get_db)):
+async def publish_exam_with_defaults(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Exam).where(Exam.id == exam_id))
     exam = result.scalars().first()
     if not exam:
@@ -102,25 +115,33 @@ async def publish_exam_with_defaults(exam_id: int, db: AsyncSession = Depends(ge
         show_score_mode=exam.show_score_mode,
         show_answer_mode=exam.show_answer_mode,
     )
-    return await publish_exam(db, exam_id, config)
+    published_exam = await publish_exam(db, exam_id, config)
+    capture(request, "exam_published", {"exam_id": exam_id, "publish_mode": "default"})
+    return published_exam
 
 @router.put("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def config_and_publish_exam(exam_id: int, config: ExamPublishRequest, db: AsyncSession = Depends(get_db)):
-    return await publish_exam(db, exam_id, config)
+async def config_and_publish_exam(request: Request, exam_id: int, config: ExamPublishRequest, db: AsyncSession = Depends(get_db)):
+    published_exam = await publish_exam(db, exam_id, config)
+    capture(request, "exam_published", {"exam_id": exam_id, "publish_mode": "configured"})
+    return published_exam
 
 @router.post("/{exam_id}/participants", response_model=List[ExamParticipantResponse], dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def add_participants(exam_id: int, req: ExamParticipantCreate, db: AsyncSession = Depends(get_db)):
-    return await assign_participants(db, exam_id, req.user_ids)
+async def add_participants(request: Request, exam_id: int, req: ExamParticipantCreate, db: AsyncSession = Depends(get_db)):
+    participants = await assign_participants(db, exam_id, req.user_ids)
+    capture(request, "exam_participants_assigned", {"exam_id": exam_id, "participant_count": len(req.user_ids)})
+    return participants
 
 
 @router.post("/{exam_id}/assign", response_model=List[ExamParticipantResponse], dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def assign_participants_compat(exam_id: int, user_ids: List[int], db: AsyncSession = Depends(get_db)):
-    return await assign_participants(db, exam_id, user_ids)
+async def assign_participants_compat(request: Request, exam_id: int, user_ids: List[int], db: AsyncSession = Depends(get_db)):
+    participants = await assign_participants(db, exam_id, user_ids)
+    capture(request, "exam_participants_assigned", {"exam_id": exam_id, "participant_count": len(user_ids)})
+    return participants
 
 @router.post("/{exam_id}/start", dependencies=[Depends(RequireRole(["STUDENT"]))])
-async def start_exam(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Randomly assign a form if not assigned, and return it
+async def start_exam(request: Request, exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     form = await get_or_assign_exam_form(db, exam_id, current_user.id)
+    capture(request, "exam_started", {"exam_id": exam_id, "form_code": form.code})
     return {"message": "Exam started", "form_code": form.code, "form_id": form.id}
 
 
@@ -139,6 +160,7 @@ async def autosave(exam_id: int, req: AutosaveRequest, db: AsyncSession = Depend
 @limiter.limit("5/minute")
 async def submit(request: Request, exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     await submit_exam(db, exam_id, current_user.id)
+    capture(request, "exam_submitted", {"exam_id": exam_id})
     return {"message": "Exam submitted successfully"}
 
 @router.post("/{exam_id}/track", response_model=TrackingEventResponse, dependencies=[Depends(RequireRole(["STUDENT"]))])

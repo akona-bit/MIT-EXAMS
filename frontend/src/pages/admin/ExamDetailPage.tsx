@@ -1,21 +1,50 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getExam, publishExam, generateExamForms } from '../../api/exams';
+import { getExam, publishExam, getExamForms } from '../../api/exams';
+import { runIrtCalibration, getIrtTaskStatus } from '../../api/grading';
+import { getExamOverview, getExamItemsAnalysis, type ExamOverview, type ExamItemAnalysis } from '../../api/statistics';
 import type { Exam } from '../../types';
 import Button from '../../components/ui/Button';
+import GenerateExamModal from '../../components/admin/GenerateExamModal';
 
 export default function ExamDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [exam, setExam] = useState<Exam | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasExistingForms, setHasExistingForms] = useState(false);
+  
+  const [irtTaskId, setIrtTaskId] = useState<string | null>(null);
+  const [irtStatus, setIrtStatus] = useState<string | null>(null);
+  
+  const [overview, setOverview] = useState<ExamOverview | null>(null);
+  const [itemsAnalysis, setItemsAnalysis] = useState<ExamItemAnalysis[] | null>(null);
+  const [activeTab, setActiveTab] = useState<'info' | 'irt'>('info');
 
-  const fetchExam = async () => {
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+
+  const fetchExamData = async () => {
     if (!id) return;
     setIsLoading(true);
     try {
-      const data = await getExam(parseInt(id));
-      setExam(data);
+      const examData = await getExam(parseInt(id));
+      setExam(examData);
+      
+      const forms = await getExamForms(parseInt(id));
+      setHasExistingForms(forms.length > 0);
+      
+      if (examData.status === 'COMPLETED' || examData.status === 'PUBLISHED') {
+         try {
+           const [ov, items] = await Promise.all([
+             getExamOverview(parseInt(id)),
+             getExamItemsAnalysis(parseInt(id))
+           ]);
+           setOverview(ov);
+           setItemsAnalysis(items);
+         } catch (e) {
+           console.error("Lỗi lấy thống kê:", e);
+         }
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -24,20 +53,39 @@ export default function ExamDetailPage() {
   };
 
   useEffect(() => {
-    fetchExam();
+    fetchExamData();
   }, [id]);
 
-  const handleGenerate = async () => {
-    if (!id) return;
-    if (confirm('Tạo 4 mã đề cho kỳ thi này?')) {
+  useEffect(() => {
+    if (!irtTaskId || irtStatus === 'SUCCESS' || irtStatus === 'FAILED') return;
+    
+    const interval = setInterval(async () => {
       try {
-        await generateExamForms(parseInt(id), 4);
-        alert('Tạo mã đề thành công!');
-        fetchExam();
+        const res = await getIrtTaskStatus(irtTaskId);
+        setIrtStatus(res.status);
+        if (res.status === 'SUCCESS' || res.status === 'FAILED') {
+          clearInterval(interval);
+          if (res.status === 'SUCCESS') {
+            alert('Chấm điểm IRT hoàn tất!');
+            fetchExamData();
+          } else {
+            alert('Chấm điểm IRT thất bại!');
+          }
+        }
       } catch (error) {
-        alert('Lỗi tạo mã đề');
+         console.error("Lỗi poll IRT status", error);
       }
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [irtTaskId, irtStatus]);
+
+  const handleGenerate = () => {
+    if (!exam?.matrix_id) {
+      alert("Kỳ thi này chưa được gắn ma trận đặc tả. Hãy chọn ma trận trước khi sinh đề.");
+      return;
     }
+    setIsGenerateModalOpen(true);
   };
 
   const handlePublish = async () => {
@@ -46,9 +94,22 @@ export default function ExamDetailPage() {
       try {
         await publishExam(parseInt(id));
         alert('Đã xuất bản!');
-        fetchExam();
+        fetchExamData();
       } catch (error) {
         alert('Lỗi xuất bản');
+      }
+    }
+  };
+
+  const handleRunIrt = async () => {
+    if (!id) return;
+    if (confirm('Khởi chạy tiến trình phân tích IRT và quy đổi điểm chuẩn?')) {
+      try {
+        const res = await runIrtCalibration(parseInt(id));
+        setIrtTaskId(res.task_id);
+        setIrtStatus('PENDING');
+      } catch (error) {
+        alert('Lỗi chạy IRT');
       }
     }
   };
@@ -57,39 +118,152 @@ export default function ExamDetailPage() {
   if (!exam) return <div>Không tìm thấy kỳ thi</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900">{exam.name}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{exam.name}</h1>
         <Button variant="ghost" onClick={() => navigate('/admin/exams')}>Quay lại</Button>
+      </div>
+
+      <div className="flex border-b border-slate-200 dark:border-white/10">
+        <button
+          className={`px-4 py-3 font-semibold text-sm transition-colors ${activeTab === 'info' ? 'text-primary-600 border-b-2 border-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          onClick={() => setActiveTab('info')}
+        >
+          Thông tin chung
+        </button>
+        <button
+          className={`px-4 py-3 font-semibold text-sm transition-colors ${activeTab === 'irt' ? 'text-primary-600 border-b-2 border-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          onClick={() => setActiveTab('irt')}
+        >
+          Kết quả IRT & Thống kê
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm">
-            <h3 className="text-lg font-semibold mb-4">Thông tin chung</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-neutral-500">Trạng thái:</span> <span className="font-medium ml-2">{exam.status}</span></div>
-              <div><span className="text-neutral-500">Thời gian:</span> <span className="font-medium ml-2">{exam.duration_minutes} phút</span></div>
-              <div><span className="text-neutral-500">ID Ma trận:</span> <span className="font-medium ml-2">{exam.matrix_id}</span></div>
+          {activeTab === 'info' ? (
+            <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Chi tiết kỳ thi</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+                <div className="space-y-1">
+                  <p className="text-slate-500 dark:text-slate-400">Trạng thái</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.status}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 dark:text-slate-400">Thời gian làm bài</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.duration_minutes} phút</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 dark:text-slate-400">ID Ma trận</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.matrix_id || <span className="text-danger-500 italic">Chưa cấu hình</span>}</p>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Tổng quan</h3>
+                {overview ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+                      <div className="text-slate-500 dark:text-slate-400 mb-1">Số lượng</div>
+                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.total_participants}</div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+                      <div className="text-slate-500 dark:text-slate-400 mb-1">Điểm TB</div>
+                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.average_score}</div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+                      <div className="text-slate-500 dark:text-slate-400 mb-1">Điểm cao nhất</div>
+                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.max_score}</div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+                      <div className="text-slate-500 dark:text-slate-400 mb-1">Điểm thấp nhất</div>
+                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.min_score}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-500 text-sm">Chưa có dữ liệu thống kê.</p>
+                )}
+              </div>
+              
+              <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Phân tích chất lượng câu hỏi (IRT)</h3>
+                {itemsAnalysis && itemsAnalysis.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-white/10">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">ID</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Độ khó (b)</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Phân biệt (a)</th>
+                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cảnh báo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                        {itemsAnalysis.map(item => (
+                          <tr key={item.question_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="px-4 py-3 font-medium">{item.question_id}</td>
+                            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{item.difficulty_b}</td>
+                            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{item.discrimination_a}</td>
+                            <td className="px-4 py-3">
+                              {item.warning_flags.map(f => (
+                                <span key={f} className="inline-block bg-danger-500/10 text-danger-600 dark:text-danger-400 border border-danger-500/20 text-xs px-2 py-1 rounded-md mr-1">{f}</span>
+                              ))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-slate-500 text-sm">Chưa có phân tích câu hỏi. Hãy chạy chấm điểm IRT.</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
-          <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm flex flex-col gap-3">
-            <h3 className="text-lg font-semibold mb-2">Thao tác</h3>
+          <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl flex flex-col gap-4">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Thao tác</h3>
             {exam.status === 'DRAFT' && (
               <>
-                <Button variant="secondary" onClick={handleGenerate}>Sinh mã đề thi</Button>
-                <Button variant="primary" onClick={handlePublish}>Xuất bản (Publish)</Button>
+                <div title={!exam.matrix_id ? "Kỳ thi chưa gắn ma trận" : ""}>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleGenerate} 
+                    className="w-full justify-center"
+                    disabled={!exam.matrix_id}
+                  >
+                    Sinh mã đề thi
+                  </Button>
+                </div>
+                <Button variant="default" onClick={handlePublish} className="w-full justify-center shadow-lg shadow-primary-500/20">Xuất bản (Publish)</Button>
+              </>
+            )}
+            {(exam.status === 'PUBLISHED' || exam.status === 'COMPLETED') && (
+              <>
+                <Button variant="default" onClick={handleRunIrt} disabled={!!irtStatus && irtStatus !== 'SUCCESS' && irtStatus !== 'FAILED'} className="w-full justify-center shadow-lg shadow-primary-500/20">
+                  {irtStatus === 'PENDING' || irtStatus === 'STARTED' ? `Đang chạy IRT... (${irtStatus})` : 'Chạy phân tích IRT'}
+                </Button>
               </>
             )}
             {exam.status === 'PUBLISHED' && (
-              <Button variant="secondary" disabled>Đang diễn ra</Button>
+              <Button variant="secondary" disabled className="w-full justify-center">Đang diễn ra</Button>
             )}
           </div>
         </div>
       </div>
+      
+      <GenerateExamModal 
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        examId={exam.id}
+        matrixId={exam.matrix_id}
+        hasExistingForms={hasExistingForms}
+        onSuccess={fetchExamData}
+      />
     </div>
   );
 }

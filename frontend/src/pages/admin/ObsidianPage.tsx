@@ -1,12 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, useEffect, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  createKnowledgeNode,
-  getKnowledgeGraph,
-  getKnowledgeTree,
-} from "../../api/knowledge";
-import { syncObsidianLocalApi, type SyncRequest } from "../../api/obsidian";
-import type { KnowledgeGraphNode, KnowledgeNode } from "../../types";
+import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
+import { createKnowledgeNode, getKnowledgeGraph } from "../../api/knowledge";
+import type { KnowledgeGraphEdge, KnowledgeGraphNode } from "../../types";
+import { useTheme } from "../../stores/themeStore";
 
 const levelLabels: Record<string, string> = {
   TOPIC: "Chủ đề",
@@ -15,485 +12,485 @@ const levelLabels: Record<string, string> = {
   NOTE: "Ghi chú",
 };
 
-function flattenTree(nodes: KnowledgeNode[]): KnowledgeNode[] {
-  return nodes.flatMap((node) => [node, ...flattenTree(node.children ?? [])]);
-}
+const levelColors: Record<string, string> = {
+  TOPIC: "#2D6CFF",
+  CONCEPT: "#2D9BFF",
+  SKILL: "#1BA672",
+  NOTE: "#8A93A3",
+};
 
-function levelClass(level?: string) {
-  if (level === "TOPIC")
-    return "bg-primary-500/10 text-primary-700 border-primary-300";
-  if (level === "CONCEPT")
-    return "bg-info-500/10 text-info-500 border-info-500/30";
-  if (level === "SKILL")
-    return "bg-success-500/10 text-success-500 border-success-500/30";
-  return "bg-neutral-100 text-neutral-700 border-neutral-300";
-}
-
-function TreeNode({
+function NodePill({
   node,
-  selectedId,
-  onSelect,
-  depth = 0,
+  active,
+  onClick,
 }: {
-  node: KnowledgeNode;
-  selectedId: number | null;
-  onSelect: (node: KnowledgeNode) => void;
-  depth?: number;
+  node: KnowledgeGraphNode;
+  active: boolean;
+  onClick: () => void;
 }) {
-  const isSelected = node.id === selectedId;
-
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => onSelect(node)}
-        className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
-          isSelected
-            ? "bg-primary-500 text-white"
-            : "text-neutral-700 hover:bg-neutral-100"
-        }`}
-        style={{ paddingLeft: `${8 + depth * 16}px` }}
-      >
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${isSelected ? "bg-white" : "bg-neutral-300"}`}
-        />
-        <span className="min-w-0 flex-1 truncate">{node.name}</span>
-        {typeof node.question_count === "number" && node.question_count > 0 && (
-          <span
-            className={`text-xs ${isSelected ? "text-white/80" : "text-neutral-500"}`}
-          >
-            {node.question_count}
-          </span>
-        )}
-      </button>
-      {(node.children ?? []).map((child) => (
-        <TreeNode
-          key={child.id}
-          node={child}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          depth={depth + 1}
-        />
-      ))}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? "bg-primary-50 ring-1 ring-primary-200 dark:bg-primary-900/30 dark:ring-primary-500/50" : "hover:bg-neutral-50 dark:hover:bg-slate-800/50"}`}
+    >
+      <span
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: levelColors[node.type] ?? levelColors.NOTE }}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+          {node.label}
+        </span>
+        <span className="mt-0.5 block truncate text-[11px] text-neutral-500 dark:text-neutral-400">
+          {node.path}
+        </span>
+      </span>
+      {node.question_count > 0 && (
+        <span className="rounded-full bg-neutral-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-neutral-600 dark:text-neutral-300">
+          {node.question_count}
+        </span>
+      )}
+    </button>
   );
 }
 
-function GraphNodeCard({ node }: { node: KnowledgeGraphNode }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-primary-500" />
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-900">
-          {node.label}
-        </p>
+function GraphCanvas({
+  nodes,
+  edges,
+  selectedId,
+  onSelect,
+  isDarkMode
+}: {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  isDarkMode: boolean;
+}) {
+  const fgRef = useRef<ForceGraphMethods>();
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const { clientWidth, clientHeight } = containerRef.current;
+    setDimensions({ width: clientWidth, height: clientHeight });
+    
+    const handleResize = () => {
+      if (containerRef.current) {
+        setDimensions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const graphData = useMemo(() => {
+    return {
+      nodes: nodes.map(n => ({ ...n, id: n.id, name: n.label, val: (n.question_count || 1) * 1.5 })),
+      links: edges.map(e => ({ source: e.source, target: e.target }))
+    };
+  }, [nodes, edges]);
+
+  const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const isSelected = node.id === selectedId;
+    const label = node.name;
+    const fontSize = 14 / globalScale;
+    ctx.font = `${isSelected ? 'bold ' : ''}${fontSize}px Inter, sans-serif`;
+    const textWidth = ctx.measureText(label).width;
+    const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 1.2);
+
+    ctx.fillStyle = isDarkMode ? (isSelected ? 'rgba(45, 108, 255, 0.2)' : 'rgba(15, 23, 42, 0.8)') : (isSelected ? 'rgba(45, 108, 255, 0.1)' : 'rgba(255, 255, 255, 0.9)');
+    if (isSelected) {
+      ctx.strokeStyle = '#2D6CFF';
+      ctx.lineWidth = 1.5 / globalScale;
+    } else {
+      ctx.strokeStyle = isDarkMode ? '#334155' : '#e2e8f0';
+      ctx.lineWidth = 1 / globalScale;
+    }
+    
+    // Draw background
+    ctx.beginPath();
+    ctx.roundRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1], 4 / globalScale);
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw dot
+    ctx.fillStyle = levelColors[node.type] ?? levelColors.NOTE;
+    ctx.beginPath();
+    ctx.arc(node.x - bckgDimensions[0] / 2 + fontSize, node.y, 3 / globalScale, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Draw text
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isDarkMode ? '#f8fafc' : '#0f172a';
+    ctx.fillText(label, node.x - bckgDimensions[0] / 2 + fontSize * 2, node.y);
+  }, [selectedId, isDarkMode]);
+
+  if (nodes.length === 0) {
+    return (
+      <div className="flex h-[600px] items-center justify-center rounded-2xl border border-dashed border-neutral-300 dark:border-slate-700 bg-neutral-50 dark:bg-slate-900 text-sm text-neutral-500">
+        Không có note phù hợp với bộ lọc.
       </div>
-      <div className="mt-2 flex items-center gap-2">
-        <span
-          className={`rounded border px-2 py-0.5 text-xs ${levelClass(node.type)}`}
-        >
-          {levelLabels[node.type] ?? node.type}
-        </span>
-        <span className="text-xs text-neutral-500">
-          {node.question_count} câu
-        </span>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative h-[600px] overflow-hidden rounded-2xl border border-neutral-200 dark:border-slate-800 bg-[#fbfcff] dark:bg-[#0b1120] shadow-inner transition-colors duration-300">
+      <div className="absolute inset-0 z-0 opacity-[0.4] dark:opacity-[0.1]" style={{
+        backgroundImage: `radial-gradient(${isDarkMode ? '#334155' : '#cbd5e1'} 1px, transparent 1px)`,
+        backgroundSize: '24px 24px'
+      }} />
+      <div className="absolute inset-0 z-10">
+        <ForceGraph2D
+          ref={fgRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={graphData}
+          nodeCanvasObject={paintNode}
+          nodePointerAreaPaint={(node: any, color, ctx) => {
+            const bckgDimensions = [50, 15]; // rough estimate
+            ctx.fillStyle = color;
+            ctx.fillRect(node.x - bckgDimensions[0]/2, node.y - bckgDimensions[1]/2, bckgDimensions[0], bckgDimensions[1]);
+          }}
+          linkColor={() => isDarkMode ? 'rgba(71, 85, 105, 0.4)' : 'rgba(203, 213, 225, 0.6)'}
+          linkWidth={selectedId ? (link: any) => (link.source.id === selectedId || link.target.id === selectedId) ? 2 : 1 : 1}
+          onNodeClick={(node) => onSelect(node.id)}
+          d3VelocityDecay={0.3}
+          cooldownTicks={100}
+        />
+      </div>
+      <div className="absolute left-4 top-4 z-20 rounded-lg border border-white/80 dark:border-slate-700 bg-white/85 dark:bg-slate-800/80 px-3 py-2 text-[11px] text-neutral-500 dark:text-neutral-400 shadow-sm backdrop-blur">
+        Graph view · {nodes.length} notes · {edges.length} links
+      </div>
+      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3 rounded-lg border border-white/80 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 px-3 py-2 text-[10px] text-neutral-500 dark:text-neutral-400 shadow-sm backdrop-blur">
+        <span><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: levelColors.TOPIC }}/> Topic</span>
+        <span><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: levelColors.CONCEPT }}/> Concept</span>
+        <span><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: levelColors.SKILL }}/> Skill</span>
       </div>
     </div>
   );
 }
 
 export default function ObsidianPage() {
-  const [apiUrl, setApiUrl] = useState("https://127.0.0.1:27124");
-  const [apiKey, setApiKey] = useState("");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [nodeName, setNodeName] = useState("");
-  const [nodeDescription, setNodeDescription] = useState("");
-  const [nodeParentId, setNodeParentId] = useState<number | undefined>();
-  const [nodeError, setNodeError] = useState("");
+  const { theme } = useTheme();
+  const isDarkMode = theme === 'dark';
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showNewNote, setShowNewNote] = useState(false);
+  const [noteName, setNoteName] = useState("");
+  const [noteDescription, setNoteDescription] = useState("");
+  const [noteError, setNoteError] = useState("");
   const queryClient = useQueryClient();
-
-  const treeQuery = useQuery({
-    queryKey: ["knowledgeTree"],
-    queryFn: getKnowledgeTree,
-  });
-
   const graphQuery = useQuery({
     queryKey: ["knowledgeGraph"],
     queryFn: getKnowledgeGraph,
   });
+  const allNodes = graphQuery.data?.nodes ?? [];
+  const allEdges = graphQuery.data?.edges ?? [];
 
-  const flatNodes = useMemo(
-    () => flattenTree(treeQuery.data ?? []),
-    [treeQuery.data],
-  );
-  const selectedNode =
-    flatNodes.find((node) => node.id === selectedId) ?? flatNodes[0] ?? null;
-
-  const mutation = useMutation({
-    mutationFn: (data: SyncRequest) => syncObsidianLocalApi(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["questions"] });
-      queryClient.invalidateQueries({ queryKey: ["knowledgeTree"] });
-      queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
-    },
-  });
-
-  const handleSync = () => {
-    if (!apiUrl || !apiKey) {
-      alert("Vui lòng nhập đầy đủ API URL và API Key");
-      return;
-    }
-    mutation.mutate({ api_url: apiUrl, api_key: apiKey });
-  };
-
-  const createNodeMutation = useMutation({
-    mutationFn: createKnowledgeNode,
-    onSuccess: (node) => {
-      setNodeName("");
-      setNodeDescription("");
-      setNodeParentId(undefined);
-      setSelectedId(node.id);
-      setNodeError("");
-      queryClient.invalidateQueries({ queryKey: ["knowledgeTree"] });
-      queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
-    },
-    onError: (requestError: unknown) => {
-      setNodeError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Không tạo được node.",
+  const visibleNodes = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return allNodes.filter((node) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        node.label.toLowerCase().includes(normalizedSearch) ||
+        node.path.toLowerCase().includes(normalizedSearch);
+      return (
+        matchesSearch && (typeFilter === "ALL" || node.type === typeFilter)
       );
+    });
+  }, [allNodes, search, typeFilter]);
+
+  const selectedNode =
+    allNodes.find((node) => node.id === selectedId) ?? visibleNodes[0] ?? null;
+  const connectedNodes = selectedNode
+    ? allEdges
+        .flatMap((edge) => {
+          if (edge.source === selectedNode.id)
+            return [allNodes.find((node) => node.id === edge.target)];
+          if (edge.target === selectedNode.id)
+            return [allNodes.find((node) => node.id === edge.source)];
+          return [];
+        })
+        .filter((node): node is KnowledgeGraphNode => Boolean(node))
+    : [];
+
+  const createNoteMutation = useMutation({
+    mutationFn: createKnowledgeNode,
+    onSuccess: () => {
+      setNoteName("");
+      setNoteDescription("");
+      setNoteError("");
+      setShowNewNote(false);
+      queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
     },
+    onError: (error: unknown) =>
+      setNoteError(
+        error instanceof Error ? error.message : "Không tạo được note.",
+      ),
   });
 
-  const handleCreateNode = (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateNote = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!nodeName.trim()) return;
-    createNodeMutation.mutate({
-      name: nodeName.trim(),
-      description: nodeDescription.trim() || undefined,
-      parent_id: nodeParentId,
+    if (!noteName.trim()) return;
+    const selectedEntityId = selectedNode ? selectedNode.entity_id : undefined;
+    createNoteMutation.mutate({
+      name: noteName.trim(),
+      description: noteDescription.trim() || undefined,
+      parent_id: selectedEntityId,
     });
   };
 
-  const graphNodes = graphQuery.data?.nodes ?? [];
-  const graphEdges = graphQuery.data?.edges ?? [];
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+    <div className={`space-y-5 transition-colors duration-300 ${isDarkMode ? 'dark' : ''}`}>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
-            Knowledge Vault
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary-600 dark:text-primary-400">
+            Local knowledge space
+          </p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+            Obsidian Graph
           </h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            Cây kiến thức đồng bộ từ Obsidian, liên kết với câu hỏi và graph
-            nghiệp vụ của MIT EXAMS.
+          <p className="mt-1 max-w-2xl text-sm text-neutral-500 dark:text-neutral-400">
+            Không gian trực quan để khám phá các note, liên kết và ngữ cảnh tri thức trong vault.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-neutral-500">
-          <span>{flatNodes.length} node</span>
-          <span className="h-1 w-1 rounded-full bg-neutral-300" />
-          <span>{graphEdges.length} liên kết</span>
-        </div>
-      </div>
+        <button
+          type="button"
+          onClick={() => setShowNewNote((value) => !value)}
+          className="rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 transition hover:bg-primary-600 dark:hover:bg-primary-400"
+        >
+          {showNewNote ? "Đóng note mới" : "+ Note mới"}
+        </button>
+      </header>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <aside className="rounded-xl border border-neutral-200 bg-white shadow-sm">
-          <div className="border-b border-neutral-100 px-4 py-3">
-            <p className="text-sm font-semibold text-neutral-900">Vault Tree</p>
-          </div>
-          <div className="max-h-[620px] overflow-y-auto p-2">
-            {treeQuery.isLoading && (
-              <p className="px-2 py-3 text-sm text-neutral-500">
-                Đang tải cây kiến thức...
-              </p>
-            )}
-            {!treeQuery.isLoading && flatNodes.length === 0 && (
-              <p className="px-2 py-3 text-sm text-neutral-500">
-                Chưa có node kiến thức.
-              </p>
-            )}
-            {(treeQuery.data ?? []).map((node) => (
-              <TreeNode
-                key={node.id}
-                node={node}
-                selectedId={selectedNode?.id ?? null}
-                onSelect={(nextNode) => setSelectedId(nextNode.id)}
-              />
-            ))}
-          </div>
-        </aside>
-
-        <main className="space-y-4">
-          <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-            {selectedNode ? (
-              <div className="space-y-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase text-neutral-500">
-                      {selectedNode.path}
-                    </p>
-                    <h2 className="mt-1 text-xl font-semibold text-neutral-900">
-                      {selectedNode.name}
-                    </h2>
-                  </div>
-                  <span
-                    className={`w-fit rounded border px-2.5 py-1 text-xs font-medium ${levelClass(selectedNode.level)}`}
-                  >
-                    {levelLabels[selectedNode.level ?? "NOTE"] ??
-                      selectedNode.level}
-                  </span>
-                </div>
-
-                {selectedNode.description && (
-                  <p className="text-sm leading-6 text-neutral-700">
-                    {selectedNode.description}
-                  </p>
-                )}
-
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <div className="rounded-lg bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">Câu hỏi</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">
-                      {selectedNode.question_count ?? 0}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">Node con</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">
-                      {selectedNode.children?.length ?? 0}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">Parent ID</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">
-                      {selectedNode.parent_id ?? "-"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-neutral-50 p-3">
-                    <p className="text-xs text-neutral-500">Node ID</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">
-                      {selectedNode.id}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-neutral-500">
-                Chọn một node để xem chi tiết.
-              </p>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 border-b border-neutral-100 pb-5">
-              <p className="text-sm font-semibold text-neutral-900">
-                Tạo node thủ công
-              </p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Không cần cài Obsidian. Dùng cách này để tạo cây kiến thức trực
-                tiếp.
-              </p>
-              <form
-                onSubmit={handleCreateNode}
-                className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_180px_auto] md:items-end"
-              >
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-700">
-                    Tên node
-                  </span>
-                  <input
-                    value={nodeName}
-                    onChange={(event) => setNodeName(event.target.value)}
-                    required
-                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                    placeholder="Ví dụ: Đại số"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-700">
-                    Mô tả
-                  </span>
-                  <input
-                    value={nodeDescription}
-                    onChange={(event) => setNodeDescription(event.target.value)}
-                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                    placeholder="Tùy chọn"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-700">
-                    Node cha
-                  </span>
-                  <select
-                    value={nodeParentId ?? ""}
-                    onChange={(event) =>
-                      setNodeParentId(
-                        event.target.value
-                          ? Number(event.target.value)
-                          : undefined,
-                      )
-                    }
-                    className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                  >
-                    <option value="">Node gốc</option>
-                    {flatNodes.map((node) => (
-                      <option key={node.id} value={node.id}>
-                        {node.path || node.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="submit"
-                  disabled={createNodeMutation.isPending}
-                  className="rounded-lg bg-success-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-success-500/90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {createNodeMutation.isPending ? "Đang tạo..." : "Thêm node"}
-                </button>
-              </form>
-              {nodeError && (
-                <p className="mt-2 text-xs text-danger-500">{nodeError}</p>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-neutral-900">
-                  Đồng bộ Obsidian Local REST API{" "}
-                  <span className="font-normal text-neutral-500">
-                    (tùy chọn)
-                  </span>
-                </p>
-                <p className="mb-3 text-xs text-neutral-500">
-                  Chỉ dùng phần này nếu bạn có Obsidian và plugin Local REST
-                  API. Nếu không, hãy tạo node thủ công ở trên.
-                </p>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-700">
-                      Obsidian API URL
-                    </span>
-                    <input
-                      type="text"
-                      value={apiUrl}
-                      onChange={(event) => setApiUrl(event.target.value)}
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-700">
-                      API Key
-                    </span>
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                    />
-                  </label>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleSync}
-                disabled={!apiUrl || !apiKey || mutation.isPending}
-                className="self-end rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {mutation.isPending ? "Đang đồng bộ..." : "Đồng bộ ngay"}
-              </button>
-            </div>
-
-            {mutation.isError && (
-              <div className="mt-4 rounded-lg border border-danger-500/20 bg-danger-500/10 p-3 text-sm text-danger-500">
-                Lỗi kết nối: {(mutation.error as Error).message}
-              </div>
-            )}
-
-            {mutation.isSuccess && mutation.data && (
-              <div className="mt-5 max-h-72 overflow-y-auto rounded-lg border border-neutral-200">
-                <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                  <thead className="sticky top-0 bg-neutral-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium text-neutral-500">
-                        File
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium text-neutral-500">
-                        Trạng thái
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium text-neutral-500">
-                        Chi tiết
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-200 bg-white">
-                    {mutation.data.details.map((detail, index) => (
-                      <tr key={`${detail.file}-${index}`}>
-                        <td className="px-4 py-3 text-neutral-900">
-                          {detail.file}
-                        </td>
-                        <td className="px-4 py-3 text-neutral-700">
-                          {detail.status}
-                        </td>
-                        <td className="px-4 py-3 text-neutral-500">
-                          {detail.reason || `ID: ${detail.question_id}`}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </main>
-
-        <aside className="rounded-xl border border-neutral-200 bg-white shadow-sm">
-          <div className="border-b border-neutral-100 px-4 py-3">
-            <p className="text-sm font-semibold text-neutral-900">
-              Graph Links
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Notes", value: allNodes.length },
+          { label: "Links", value: allEdges.length },
+          {
+            label: "Có câu hỏi",
+            value: allNodes.filter((node) => node.question_count > 0).length,
+          },
+          {
+            label: "Đang chọn",
+            value: selectedNode ? selectedNode.label : "-",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border border-neutral-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 shadow-sm transition-colors"
+          >
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">{stat.label}</p>
+            <p className="mt-1 truncate text-lg font-bold text-neutral-900 dark:text-white">
+              {stat.value}
             </p>
           </div>
-          <div className="max-h-[620px] space-y-4 overflow-y-auto p-4">
+        ))}
+      </div>
+
+      {showNewNote && (
+        <form
+          onSubmit={handleCreateNote}
+          className="rounded-2xl border border-primary-100 dark:border-primary-900/50 bg-primary-50/60 dark:bg-primary-900/20 p-5 shadow-sm transition-colors"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+            <label className="flex-1">
+              <span className="mb-1.5 block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                Tên note
+              </span>
+              <input
+                value={noteName}
+                onChange={(event) => setNoteName(event.target.value)}
+                required
+                placeholder="Ví dụ: Phương trình bậc hai"
+                className="w-full rounded-lg border border-neutral-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-neutral-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-400"
+              />
+            </label>
+            <label className="flex-[1.5]">
+              <span className="mb-1.5 block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                Mô tả ngắn
+              </span>
+              <input
+                value={noteDescription}
+                onChange={(event) => setNoteDescription(event.target.value)}
+                placeholder="Ghi chú cho note"
+                className="w-full rounded-lg border border-neutral-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-neutral-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-400"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={createNoteMutation.isPending}
+              className="rounded-lg bg-success-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-success-600 transition"
+            >
+              {createNoteMutation.isPending ? "Đang tạo..." : "Tạo note"}
+            </button>
+          </div>
+          {selectedNode && (
+            <p className="mt-3 text-xs text-primary-700 dark:text-primary-400">
+              Note mới sẽ được liên kết với{" "}
+              <strong>{selectedNode.label}</strong>.
+            </p>
+          )}
+          {noteError && (
+            <p className="mt-3 text-xs text-danger-500 dark:text-danger-400">{noteError}</p>
+          )}
+        </form>
+      )}
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+        <aside className="rounded-2xl border border-neutral-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm transition-colors">
+          <div className="px-2 pb-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-neutral-900 dark:text-white">All notes</h2>
+              <span className="text-xs text-neutral-400">
+                {visibleNodes.length}/{allNodes.length}
+              </span>
+            </div>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search notes..."
+              aria-label="Tìm note"
+              className="mt-3 w-full rounded-lg border border-neutral-200 dark:border-slate-700 bg-neutral-50 dark:bg-slate-800 px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            />
+            <select
+              value={typeFilter}
+              onChange={(event) => setTypeFilter(event.target.value)}
+              aria-label="Lọc loại note"
+              className="mt-2 w-full rounded-lg border border-neutral-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-neutral-700 dark:text-neutral-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            >
+              <option value="ALL">Tất cả loại note</option>
+              <option value="TOPIC">Chủ đề</option>
+              <option value="CONCEPT">Khái niệm</option>
+              <option value="SKILL">Kỹ năng</option>
+              <option value="NOTE">Ghi chú</option>
+            </select>
+          </div>
+          <div className="max-h-[520px] space-y-1 overflow-y-auto custom-scrollbar">
             {graphQuery.isLoading && (
-              <p className="text-sm text-neutral-500">Đang tải graph...</p>
-            )}
-            {!graphQuery.isLoading && graphNodes.length === 0 && (
-              <p className="text-sm text-neutral-500">Chưa có graph node.</p>
-            )}
-            <div className="grid grid-cols-1 gap-3">
-              {graphNodes.slice(0, 12).map((node) => (
-                <GraphNodeCard key={node.id} node={node} />
-              ))}
-            </div>
-            {graphNodes.length > 12 && (
-              <p className="text-xs text-neutral-500">
-                +{graphNodes.length - 12} node khác trong vault
+              <p className="px-2 py-5 text-sm text-neutral-500 dark:text-neutral-400">
+                Đang tải notes...
               </p>
             )}
-            <div className="rounded-lg bg-neutral-50 p-3">
-              <p className="text-xs font-medium text-neutral-500">
-                Loại liên kết
+            {graphQuery.isError && (
+              <p className="px-2 py-5 text-sm text-danger-500 dark:text-danger-400">
+                Không tải được graph.
               </p>
-              <div className="mt-2 space-y-1 text-sm text-neutral-700">
-                <p>
-                  PARENT_OF:{" "}
-                  {
-                    graphEdges.filter((edge) => edge.type === "PARENT_OF")
-                      .length
-                  }
-                </p>
-                <p>
-                  NEXT_SIBLING:{" "}
-                  {
-                    graphEdges.filter((edge) => edge.type === "NEXT_SIBLING")
-                      .length
-                  }
-                </p>
-              </div>
-            </div>
+            )}
+            {visibleNodes.map((node) => (
+              <NodePill
+                key={node.id}
+                node={node}
+                active={node.id === selectedNode?.id}
+                onClick={() => setSelectedId(node.id)}
+              />
+            ))}
+            {!graphQuery.isLoading && visibleNodes.length === 0 && (
+              <p className="px-2 py-5 text-sm text-neutral-500 dark:text-neutral-400">
+                Chưa có note phù hợp.
+              </p>
+            )}
           </div>
         </aside>
-      </div>
+
+        <main className="min-w-0">
+          <GraphCanvas
+            nodes={visibleNodes}
+            edges={allEdges}
+            selectedId={selectedNode?.id ?? null}
+            onSelect={setSelectedId}
+            isDarkMode={isDarkMode}
+          />
+        </main>
+
+        <aside className="rounded-2xl border border-neutral-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm transition-colors">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-600 dark:text-primary-400">
+            Note context
+          </p>
+          {selectedNode ? (
+            <>
+              <div className="mt-3 flex items-start gap-3">
+                <span
+                  className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor:
+                      levelColors[selectedNode.type] ?? levelColors.NOTE,
+                  }}
+                />
+                <div className="min-w-0">
+                  <h2 className="break-words text-xl font-bold text-neutral-900 dark:text-white">
+                    {selectedNode.label}
+                  </h2>
+                  <p className="mt-1 break-words text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+                    {selectedNode.path}
+                  </p>
+                </div>
+              </div>
+              <span
+                className="mt-4 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                style={{
+                  color: levelColors[selectedNode.type] ?? levelColors.NOTE,
+                  backgroundColor: `${levelColors[selectedNode.type] ?? levelColors.NOTE}18`,
+                }}
+              >
+                {levelLabels[selectedNode.type] ?? selectedNode.type}
+              </span>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-neutral-50 dark:bg-slate-800/50 p-3">
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Questions</p>
+                  <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-white">
+                    {selectedNode.question_count}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-neutral-50 dark:bg-slate-800/50 p-3">
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Links</p>
+                  <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-white">
+                    {connectedNodes.length}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 border-t border-neutral-100 dark:border-slate-800 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">
+                  Backlinks & connections
+                </p>
+                <div className="mt-3 space-y-1">
+                  {connectedNodes.length === 0 && (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                      Note chưa có liên kết.
+                    </p>
+                  )}
+                  {connectedNodes.map((node) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={() => setSelectedId(node.id)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-slate-800/50 transition-colors"
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor:
+                            levelColors[node.type] ?? levelColors.NOTE,
+                        }}
+                      />{" "}
+                      <span className="truncate">{node.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
+              Chọn một note trên graph để xem context.
+            </p>
+          )}
+        </aside>
+      </section>
     </div>
   );
 }

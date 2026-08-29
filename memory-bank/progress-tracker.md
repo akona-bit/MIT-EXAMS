@@ -5,7 +5,7 @@
 ## Trạng thái tổng quan
 
 **Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH (BACKEND)
-**Cập nhật lần cuối:** 2026-08-22
+**Cập nhật lần cuối:** 2026-08-24
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -26,9 +26,9 @@
 
 - [x] Schema Question/Answer/KnowledgeNode/Resource
 - [x] CRUD API
-- [ ] Admin UI cơ bản
+- [x] Admin UI cơ bản
 - [x] Workflow duyệt
-- [ ] Versioning câu hỏi
+- [x] Versioning câu hỏi
 
 ### Giai đoạn 3 — Ma trận & Sinh đề
 
@@ -43,7 +43,7 @@
 - [x] Cấu hình Phiên thi (Thời gian, điểm số)
 - [x] ExamParticipant (Danh sách dự thi)
 - [x] Logic gán mã đề (Dynamic Assignment)
-- [ ] Admin UI quản lý kỳ thi
+- [x] Admin UI quản lý kỳ thi
 
 ### Giai đoạn 5 — Thi Online
 
@@ -82,6 +82,27 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-08-29` — Hoàn thiện tính năng Tạo/Sửa Ma trận đặc tả (MatrixBuilder): Tạo `MatrixFormPage`, kết nối API `createMatrix` và `updateMatrix`, tạo form quy tắc động (cho phép thêm/xóa/sửa Chủ đề, Loại câu, Số lượng, Phần thi). Đã gắn vào routing chính của ứng dụng và xóa các placeholder cũ. Frontend build thành công.
+- `2026-08-29` — Thực hiện đại tu UI/UX toàn diện (Premium Upgrade): Nâng cấp `tailwind.config.js` thêm hệ màu mới và keyframes animation (blob, gradient); cấu hình lại `index.css` với nền Noise texture và Mesh Gradient chuyển động chậm; viết lại `Card.tsx` (True Glassmorphism với viền sáng mờ); `Button.tsx` (gradient flow animation, glow outline); `Input.tsx` (glow rings); thay đổi `AdminShell.tsx` sang giao diện Floating Sidebar và Floating Header tạo cảm giác hiện đại tối đa. Frontend build thành công.
+- `2026-08-28` — Hoàn thành Mảng Dữ liệu (Phân tích 703 bài thi): Viết và chạy script `analyze_703.py`, parse cơ chế Thưởng/Phạt (giá trị 0.1, 0.25, 0.5), thiết lập Câu 4 đúng mặc định, chạy MMLE IRT 2PL, scale về thang điểm 0-300. Dữ liệu và logs được gửi lên PostHog, vẽ biểu đồ phân phối điểm, lưu kết quả tổng hợp vào Obsidian Vault dưới dạng báo cáo tự động (`quy-trinh-phan-tich-data.md` và `bao-cao-phan-tich-703-thi-sinh.md`).
+- `2026-08-28` — Hoàn thành Mảng Hệ thống & Giao diện: Dọn dẹp test files thừa, sửa lỗi Typescript build (`npm run build` thành công 100%). Hoàn thiện UI trang Quản lý quyền xem đáp án (`/admin/access`), nâng cấp giao diện `ObsidianPage` sang bản Premium sử dụng thư viện `react-force-graph-2d` với Force-directed layout và Dark Mode cực đẹp.
+- `2026-08-26` — Lột xác toàn bộ giao diện (UI Revamp) & tích hợp **Dark Mode (Giao diện tối)**: Thêm Context `ThemeStore`, tinh chỉnh `tailwind.config.js`, nâng cấp hiệu ứng Glassmorphism (kính mờ), thêm micro-animation (active scale, focus ring) cho toàn bộ Component (Button, Input, ConfirmDialog, DataTable) và layout (`AdminShell`, `AuthShell`).
+- `2026-08-26` — Hoàn thiện tích hợp luồng xử lý IRT sâu vào Backend (`scorer.py`): Tự động trích xuất kết quả bài làm, chuyển sang ma trận $U$, tính toán độ khó/phân biệt bằng MMLE (`irt_engine.py`), lưu tham số vào bảng `Question`, ước lượng năng lực $\theta$, và quy đổi điểm chuẩn lưu vào `ExamResult`.
+- `2026-08-26` — Xác minh thuật toán IRT và CTT hoạt động hoàn hảo (đã tạo test script kiểm chứng MMLE, ước lượng Theta, SE, true score). Dọn dẹp các file rác: file database dư thừa, `__pycache__`, `requirements_clean.txt`, và các file nháp.
+- `2026-08-26` — Khởi động backend local thành công: chạy `uvicorn app.main:app` trong venv backend trên `http://localhost:8000`, health check `/api/health` trả `200 {"status":"ok"}`.
+- `2026-08-26` — Xóa mock data dashboard: thêm `/api/v1/statistics/overview` đọc KPI/kỳ thi/phổ điểm từ Supabase, thay DashboardPage bằng query dữ liệu thật và empty/loading states; xác nhận API overview 200, không còn literal mock KPI/exam/chart, frontend build đạt.
+- `2026-08-26` — Cấu hình Supabase Session Pooler và sửa `core/config.py` đọc `backend/.env` theo đường dẫn tuyệt đối, tránh fallback SQLite khi khởi động từ root; migration `a4e5f6b7c8d9` đã apply thành công, health/login/questions API đều trả 200.
+- `2026-08-26` — Điều tra lỗi API Questions 500: database thiếu `question.scoring_config` và schema sub-item dù model đã dùng; thêm migration `a4e5f6b7c8d9_add_question_scoring_and_sub_items.py` (scoring config, enum COMPOSITE, question_sub_item, answer.sub_item_id). Offline SQL/compile đạt; apply thật bị chặn vì hostname Supabase không resolve (`socket.gaierror 11001`).
+- `2026-08-25` — Làm lại Obsidian theo graph-first: thay toàn bộ Knowledge Vault dạng cây bằng canvas graph node-edge, danh sách All notes, tìm kiếm/lọc, note context, backlinks/connections và tạo note mới; frontend build đạt.
+- `2026-08-25` — Điều chỉnh Obsidian theo workflow manual-only: gỡ tab Đồng bộ/Lịch sử, API URL/API Key và các trạng thái sync khỏi UI; giữ lại cây kiến thức, tìm kiếm/lọc, tạo node và graph. Frontend build đạt.
+- `2026-08-25` — Khắc phục lỗi npm `ENOENT` khi chạy từ root: thêm `package.json` tại workspace root với các script chuyển tiếp sang `frontend`; xác nhận `npm run build` đạt và `npm run dev` khởi động Vite tại `http://localhost:5173/`.
+- `2026-08-25` — Bắt đầu dựng lại Obsidian frontend: tách workspace thành tab Vault/Đồng bộ, thêm tìm kiếm/lọc cây kiến thức, hiển thị sync run và thống kê file, cập nhật type `wikilinks`/`sync_run_id`; `npm run build` đạt.
+- `2026-08-25` — Hoàn thành lát cắt idempotent sync Obsidian: thêm `ObsidianSyncRun`/`ObsidianFile`, checksum chống import lặp, liên kết version khi file thay đổi, sync service và migration `8a2c9d10e7f1`; module compile đạt và Alembic xác nhận revision là head.
+- `2026-08-25` — Bắt đầu Phase 1 tạo lại Obsidian: harden parser frontmatter/checklist/metadata, chuyển imported question sang `PENDING`, trích xuất wikilink, thêm timeout/retry/URL encoding/concurrency cho REST client và expose metadata trong sync response; backend compile đạt.
+- `2026-08-25` — Bắt đầu implementation luồng tạo kỳ thi Admin: thêm form chọn ma trận/số mã đề, gọi endpoint sinh đề thật, điều hướng tới chi tiết kỳ thi và xác nhận frontend build thành công (`npm run build` ✓).
+- `2026-08-25` — Hoàn thành luồng Admin Question CRUD:end-to-end: thêm route chỉnh sửa câu hỏi, hợp nhất form create/edit, tích hợp Edit action từ danh sách, validate dữ liệu đầu vào và build frontend thành công (`npm run build` ✓).
+- `2026-08-24` — Chuẩn hóa cấu hình deploy frontend lên Vercel/v0 cho monorepo: root build `frontend`, SPA fallback, cập nhật hướng dẫn Root Directory/build command và xác nhận `npm run build` đạt.
+- `2026-08-24` — Deploy production frontend thành công lên Vercel, trạng thái Ready: `https://frontend-seven-hazel-33.vercel.app`.
 - `2026-08-23` — Bổ sung chế độ tạo node kiến thức thủ công trong Knowledge Vault, biến Obsidian Local REST API thành tùy chọn; frontend build đạt.
 - `2026-08-23` — Triển khai lát cắt chấm và xuất Excel: mapping submission theo mã đề về câu gốc, vector C1-C120 `1/0/-1`, điểm CTT theo 4 phần, endpoint `/api/v1/statistics/exams/{exam_id}/export.xlsx`, migration Supabase `7d6d4f2a1c90`. API health và OpenAPI route export đã xác nhận; IRT MMLE thật vẫn chưa tích hợp.
 - `2026-08-23` — Sửa migration PostgreSQL: tạo enum `examstatus` tường minh trước khi thêm cột `exam.status`, bổ sung `asyncpg` vào requirements. Alembic đã chạy thành công toàn bộ trên Supabase, revision hiện tại `4c449bf29194 (head)`.

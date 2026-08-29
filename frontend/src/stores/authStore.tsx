@@ -1,54 +1,89 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { User } from '../types';
-import { login as apiLogin, getMe } from '../api/auth';
-import type { LoginRequest } from '../types';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import type { User, LoginRequest } from "../types";
+import { getMe } from "../api/auth";
+import { supabase } from "../lib/supabase";
+import posthog from "../lib/posthog";
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (data: LoginRequest) => Promise<void>;
-  logout: () => void;
+  login: (data: LoginRequest) => Promise<User>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('access_token')
-  );
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On mount: if token exists, fetch user profile
   useEffect(() => {
-    if (token) {
-      getMe()
-        .then((u) => setUser(u))
-        .catch(() => {
-          // Token invalid/expired
-          localStorage.removeItem('access_token');
-          setToken(null);
-        })
-        .finally(() => setIsLoading(false));
-    } else {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        setToken(session.access_token);
+        try {
+          // getMe() calls the backend, which now will lazily create/sync the user
+          // based on the Supabase JWT.
+          const u = await getMe();
+          setUser(u);
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            posthog.identify(session.user.id, { email: session.user.email });
+          }
+        } catch (e) {
+          console.error("Failed to fetch user profile", e);
+          setUser(null);
+        }
+      } else {
+        setToken(null);
+        setUser(null);
+        posthog.reset();
+      }
       setIsLoading(false);
-    }
-  }, [token]);
+    });
 
-  const login = useCallback(async (data: LoginRequest) => {
-    const result = await apiLogin(data);
-    localStorage.setItem('access_token', result.access_token);
-    setToken(result.access_token);
-    const u = await getMe();
-    setUser(u);
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('access_token');
-    setToken(null);
-    setUser(null);
+  const login = useCallback(async (data: LoginRequest) => {
+    setIsLoading(true);
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
+      email: data.username, // Using the username field as email
+      password: data.password,
+    });
+    
+    if (error) {
+      setIsLoading(false);
+      throw error;
+    }
+    
+    // onAuthStateChange will trigger, but we also return immediately
+    setToken(authData.session.access_token);
+    try {
+      const u = await getMe();
+      setUser(u);
+      return u;
+    } catch (e) {
+      setIsLoading(false);
+      throw e;
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
   }, []);
 
   return (
@@ -69,6 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

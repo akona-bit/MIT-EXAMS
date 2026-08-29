@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -11,7 +12,9 @@ export default {
           50: '#EEF4FF',
           100: '#D9E6FF',
           300: '#7FA8FF',
+          400: '#5C90FF', // Added
           500: '#2D6CFF',
+          600: '#2255CC', // Added
           700: '#1B45B3',
           900: '#0F2966',
         },
@@ -19,10 +22,15 @@ export default {
           0: '#FFFFFF',
           50: '#F7F8FA',
           100: '#EEF0F3',
+          200: '#E0E4EB', // Added
           300: '#C7CCD4',
+          400: '#A3ADC0', // Added
           500: '#8A93A3',
+          600: '#647087', // Added
           700: '#4A5261',
+          800: '#2D3545', // Added
           900: '#1A1F29',
+          950: '#0F1218', // Added deeply dark
         },
         success: { 500: '#1BA672' },
         danger: { 500: '#E5484D' },

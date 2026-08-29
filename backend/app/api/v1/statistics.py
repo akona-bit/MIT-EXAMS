@@ -8,6 +8,7 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import List, Dict, Any
 
 from app.db.database import get_db
@@ -17,6 +18,57 @@ from app.models.exam import ExamSubmission, ExamParticipant, Exam, ExamForm, Exa
 from app.models.question import Question
 
 router = APIRouter()
+
+
+@router.get("/overview", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def get_dashboard_overview(
+    db: AsyncSession = Depends(get_db),
+):
+    question_count = await db.scalar(select(func.count(Question.id))) or 0
+    exam_count = await db.scalar(select(func.count(Exam.id))) or 0
+    participant_count = await db.scalar(select(func.count(ExamParticipant.id))) or 0
+    submission_count = await db.scalar(select(func.count(ExamSubmission.id))) or 0
+
+    recent_result = await db.execute(
+        select(Exam).order_by(Exam.created_at.desc()).limit(3)
+    )
+    recent_exams = [
+        {
+            "id": exam.id,
+            "name": exam.name,
+            "start_time": exam.start_time,
+            "end_time": exam.end_time,
+            "status": exam.status,
+        }
+        for exam in recent_result.scalars().all()
+    ]
+
+    score_result = await db.execute(
+        select(ExamResult.raw_total_score, ExamResult.total_score)
+        .order_by(ExamResult.created_at.desc())
+        .limit(1000)
+    )
+    scores = [float(raw_score) for raw_score, _ in score_result.all()]
+    distribution: List[Dict[str, Any]] = []
+    bucket_size = 12
+    for bucket in range(10):
+        lower = bucket * bucket_size
+        upper = (bucket + 1) * bucket_size
+        distribution.append({
+            "range": f"{lower}-{upper}",
+            "count": sum(1 for score in scores if lower <= score < upper),
+        })
+    if any(score >= 120 for score in scores):
+        distribution[-1]["count"] += sum(1 for score in scores if score >= 120)
+
+    return {
+        "total_questions": question_count,
+        "total_exams": exam_count,
+        "total_participants": participant_count,
+        "total_submissions": submission_count,
+        "recent_exams": recent_exams,
+        "score_distribution": distribution,
+    }
 
 
 @router.get("/exams/{exam_id}/export.xlsx", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -88,10 +140,10 @@ async def export_exam_results(exam_id: int, db: AsyncSession = Depends(get_db)):
         sheet.append(row)
 
     widths = {"A": 8, "B": 14, "C": 26, "D": 30, "E": 12}
-    for column, width in widths.items():
-        sheet.column_dimensions[column].width = width
-    for column in range(6, len(headers) + 1):
-        sheet.column_dimensions[get_column_letter(column)].width = 13
+    for column_name, width in widths.items():
+        sheet.column_dimensions[column_name].width = width
+    for column_index in range(6, len(headers) + 1):
+        sheet.column_dimensions[get_column_letter(column_index)].width = 13
 
     output = BytesIO()
     workbook.save(output)

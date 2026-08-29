@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Float, Enum as SQLAlchemyEnum
+from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Float, Enum as SQLAlchemyEnum, JSON
 import enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -11,6 +11,7 @@ from .question import QuestionType
 class Matrix(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
@@ -25,8 +26,25 @@ class MatrixRule(Base):
     count: Mapped[int] = mapped_column(Integer, default=1)
     # Part indicator: 1 (TV), 2 (TA), 3 (Toan), 4 (TDKH)
     part: Mapped[int] = mapped_column(Integer, default=1)
+    target_irt_b: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
     
     matrix: Mapped["Matrix"] = relationship(back_populates="rules")
+
+class ExamGenerationStatus(str, enum.Enum):
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+class ExamGenerationRun(Base):
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    matrix_id: Mapped[int] = mapped_column(ForeignKey("matrix.id"))
+    num_forms: Mapped[int] = mapped_column(Integer, default=1)
+    distinct_questions: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[ExamGenerationStatus] = mapped_column(SQLAlchemyEnum(ExamGenerationStatus))
+    error_details: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 
 class ExamStatus(str, enum.Enum):
     DRAFT = "DRAFT"
@@ -91,6 +109,8 @@ class ExamFormQuestion(Base):
     question_id: Mapped[int] = mapped_column(ForeignKey("question.id"))
     position: Mapped[int] = mapped_column(Integer) # Vị trí 1-120
     part: Mapped[int] = mapped_column(Integer) # 1, 2, 3, 4
+    matrix_rule_id: Mapped[Optional[int]] = mapped_column(ForeignKey("matrix_rule.id"), nullable=True)
+    exam_generation_run_id: Mapped[Optional[int]] = mapped_column(ForeignKey("exam_generation_run.id"), nullable=True)
     
     exam_form: Mapped["ExamForm"] = relationship(back_populates="questions")
     answers: Mapped[List["ExamFormAnswer"]] = relationship(back_populates="exam_form_question", cascade="all, delete-orphan")
@@ -116,8 +136,15 @@ class ExamSubmissionAnswer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     exam_submission_id: Mapped[int] = mapped_column(ForeignKey("exam_submission.id"))
     exam_form_question_id: Mapped[int] = mapped_column(ForeignKey("exam_form_question.id"))
-    selected_answer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("answer.id"), nullable=True) # None nếu bỏ trống
-    
+    # SINGLE_CHOICE: dùng selected_answer_id
+    selected_answer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("answer.id"), nullable=True)  # None nếu bỏ trống
+    # MULTIPLE_CHOICE: danh sách ID các answer được chọn
+    selected_answer_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
+    # TRUE_FALSE / COMPOSITE: dict { sub_item_id: selected_answer_id }
+    selected_subitem_answers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
+    # Điểm của riêng câu này (do scorer ghi, vd 0.25 cho 1 ý đúng/sai đúng)
+    score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     submission: Mapped["ExamSubmission"] = relationship(back_populates="answers")
 
 class ExamTrackingLog(Base):

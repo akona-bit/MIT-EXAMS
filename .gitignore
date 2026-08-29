@@ -12,3 +12,4 @@ backups/
 
 .vercel
 .env*
+frontend/dist/

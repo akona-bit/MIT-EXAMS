@@ -42,24 +42,24 @@ export default function ConfirmDialog({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-slate-900/40 dark:bg-slate-950/80 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
         onClick={!isLoading ? onCancel : undefined}
       />
       
       {/* Modal Content */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all">
+      <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
         <div className="p-6">
-          <h3 className="text-lg font-bold text-neutral-900 mb-2">{title}</h3>
-          <div className="text-neutral-600 text-sm leading-relaxed">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">{title}</h3>
+          <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
             {message}
           </div>
         </div>
-        <div className="bg-neutral-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-neutral-100">
+        <div className="bg-slate-50 dark:bg-slate-950/50 px-6 py-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-white/5">
           <Button variant="ghost" onClick={onCancel} disabled={isLoading}>
             {cancelText}
           </Button>
           <Button 
-            variant={isDestructive ? 'danger' : 'primary'} 
+            variant={isDestructive ? 'destructive' : 'default'} 
             onClick={onConfirm} 
             isLoading={isLoading}
           >

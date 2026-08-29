@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -7,6 +7,7 @@ from app.db.database import get_db
 from app.models.question import KnowledgeNode, Question
 from app.schemas.question import KnowledgeNodeCreate, KnowledgeNodeResponse
 from app.api.dependencies import RequireRole
+from app.core.analytics import capture
 
 router = APIRouter()
 
@@ -127,7 +128,7 @@ async def get_knowledge_graph(db: AsyncSession = Depends(get_db)):
     return {"nodes": graph_nodes, "edges": graph_edges}
 
 @router.post("/", response_model=KnowledgeNodeResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def create_knowledge_node(node_in: KnowledgeNodeCreate, db: AsyncSession = Depends(get_db)):
+async def create_knowledge_node(request: Request, node_in: KnowledgeNodeCreate, db: AsyncSession = Depends(get_db)):
     if node_in.parent_id:
         result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == node_in.parent_id))
         if not result.scalars().first():
@@ -137,4 +138,5 @@ async def create_knowledge_node(node_in: KnowledgeNodeCreate, db: AsyncSession =
     db.add(node)
     await db.commit()
     await db.refresh(node)
+    capture(request, "knowledge_node_created", {"knowledge_node_id": node.id, "has_parent": node.parent_id is not None})
     return node

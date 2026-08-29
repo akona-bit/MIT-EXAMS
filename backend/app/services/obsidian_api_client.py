@@ -1,102 +1,104 @@
-import httpx
-from typing import List, Dict, Any, Tuple
 import asyncio
+from typing import Any, List, Tuple
+from urllib.parse import quote
+
+import httpx
+
 
 class ObsidianApiClient:
-    def __init__(self, api_url: str, api_key: str):
-        # Ensure url doesn't end with /
+    def __init__(self, api_url: str, api_key: str, verify_ssl: bool = True):
         self.api_url = api_url.rstrip('/')
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json"
+            'Authorization': f'Bearer {api_key}',
+            'Accept': 'application/json',
         }
+        self.verify_ssl = verify_ssl
+        self.timeout = httpx.Timeout(20.0, connect=5.0)
+
+    async def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        request_headers = {**self.headers, **kwargs.pop('headers', {})}
+        last_error: Exception | None = None
+
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(
+                    verify=self.verify_ssl,
+                    timeout=self.timeout,
+                ) as client:
+                    response = await client.request(
+                        method,
+                        url,
+                        headers=request_headers,
+                        **kwargs,
+                    )
+
+                if response.status_code not in {408, 429, 500, 502, 503, 504}:
+                    response.raise_for_status()
+                    return response
+
+                last_error = httpx.HTTPStatusError(
+                    f'Obsidian API returned HTTP {response.status_code}',
+                    request=response.request,
+                    response=response,
+                )
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as error:
+                last_error = error
+
+            if attempt < 2:
+                await asyncio.sleep(0.25 * (attempt + 1))
+
+        raise RuntimeError(f'Obsidian API request failed: {last_error}') from last_error
 
     async def list_vault_files(self) -> List[str]:
-        """Fetch all markdown files from the vault."""
-        # The Local REST API uses /search/ or /vault/ to list files.
-        # According to Local REST API docs, GET /vault/ returns a JSON tree of files.
-        # Alternatively, GET /search/ with an empty query might return all files.
-        # Let's use GET /vault/ which returns directory structure.
-        async with httpx.AsyncClient(verify=False) as client:
-            response = await client.get(
-                f"{self.api_url}/vault/",
-                headers=self.headers
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            # The API returns an object for a folder. We need to parse recursively.
-            return self._extract_markdown_paths(data)
+        response = await self._request('GET', f'{self.api_url}/vault/')
+        return self._extract_markdown_paths(response.json())
 
-    def _extract_markdown_paths(self, node: Dict[str, Any], current_path: str = "") -> List[str]:
-        paths = []
-        if 'files' in node: # It's a folder
-            for child in node['files']:
+    def _extract_markdown_paths(self, node: Any) -> List[str]:
+        paths: List[str] = []
+        if isinstance(node, list):
+            for child in node:
                 paths.extend(self._extract_markdown_paths(child))
-        else: # Might be the root or direct file
-            pass 
-        
-        # Actually, the Local REST API returns an array of files/folders at the root if queried properly.
-        # Format for GET /vault/:
-        # {
-        #   "files": [
-        #     {"path": "file1.md", "name": "file1.md", "content": "..."} // Wait, /vault/ returns array or object?
-        #   ]
-        # }
-        
-        # Let's use the simplest approach. Local REST API `GET /search/` with `query=*` or similar?
-        # Actually, let's just make it robust. If we get a flat list from somewhere or use search:
-        # A safer bet for Obsidian Local REST API is `POST /search/` with empty query:
-        # Request: {"query": ""} -> returns list of files matching.
-        # Let's implement reading files by searching for ".md".
+        elif isinstance(node, dict):
+            path = node.get('path') or node.get('filename')
+            if isinstance(path, str) and path.lower().endswith('.md'):
+                paths.append(path)
+            for child in node.get('files', []):
+                paths.extend(self._extract_markdown_paths(child))
         return paths
 
     async def fetch_file_content(self, filepath: str) -> str:
-        """Fetch the content of a specific markdown file."""
-        # We need to URL encode the filepath
-        # But for httpx, we can just pass it in the path
-        async with httpx.AsyncClient(verify=False) as client:
-            response = await client.get(
-                f"{self.api_url}/vault/{filepath}",
-                headers={"Authorization": self.headers["Authorization"], "Accept": "text/markdown"}
-            )
-            response.raise_for_status()
-            return response.text
+        encoded_path = quote(filepath.lstrip('/'), safe='/')
+        response = await self._request(
+            'GET',
+            f'{self.api_url}/vault/{encoded_path}',
+            headers={'Accept': 'text/markdown'},
+        )
+        return response.text
 
     async def get_all_markdown_contents(self) -> List[Tuple[str, str]]:
-        """
-        Fetch all markdown files and their contents.
-        Since we might not know the exact file structure, we can use the /search/ endpoint 
-        to find all files with 'type: question' or just '.md' extension.
-        """
-        async with httpx.AsyncClient(verify=False) as client:
-            # Let's use a simple POST /search/ to find all files with '---' (which implies frontmatter)
-            search_query = {"query": "type: question"}
-            response = await client.post(
-                f"{self.api_url}/search/",
-                headers=self.headers,
-                json=search_query
-            )
-            
-            if response.status_code != 200:
-                raise Exception(f"Failed to search Obsidian vault: {response.text}")
-                
-            results = response.json()
-            
-            # The search endpoint returns an array of matches.
-            # Usually: [{"filename": "...", "result": {...}}] or similar.
-            # Actually, standard Obsidian Local REST API search returns:
-            # [ { "filename": "path/to/file.md", "score": 1.0, ... } ]
-            file_paths = []
-            if isinstance(results, list):
-                file_paths = [item.get("filename") for item in results if isinstance(item, dict) and "filename" in item]
-            
-            # Now fetch contents for each file
-            file_contents = []
-            for path in file_paths:
-                if not path.endswith('.md'):
+        response = await self._request(
+            'POST',
+            f'{self.api_url}/search/',
+            json={'query': 'type: question'},
+        )
+        results = response.json()
+        file_paths: List[str] = []
+        if isinstance(results, list):
+            for item in results:
+                if not isinstance(item, dict):
                     continue
-                content = await self.fetch_file_content(path)
-                file_contents.append((path, content))
-                
-            return file_contents
+                path = item.get('filename') or item.get('path')
+                if isinstance(path, str) and path.lower().endswith('.md'):
+                    file_paths.append(path)
+        file_paths = [
+            path for path in file_paths
+            if isinstance(path, str) and path.lower().endswith('.md')
+        ]
+
+        semaphore = asyncio.Semaphore(8)
+
+        async def fetch(path: str) -> Tuple[str, str]:
+            async with semaphore:
+                return path, await self.fetch_file_content(path)
+
+        return list(await asyncio.gather(*(fetch(path) for path in file_paths)))

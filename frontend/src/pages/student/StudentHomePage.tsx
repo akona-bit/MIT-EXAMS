@@ -3,6 +3,9 @@ import { useAuth } from "../../stores/authStore";
 import { getExams } from "../../api/exams";
 import client from "../../api/client";
 import type { Exam } from "../../types";
+import { motion } from "framer-motion";
+import { Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import Button from "../../components/ui/Button";
 
 function formatExamWindow(startTime: string | null, endTime: string | null) {
   if (!startTime && !endTime) return "Thời gian linh hoạt";
@@ -69,27 +72,45 @@ export default function StudentHomePage() {
     }
   };
 
+  const containerAnim = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+
+  const itemAnim = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } }
+  };
+
   return (
-    <div className="student-shell min-h-screen text-neutral-900">
-      <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
+    <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <header className="sticky top-0 z-50 glass-header border-b-transparent">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500 text-lg font-bold text-white shadow-lg shadow-primary-500/25">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 text-lg font-bold text-white shadow-lg shadow-primary-500/25">
               M
             </div>
             <div>
-              <p className="font-bold tracking-tight">MIT EXAMS</p>
-              <p className="text-xs text-neutral-500">Khu vực thí sinh</p>
+              <p className="font-extrabold tracking-tight">MIT EXAMS</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Khu vực thí sinh</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="hidden text-sm text-neutral-600 sm:block">
-              {user?.username || user?.email}
-            </span>
+            <div className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200/60 bg-white/60 dark:bg-slate-900/60 dark:border-slate-800/60 px-4 py-1.5 shadow-sm backdrop-blur-md">
+              <div className="h-6 w-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xs font-bold text-primary-600 dark:text-primary-400">
+                {user?.username?.[0]?.toUpperCase() || "S"}
+              </div>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {user?.username || user?.email}
+              </span>
+            </div>
             <button
               type="button"
               onClick={logout}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Đăng xuất
             </button>
@@ -98,134 +119,143 @@ export default function StudentHomePage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 lg:px-8 lg:py-10">
-        <section className="relative overflow-hidden rounded-2xl bg-neutral-900 px-6 py-8 text-white shadow-lg sm:px-10">
-          <div className="relative z-10 max-w-2xl">
-            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary-300">
-              Bảng điều khiển thí sinh
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Chào {user?.username || "bạn"}.
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-300 sm:text-base">
-              Các kỳ thi được mở cho bạn sẽ xuất hiện tại đây. Hãy kiểm tra thời
-              lượng và thời gian trước khi bắt đầu.
-            </p>
-          </div>
-          <div className="absolute inset-y-0 right-0 w-1/3 bg-primary-500/10 [clip-path:polygon(40%_0,100%_0,100%_100%,0_100%)]" />
+        <section className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-8">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
+            Bảng điều khiển thí sinh
+          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Chào {user?.username || "bạn"}.
+          </h1>
+          <p className="mt-2 text-slate-600 dark:text-slate-300 max-w-xl">
+            Các kỳ thi được mở cho bạn sẽ xuất hiện tại đây. Hãy kiểm tra thời
+            lượng và thời gian trước khi bắt đầu. Chúc bạn thi tốt!
+          </p>
         </section>
 
         {notice && (
-          <div
-            className="rounded-xl border border-info-500/20 bg-info-500/10 px-4 py-3 text-sm text-info-500"
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 rounded-2xl border border-primary-500/20 bg-primary-500/10 px-5 py-4 text-sm font-medium text-primary-600 dark:text-primary-400 shadow-sm backdrop-blur-md"
             role="status"
           >
-            {notice}
-          </div>
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
+            <p>{notice}</p>
+          </motion.div>
         )}
 
         <section>
-          <div className="mb-4 flex items-end justify-between gap-4">
+          <div className="mb-6 flex items-end justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-primary-500">
+              <p className="text-sm font-bold uppercase tracking-wider text-primary-500">
                 Kỳ thi của bạn
               </p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight">
+              <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                 Sẵn sàng chinh phục
               </h2>
             </div>
             {!isLoading && (
-              <span className="text-sm text-neutral-500">
+              <span className="rounded-full bg-primary-50 dark:bg-primary-500/10 px-3 py-1 text-sm font-semibold text-primary-600 dark:text-primary-400">
                 {exams.length} kỳ thi đang mở
               </span>
             )}
           </div>
 
           {isLoading && (
-            <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
-              Đang tải kỳ thi...
+            <div className="rounded-3xl border border-slate-200/60 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 p-12 text-center backdrop-blur-xl">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+              <p className="mt-4 text-sm font-medium text-slate-500">Đang tải kỳ thi...</p>
             </div>
           )}
+          
           {error && (
-            <div className="flex flex-col items-center gap-3 rounded-xl border border-danger-500/20 bg-danger-500/10 p-8 text-center">
-              <p className="text-sm text-danger-500">{error}</p>
-              <button
-                type="button"
-                onClick={() => setRetryKey((key) => key + 1)}
-                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-danger-500 shadow-sm transition hover:bg-danger-500 hover:text-white"
-              >
+            <div className="flex flex-col items-center gap-4 rounded-3xl border border-danger-500/20 bg-danger-500/10 p-12 text-center backdrop-blur-xl">
+              <AlertCircle className="h-10 w-10 text-danger-500" />
+              <p className="text-sm font-medium text-danger-600 dark:text-danger-400">{error}</p>
+              <Button onClick={() => setRetryKey((key) => key + 1)} variant="destructive">
                 Thử lại
-              </button>
+              </Button>
             </div>
           )}
+          
           {!isLoading && !error && exams.length === 0 && (
-            <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center">
-              <p className="font-semibold text-neutral-900">
+            <div className="rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 p-16 text-center backdrop-blur-xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                <CheckCircle2 className="h-8 w-8 text-slate-400" />
+              </div>
+              <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                 Chưa có kỳ thi đang mở
               </p>
-              <p className="mt-1 text-sm text-neutral-500">
+              <p className="text-sm text-slate-500">
                 Kỳ thi được phân công sẽ hiển thị ở đây.
               </p>
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <motion.div 
+            variants={containerAnim}
+            initial="hidden"
+            animate="show"
+            className="grid gap-6 md:grid-cols-2"
+          >
             {exams.map((exam) => (
-              <article
+              <motion.article
+                variants={itemAnim}
                 key={exam.id}
-                className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                className="group relative overflow-hidden rounded-3xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary-500/10"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <span className="rounded-full bg-success-500/10 px-2.5 py-1 text-xs font-semibold text-success-500">
-                      Đang mở
-                    </span>
-                    <h3 className="mt-4 text-lg font-bold text-neutral-900">
-                      {exam.name}
-                    </h3>
+                <div className="absolute top-0 right-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-primary-500/5 transition-transform group-hover:scale-150" />
+                
+                <div className="relative z-10 flex flex-col h-full">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-success-500/10 border border-success-500/20 px-3 py-1 text-xs font-bold text-success-600 dark:text-success-400">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-400 opacity-75"></span>
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-success-500"></span>
+                        </span>
+                        Đang mở
+                      </span>
+                      <h3 className="mt-4 text-xl font-bold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                        {exam.name}
+                      </h3>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-3xl font-black text-primary-500 tracking-tighter">
+                        {exam.duration_minutes}
+                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        phút
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-2xl font-bold text-primary-500">
-                    {exam.duration_minutes}
-                    <span className="ml-1 text-xs font-medium text-neutral-500">
-                      phút
+                  
+                  <p className="mb-6 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                    {exam.description || "Bài thi trắc nghiệm MIT EXAMS."}
+                  </p>
+                  
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 bg-slate-50/50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-white/5">
+                    <Clock className="h-4 w-4 text-primary-500 shrink-0" />
+                    <span className="truncate">{formatExamWindow(exam.start_time, exam.end_time)}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-5">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Mã #{exam.id}
                     </span>
-                  </span>
+                    <Button
+                      onClick={() => handleStart(exam)}
+                      disabled={startingExamId === exam.id}
+                      size="lg"
+                      className="shadow-lg shadow-primary-500/20"
+                    >
+                      {startingExamId === exam.id ? "Đang vào..." : "Bắt đầu thi"}
+                    </Button>
+                  </div>
                 </div>
-                <p className="mt-3 min-h-12 text-sm leading-6 text-neutral-600">
-                  {exam.description || "Bài thi trắc nghiệm MIT EXAMS."}
-                </p>
-                <div className="mt-4 flex items-center gap-2 text-xs text-neutral-500">
-                  <svg
-                    className="h-4 w-4 text-primary-500"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  {formatExamWindow(exam.start_time, exam.end_time)}
-                </div>
-                <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4">
-                  <span className="text-xs text-neutral-500">
-                    Mã kỳ thi #{exam.id}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleStart(exam)}
-                    disabled={startingExamId === exam.id}
-                    className="rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {startingExamId === exam.id ? "Đang vào..." : "Bắt đầu thi"}
-                  </button>
-                </div>
-              </article>
+              </motion.article>
             ))}
-          </div>
+          </motion.div>
         </section>
       </main>
     </div>

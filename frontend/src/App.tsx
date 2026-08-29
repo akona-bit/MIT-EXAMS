@@ -6,22 +6,28 @@ import {
   Outlet,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./stores/authStore";
-
+import { ThemeProvider } from "./stores/themeStore";
 // Layouts
 import AdminShell from "./components/layout/AdminShell";
 
 // Pages
 import LoginPage from "./pages/auth/LoginPage";
-import RegisterPage from "./pages/auth/RegisterPage";
 import DashboardPage from "./pages/admin/DashboardPage";
 import QuestionsPage from "./pages/admin/QuestionsPage";
 import QuestionFormPage from "./pages/admin/QuestionFormPage";
 import MatrixPage from "./pages/admin/MatrixPage";
+import MatrixFormPage from "./pages/admin/MatrixFormPage";
 import ExamsPage from "./pages/admin/ExamsPage";
 import ExamDetailPage from "./pages/admin/ExamDetailPage";
+import ExamFormPage from "./pages/admin/ExamFormPage";
 import StudentHomePage from "./pages/student/StudentHomePage";
 
 import ObsidianPage from "./pages/admin/ObsidianPage";
+import ResourcesPage from "./pages/admin/ResourcesPage";
+import AccessControlPage from "./pages/admin/AccessControlPage";
+
+import StudentAnalyticsPage from "./pages/admin/analytics/StudentAnalyticsPage";
+import TeacherAnalyticsPage from "./pages/admin/analytics/TeacherAnalyticsPage";
 
 // --- Route Guards ---
 
@@ -77,7 +83,6 @@ function AppRoutes() {
       {/* Public Routes */}
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
       </Route>
 
       {/* Admin/Teacher Routes */}
@@ -93,10 +98,18 @@ function AppRoutes() {
           <Route index element={<DashboardPage />} />
           <Route path="questions" element={<QuestionsPage />} />
           <Route path="questions/new" element={<QuestionFormPage />} />
+          <Route path="questions/:id/edit" element={<QuestionFormPage />} />
           <Route path="matrix" element={<MatrixPage />} />
+          <Route path="matrix/new" element={<MatrixFormPage />} />
+          <Route path="matrix/:id/edit" element={<MatrixFormPage />} />
           <Route path="exams" element={<ExamsPage />} />
+          <Route path="exams/new" element={<ExamFormPage />} />
           <Route path="exams/:id" element={<ExamDetailPage />} />
           <Route path="obsidian" element={<ObsidianPage />} />
+          <Route path="resources" element={<ResourcesPage />} />
+          <Route path="access" element={<AccessControlPage />} />
+          <Route path="analytics/student" element={<StudentAnalyticsPage />} />
+          <Route path="analytics/teacher" element={<TeacherAnalyticsPage />} />
         </Route>
       </Route>
 
@@ -115,10 +128,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

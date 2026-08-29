@@ -1,20 +1,19 @@
 import axios from 'axios';
+import { supabase } from '../lib/supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const client = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
-// Request interceptor: auto-attach JWT token
+// Request interceptor: auto-attach JWT token from Supabase
 client.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    // Await the current session from Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
   },
@@ -24,10 +23,11 @@ client.interceptors.request.use(
 // Response interceptor: handle 401 (token expired)
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
+      // If we get 401, sign out from Supabase (clears local session)
+      await supabase.auth.signOut();
+      
       // Redirect to login if not already there
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
