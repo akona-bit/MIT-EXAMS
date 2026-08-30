@@ -62,23 +62,30 @@ export default function MatrixPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Ma trận Đặc tả</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Quản lý cấu trúc đề thi</p>
+          <h1 className="text-3xl font-extrabold text-gradient pb-1">Ma trận Đặc tả</h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Quản lý cấu trúc đề thi</p>
         </div>
       </div>
 
-      <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/60 dark:border-white/10 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-end gap-4">
-        <Button size="lg" className="w-full sm:w-auto shadow-lg shadow-primary-500/20" onClick={() => navigate('/admin/matrix/new')}>
-          + Thêm ma trận
-        </Button>
-      </div>
+      <div className="p-0 overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Danh sách Ma trận</h2>
+          </div>
+          <Button size="lg" className="w-full sm:w-auto shadow-lg shadow-primary-500/30 hover:-translate-y-0.5" onClick={() => navigate('/admin/matrix/new')}>
+            + Thêm ma trận
+          </Button>
+        </div>
 
-      <DataTable 
-        data={matrices}
-        columns={columns}
-        keyExtractor={(item) => item.id}
-        isLoading={isLoading}
-      />
+        <div className="p-6">
+          <DataTable 
+            data={matrices}
+            columns={columns}
+            keyExtractor={(item) => item.id}
+            isLoading={isLoading}
+          />
+        </div>
+      </div>
     </div>
   );
 }

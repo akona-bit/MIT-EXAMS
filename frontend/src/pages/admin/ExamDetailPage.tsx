@@ -120,7 +120,7 @@ export default function ExamDetailPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{exam.name}</h1>
+        <h1 className="text-3xl font-extrabold text-gradient pb-1">{exam.name}</h1>
         <Button variant="ghost" onClick={() => navigate('/admin/exams')}>Quay lại</Button>
       </div>
 
@@ -142,7 +142,7 @@ export default function ExamDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           {activeTab === 'info' ? (
-            <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl">
+            <div className="glass-card p-6">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Chi tiết kỳ thi</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
                 <div className="space-y-1">
@@ -161,7 +161,7 @@ export default function ExamDetailPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl">
+              <div className="glass-card p-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Tổng quan</h3>
                 {overview ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -187,7 +187,7 @@ export default function ExamDetailPage() {
                 )}
               </div>
               
-              <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl">
+              <div className="glass-card p-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Phân tích chất lượng câu hỏi (IRT)</h3>
                 {itemsAnalysis && itemsAnalysis.length > 0 ? (
                   <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
@@ -225,7 +225,7 @@ export default function ExamDetailPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-white/70 dark:bg-slate-900/70 p-6 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm backdrop-blur-xl flex flex-col gap-4">
+          <div className="glass-card p-6 flex flex-col gap-4">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Thao tác</h3>
             {exam.status === 'DRAFT' && (
               <>

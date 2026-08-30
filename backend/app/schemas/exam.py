@@ -4,6 +4,19 @@ from datetime import datetime
 from app.models.question import QuestionType
 from app.models.exam import ExamStatus, ParticipantStatus
 
+# --- MatrixRuleGroup Schemas ---
+class MatrixRuleGroupBase(BaseModel):
+    label: Optional[str] = None
+    required_passage_id: Optional[int] = None
+
+class MatrixRuleGroupCreate(MatrixRuleGroupBase):
+    local_id: str
+
+class MatrixRuleGroupResponse(MatrixRuleGroupBase):
+    id: int
+    matrix_id: int
+    model_config = ConfigDict(from_attributes=True)
+
 # --- MatrixRule Schemas ---
 class MatrixRuleBase(BaseModel):
     knowledge_node_id: int
@@ -15,11 +28,12 @@ class MatrixRuleBase(BaseModel):
     position: int = 0
 
 class MatrixRuleCreate(MatrixRuleBase):
-    pass
+    group_local_id: Optional[str] = None
 
 class MatrixRuleResponse(MatrixRuleBase):
     id: int
     matrix_id: int
+    group_id: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 # --- Matrix Schemas ---
@@ -30,11 +44,13 @@ class MatrixBase(BaseModel):
 
 class MatrixCreate(MatrixBase):
     rules: List[MatrixRuleCreate]
+    groups: Optional[List[MatrixRuleGroupCreate]] = None
 
 class MatrixResponse(MatrixBase):
     id: int
     created_at: datetime
     rules: List[MatrixRuleResponse]
+    groups: List[MatrixRuleGroupResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 # --- Exam Generation Request ---

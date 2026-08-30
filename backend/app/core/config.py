@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # PostHog analytics
     POSTHOG_PROJECT_TOKEN: Optional[str] = None
     POSTHOG_HOST: Optional[str] = None
+    
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
 
     class Config:
         env_file = BACKEND_DIR / ".env"

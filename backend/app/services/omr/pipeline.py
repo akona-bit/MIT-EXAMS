@@ -1,15 +1,27 @@
 import json
 import os
+import httpx
+import numpy as np
 
 class OMREngine:
     def __init__(self, file_path: str):
         self.file_path = file_path
         
-    def _convert_pdf_to_image(self):
+    def _get_file_bytes(self) -> bytes:
+        if self.file_path.startswith("http://") or self.file_path.startswith("https://"):
+            response = httpx.get(self.file_path, timeout=30.0)
+            response.raise_for_status()
+            return response.content
+        else:
+            if not os.path.exists(self.file_path):
+                raise FileNotFoundError(f"File not found: {self.file_path}")
+            with open(self.file_path, "rb") as f:
+                return f.read()
+                
+    def _convert_pdf_to_image(self, file_bytes: bytes):
         import fitz
-        import numpy as np
         import cv2
-        doc = fitz.open(self.file_path)
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
         page = doc.load_page(0) # Read first page
         pix = page.get_pixmap()
         img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
@@ -18,17 +30,16 @@ class OMREngine:
         return img_array
 
     def process(self):
-        if not os.path.exists(self.file_path):
-            raise FileNotFoundError(f"File not found: {self.file_path}")
-            
         import cv2
-        import numpy as np
+        
+        file_bytes = self._get_file_bytes()
         
         # 1. Load Image
-        if self.file_path.lower().endswith('.pdf'):
-            img = self._convert_pdf_to_image()
+        if self.file_path.lower().split('?')[0].endswith('.pdf'):
+            img = self._convert_pdf_to_image(file_bytes)
         else:
-            img = cv2.imread(self.file_path)
+            nparr = np.frombuffer(file_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
         if img is None:
             raise ValueError("Failed to read image")

@@ -56,6 +56,8 @@ export interface KnowledgeGraphNode {
   type: string;
   path: string;
   question_count: number;
+  description?: string;
+  note?: string;
 }
 
 export interface KnowledgeGraphEdge {
@@ -63,6 +65,8 @@ export interface KnowledgeGraphEdge {
   source: string;
   target: string;
   type: string;
+  label?: string;
+  link_id?: number;
 }
 
 export interface KnowledgeGraph {
@@ -78,18 +82,45 @@ export interface Answer {
   position: number;
 }
 
+export interface Passage {
+  id: number;
+  public_code: string;
+  content: string;
+  source_author?: string | null;
+  source_title?: string | null;
+  creator_id: number;
+  created_at: string;
+  updated_at: string;
+  question_count?: number;
+  questions?: Question[];
+}
+
 export interface Question {
   id: number;
+  public_code: string;
   content: string;
   level: number; // 1: Nhận biết, 2: Thông hiểu, 3: Vận dụng, 4: Vận dụng cao
   type: string;
-  status: string; // DRAFT | APPROVED | REJECTED
+  status: string; // DRAFT | PENDING | APPROVED | REJECTED
+  reject_reason?: string | null;
   knowledge_node_id: number;
   parent_question_id?: number | null;
+  passage_id?: number | null;
+  source_author?: string | null;
+  source_title?: string | null;
   knowledge_node?: KnowledgeNode;
+  passage?: Passage;
   answers: Answer[];
+  usage_count?: number;
   created_at: string;
   updated_at?: string;
+}
+
+export interface QuestionSimilarityResponse {
+  question_id: number;
+  similarity_score: number;
+  content: string;
+  status: string;
 }
 
 export interface QuestionCreate {
@@ -97,10 +128,20 @@ export interface QuestionCreate {
   level: number;
   type: string;
   knowledge_node_id: number;
+  passage_id?: number | null;
+  source_author?: string | null;
+  source_title?: string | null;
   answers: { content: string; is_correct: boolean; position: number }[];
 }
 
 // --- Matrix ---
+export interface MatrixRuleGroup {
+  id?: number;
+  local_id: string;
+  label?: string | null;
+  required_passage_id?: number | null;
+}
+
 export interface MatrixRule {
   id: number;
   knowledge_node_id: number;
@@ -109,6 +150,8 @@ export interface MatrixRule {
   count: number;
   part: number;
   knowledge_node?: KnowledgeNode;
+  group_id?: number | null;
+  group_local_id?: string;
 }
 
 export interface Matrix {
@@ -116,6 +159,7 @@ export interface Matrix {
   name: string;
   description: string | null;
   rules: MatrixRule[];
+  groups?: MatrixRuleGroup[];
 }
 
 // --- Exam ---

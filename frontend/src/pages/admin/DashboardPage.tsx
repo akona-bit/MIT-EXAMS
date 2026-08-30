@@ -90,14 +90,14 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-3xl font-extrabold tracking-tight text-gradient pb-1">
             Chào mừng trở lại, {user?.username || "Admin"}
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             Theo dõi tổng quan chất lượng bài thi và thống kê tương tác
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-neutral-900 dark:text-slate-300 shadow-sm">
+        <div className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/60 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:border-white/10 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm backdrop-blur-md">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           ? [1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-32 rounded-2xl" />)
           : stats.map((stat) => (
               <motion.div key={stat.label} variants={itemAnim}>
-                <Card className="group relative overflow-hidden transition-all hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none hover:-translate-y-1">
+                <Card className="group relative overflow-hidden transition-all hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none hover:-translate-y-1 glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent dark:from-white/5" />
                   <CardContent className="relative p-6">
                     <div className="flex items-center justify-between">
@@ -146,7 +146,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Score Distribution Chart */}
-        <Card className="lg:col-span-2 flex flex-col">
+        <Card className="lg:col-span-2 flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Exams */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-indigo-500" />

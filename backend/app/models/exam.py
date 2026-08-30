@@ -16,6 +16,18 @@ class Matrix(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     rules: Mapped[List["MatrixRule"]] = relationship(back_populates="matrix", cascade="all, delete-orphan")
+    groups: Mapped[List["MatrixRuleGroup"]] = relationship(back_populates="matrix", cascade="all, delete-orphan")
+
+class MatrixRuleGroup(Base):
+    __tablename__ = "matrix_rule_group"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    matrix_id: Mapped[int] = mapped_column(ForeignKey("matrix.id"))
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    required_passage_id: Mapped[Optional[int]] = mapped_column(ForeignKey("passage.id"), nullable=True)
+    
+    matrix: Mapped["Matrix"] = relationship(back_populates="groups")
+    rules: Mapped[List["MatrixRule"]] = relationship(back_populates="group")
+
 
 class MatrixRule(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -28,8 +40,10 @@ class MatrixRule(Base):
     part: Mapped[int] = mapped_column(Integer, default=1)
     target_irt_b: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("matrix_rule_group.id"), nullable=True)
     
     matrix: Mapped["Matrix"] = relationship(back_populates="rules")
+    group: Mapped[Optional["MatrixRuleGroup"]] = relationship(back_populates="rules")
 
 class ExamGenerationStatus(str, enum.Enum):
     SUCCESS = "SUCCESS"

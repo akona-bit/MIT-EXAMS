@@ -7,13 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
+from app.core.supabase_client import supabase_client
 from app.db.database import get_db
 from app.models.question import Resource, ResourceType
 from app.models.user import User
 from app.schemas.question import ResourceResponse
 
 router = APIRouter()
-RESOURCE_DIR = Path(__file__).resolve().parents[3] / "uploads" / "resources"
 MAX_FILE_SIZE = 20 * 1024 * 1024
 ALLOWED_EXTENSIONS = {
     ".jpg": ResourceType.IMAGE,
@@ -62,17 +62,24 @@ async def upload_resource(
     if not content:
         raise HTTPException(status_code=400, detail="Không thể lưu file rỗng")
 
-    RESOURCE_DIR.mkdir(parents=True, exist_ok=True)
     stored_name = f"{uuid4().hex}{extension}"
-    stored_path = RESOURCE_DIR / stored_name
     try:
-        stored_path.write_bytes(content)
-    except OSError as error:
-        raise HTTPException(status_code=500, detail="Không thể ghi file vào kho ngữ liệu") from error
+        res = supabase_client.storage.from_("resources").upload(
+            file=content,
+            path=stored_name,
+            file_options={"content-type": file.content_type}
+        )
+        
+        # Lấy public URL
+        public_url = supabase_client.storage.from_("resources").get_public_url(stored_name)
+    except Exception as error:
+        import logging
+        logging.error(f"Failed to upload to Supabase: {error}")
+        raise HTTPException(status_code=500, detail=f"Không thể tải file lên Supabase: {error}") from error
 
     resource = Resource(
         type=resource_type,
-        content_url=f"/uploads/resources/{stored_name}",
+        content_url=public_url,
         uploader_id=current_user.id,
         original_name=original_name,
         mime_type=file.content_type,
@@ -104,9 +111,14 @@ async def delete_resource(
     if not resource:
         raise HTTPException(status_code=404, detail="Không tìm thấy ngữ liệu")
 
-    stored_path = RESOURCE_DIR / Path(resource.content_url).name
-    if stored_path.exists():
-        stored_path.unlink()
+    # Extract filename from URL: "https://.../resources/abc123xyz.jpg"
+    filename = resource.content_url.split("/")[-1]
+    try:
+        supabase_client.storage.from_("resources").remove([filename])
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to delete file from Supabase: {e}")
+
     resource_type = resource.type.value
     await db.delete(resource)
     await db.commit()

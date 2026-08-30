@@ -28,18 +28,32 @@ async def get_matrices(skip: int = 0, limit: int = 100, db: AsyncSession = Depen
 @router.get("/{matrix_id}", response_model=MatrixResponse)
 async def get_matrix(matrix_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix_id)
+        select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix_id)
     )
     matrix = result.scalars().first()
     if not matrix:
         raise HTTPException(status_code=404, detail="Matrix not found")
     return matrix
 
+from app.models.exam import MatrixRuleGroup
+
 @router.post("/", response_model=MatrixResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def create_matrix(matrix_in: MatrixCreate, db: AsyncSession = Depends(get_db)):
     matrix = Matrix(name=matrix_in.name, description=matrix_in.description)
     db.add(matrix)
     await db.flush()
+    
+    local_to_group_id = {}
+    if matrix_in.groups:
+        for g in matrix_in.groups:
+            group = MatrixRuleGroup(
+                matrix_id=matrix.id,
+                label=g.label,
+                required_passage_id=g.required_passage_id
+            )
+            db.add(group)
+            await db.flush()
+            local_to_group_id[g.local_id] = group.id
     
     for r in matrix_in.rules:
         rule = MatrixRule(
@@ -48,22 +62,23 @@ async def create_matrix(matrix_in: MatrixCreate, db: AsyncSession = Depends(get_
             question_type=r.question_type,
             level=r.level,
             count=r.count,
-            part=r.part
+            part=r.part,
+            group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
         )
         db.add(rule)
         
     await db.commit()
     await db.refresh(matrix)
     
-    # Reload with rules
-    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix.id))
+    # Reload with rules and groups
+    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix.id))
     return result.scalars().first()
 
 
 @router.put("/{matrix_id}", response_model=MatrixResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix_id)
+        select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix_id)
     )
     matrix = result.scalars().first()
     if not matrix:
@@ -73,7 +88,21 @@ async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSessio
     matrix.description = matrix_in.description
     for rule in list(matrix.rules):
         await db.delete(rule)
+    for group in list(matrix.groups):
+        await db.delete(group)
     await db.flush()
+
+    local_to_group_id = {}
+    if matrix_in.groups:
+        for g in matrix_in.groups:
+            group = MatrixRuleGroup(
+                matrix_id=matrix.id,
+                label=g.label,
+                required_passage_id=g.required_passage_id
+            )
+            db.add(group)
+            await db.flush()
+            local_to_group_id[g.local_id] = group.id
 
     for r in matrix_in.rules:
         db.add(MatrixRule(
@@ -82,11 +111,12 @@ async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSessio
             question_type=r.question_type,
             level=r.level,
             count=r.count,
-            part=r.part
+            part=r.part,
+            group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
         ))
 
     await db.commit()
-    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix.id))
+    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix.id))
     return result.scalars().first()
 
 

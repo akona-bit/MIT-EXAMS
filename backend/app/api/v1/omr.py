@@ -9,12 +9,12 @@ import shutil
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
 from app.core.analytics import capture
+from app.core.supabase_client import supabase_client
 from app.models.omr import OmrJob, OmrSheet, OmrJobStatus, OmrSheetStatus
 from app.models.user import User
 from app.services.omr.tasks import process_omr_sheet_task
 
 router = APIRouter()
-UPLOAD_DIR = "uploads/omr_sheets"
 
 @router.post("/upload")
 async def upload_omr_sheets(
@@ -27,8 +27,6 @@ async def upload_omr_sheets(
     if current_user.role.name not in ["ADMIN", "TEACHER"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    
     job = OmrJob(
         exam_id=exam_id,
         uploader_id=current_user.id,
@@ -40,17 +38,25 @@ async def upload_omr_sheets(
     await db.refresh(job)
     
     for file in files:
-        # Save file locally
         ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
         filename = f"{uuid.uuid4()}.{ext}"
-        filepath = os.path.join(UPLOAD_DIR, filename)
         
-        with open(filepath, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        try:
+            content = await file.read()
+            supabase_client.storage.from_("omr-sheets").upload(
+                file=content,
+                path=filename,
+                file_options={"content-type": file.content_type}
+            )
+            public_url = supabase_client.storage.from_("omr-sheets").get_public_url(filename)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to upload OMR sheet: {e}")
+            continue # Skip failed file
             
         sheet = OmrSheet(
             job_id=job.id,
-            image_path=filepath,
+            image_path=public_url,
             status=OmrSheetStatus.PENDING
         )
         db.add(sheet)

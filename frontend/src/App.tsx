@@ -15,6 +15,7 @@ import LoginPage from "./pages/auth/LoginPage";
 import DashboardPage from "./pages/admin/DashboardPage";
 import QuestionsPage from "./pages/admin/QuestionsPage";
 import QuestionFormPage from "./pages/admin/QuestionFormPage";
+import PassageGroupWizard from "./components/admin/passage/PassageGroupWizard";
 import MatrixPage from "./pages/admin/MatrixPage";
 import MatrixFormPage from "./pages/admin/MatrixFormPage";
 import ExamsPage from "./pages/admin/ExamsPage";
@@ -26,8 +27,11 @@ import ObsidianPage from "./pages/admin/ObsidianPage";
 import ResourcesPage from "./pages/admin/ResourcesPage";
 import AccessControlPage from "./pages/admin/AccessControlPage";
 
-import StudentAnalyticsPage from "./pages/admin/analytics/StudentAnalyticsPage";
-import TeacherAnalyticsPage from "./pages/admin/analytics/TeacherAnalyticsPage";
+import StudentManagementPage from "./pages/admin/analytics/StudentManagementPage";
+import StudentDetailPage from "./pages/admin/analytics/StudentDetailPage";
+import StudentComparePage from "./pages/admin/analytics/StudentComparePage";
+import AdvancedAnalyticsPage from "./pages/admin/analytics/AdvancedAnalyticsPage";
+import ExamComparePage from "./pages/admin/ExamComparePage";
 
 // --- Route Guards ---
 
@@ -98,18 +102,22 @@ function AppRoutes() {
           <Route index element={<DashboardPage />} />
           <Route path="questions" element={<QuestionsPage />} />
           <Route path="questions/new" element={<QuestionFormPage />} />
+          <Route path="questions/new-group" element={<PassageGroupWizard />} />
           <Route path="questions/:id/edit" element={<QuestionFormPage />} />
           <Route path="matrix" element={<MatrixPage />} />
           <Route path="matrix/new" element={<MatrixFormPage />} />
           <Route path="matrix/:id/edit" element={<MatrixFormPage />} />
           <Route path="exams" element={<ExamsPage />} />
           <Route path="exams/new" element={<ExamFormPage />} />
+          <Route path="exams/compare" element={<ExamComparePage />} />
           <Route path="exams/:id" element={<ExamDetailPage />} />
           <Route path="obsidian" element={<ObsidianPage />} />
           <Route path="resources" element={<ResourcesPage />} />
           <Route path="access" element={<AccessControlPage />} />
-          <Route path="analytics/student" element={<StudentAnalyticsPage />} />
-          <Route path="analytics/teacher" element={<TeacherAnalyticsPage />} />
+          <Route path="students" element={<StudentManagementPage />} />
+          <Route path="students/compare" element={<StudentComparePage />} />
+          <Route path="students/:id" element={<StudentDetailPage />} />
+          <Route path="analytics/ds" element={<AdvancedAnalyticsPage />} />
         </Route>
       </Route>
 

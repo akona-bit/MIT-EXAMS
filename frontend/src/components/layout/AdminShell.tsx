@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
 import { useTheme } from "../../stores/themeStore";
@@ -15,7 +15,10 @@ import {
   LogOut,
   Menu,
   Sun,
-  Moon
+  Moon,
+  Share2,
+  Users,
+  Activity
 } from "lucide-react";
 
 interface AdminShellProps {
@@ -31,10 +34,11 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", path: "/admin", icon: <LayoutDashboard className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Ngân hàng Câu hỏi", path: "/admin/questions", icon: <Library className="h-5 w-5" strokeWidth={1.8} /> },
+  { label: "Chủ đề Kiến thức", path: "/admin/obsidian", icon: <Share2 className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Ma trận Đặc tả", path: "/admin/matrix", icon: <Network className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Kỳ thi", path: "/admin/exams", icon: <FileEdit className="h-5 w-5" strokeWidth={1.8} /> },
-  { label: "Điểm thi (HS)", path: "/admin/analytics/student", icon: <BarChart3 className="h-5 w-5" strokeWidth={1.8} /> },
-  { label: "Thống kê (GV)", path: "/admin/analytics/teacher", icon: <Database className="h-5 w-5" strokeWidth={1.8} /> },
+  { label: "Quản lý Thí sinh", path: "/admin/students", icon: <Users className="h-5 w-5" strokeWidth={1.8} /> },
+  { label: "Phân tích DS", path: "/admin/analytics/ds", icon: <BarChart3 className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Kho ngữ liệu", path: "/admin/resources", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Quyền xem đáp án", path: "/admin/access", icon: <KeyRound className="h-5 w-5" strokeWidth={1.8} /> },
 ];
@@ -44,6 +48,67 @@ export default function AdminShell({ children }: AdminShellProps) {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [fps, setFps] = useState(60);
+  const [onlineUsers, setOnlineUsers] = useState(1);
+
+  useEffect(() => {
+    // Connect to WebSocket for real-time online users
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // Use API_URL if defined, otherwise infer from window
+    const wsUrl = import.meta.env.VITE_API_URL 
+      ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws') + '/ws/online'
+      : `${protocol}//${window.location.hostname}:8000/ws/online`;
+      
+    let ws: WebSocket;
+    
+    const connect = () => {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.onlineUsers !== undefined) {
+            setOnlineUsers(data.onlineUsers);
+          }
+        } catch (e) {
+          console.error("Failed to parse websocket message", e);
+        }
+      };
+      
+      ws.onclose = () => {
+        // Retry connection after 5s
+        setTimeout(connect, 5000);
+      };
+    };
+    
+    connect();
+
+    return () => {
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    let animationFrameId: number;
+
+    const updateFPS = () => {
+      const now = performance.now();
+      frameCount++;
+      if (now - lastTime >= 1000) {
+        setFps(Math.round((frameCount * 1000) / (now - lastTime)));
+        frameCount = 0;
+        lastTime = now;
+      }
+      animationFrameId = requestAnimationFrame(updateFPS);
+    };
+
+    animationFrameId = requestAnimationFrame(updateFPS);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 selection:bg-primary-500/30">
@@ -62,7 +127,7 @@ export default function AdminShell({ children }: AdminShellProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-neutral-950 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-white/60 bg-white/60 backdrop-blur-xl dark:border-white/10 dark:bg-[#030712]/60 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -103,7 +168,7 @@ export default function AdminShell({ children }: AdminShellProps) {
                 {isActive && (
                   <motion.div
                     layoutId="activeNavIndicator"
-                    className="absolute inset-0 bg-slate-100 dark:bg-slate-800 rounded-xl"
+                    className="absolute inset-0 bg-white shadow-sm border border-white/60 dark:bg-slate-800/80 dark:border-white/10 rounded-xl"
                     initial={false}
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
@@ -118,21 +183,21 @@ export default function AdminShell({ children }: AdminShellProps) {
         </div>
 
         <div className="p-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-neutral-900">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white dark:bg-white dark:text-slate-900">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-3 shadow-[0_4px_12px_rgb(0,0,0,0.05)] dark:border-white/10 dark:bg-slate-900/40 backdrop-blur-md">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white shadow-sm dark:bg-white dark:text-slate-900">
               {user?.username?.[0]?.toUpperCase() || "A"}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
                 {user?.username || "Admin"}
               </p>
-              <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+              <p className="truncate text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                 {user?.role?.name || "Administrator"}
               </p>
             </div>
             <button
               onClick={logout}
-              className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-200 hover:text-danger-500 dark:hover:bg-slate-800"
+              className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-200/50 hover:text-danger-500 dark:hover:bg-slate-800/50"
               title="Đăng xuất"
             >
               <LogOut className="h-4 w-4" />
@@ -144,7 +209,7 @@ export default function AdminShell({ children }: AdminShellProps) {
       {/* Main Content */}
       <div className="flex min-h-screen flex-col lg:pl-[280px]">
         {/* Header */}
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-neutral-950/80 transition-all duration-300">
+        <header className="sticky top-0 z-30 border-b border-white/60 bg-white/60 backdrop-blur-xl dark:border-white/10 dark:bg-[#030712]/60 transition-all duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-4">
               <button
@@ -156,12 +221,19 @@ export default function AdminShell({ children }: AdminShellProps) {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4">
-              <div className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200/60 bg-white/60 px-3 py-1.5 text-xs font-medium text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                </span>
-                Hệ thống ổn định
+              <div className="hidden sm:flex items-center gap-4 rounded-full border border-slate-200/60 bg-white/60 px-4 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm">
+                <div className="flex items-center gap-1.5" title="Khung hình/giây (FPS)">
+                  <Activity className="h-3.5 w-3.5 text-blue-500" />
+                  <span className="w-[42px] text-right">{fps} FPS</span>
+                </div>
+                <div className="h-3 w-[1px] bg-slate-300 dark:bg-slate-700"></div>
+                <div className="flex items-center gap-1.5" title="Người dùng đang online">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                  </span>
+                  <span>{onlineUsers} Online</span>
+                </div>
               </div>
 
               <button

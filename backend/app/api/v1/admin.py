@@ -8,7 +8,8 @@ from datetime import datetime
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
-from app.models.user import User
+from app.models.user import User, Role
+from app.core.security import get_password_hash
 from app.models.exam import ExamParticipant
 from app.models.audit import AuditAction
 from app.services.audit import log_audit
@@ -93,3 +94,73 @@ async def update_user_access(user_id: int, req: UserAccessUpdate, db: AsyncSessi
     user.can_view_answers = req.can_view_answers
     await db.commit()
     return {"id": user.id, "can_view_answers": user.can_view_answers}
+
+from typing import Optional
+
+class StaffCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    role_name: str
+    full_name: Optional[str] = None
+
+class StaffUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    role_name: Optional[str] = None
+    full_name: Optional[str] = None
+
+@router.get("/staff", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_staff_members(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).join(Role).where(Role.name.in_(["ADMIN", "TEACHER"])).order_by(User.id.desc()))
+    users = result.scalars().all()
+    return [{"id": u.id, "email": u.email, "username": u.username, "full_name": u.full_name, "is_active": u.is_active, "role": u.role.name} for u in users]
+
+@router.post("/staff", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def create_staff(req: StaffCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    role_result = await db.execute(select(Role).where(Role.name == req.role_name))
+    role = role_result.scalars().first()
+    if not role:
+        raise HTTPException(status_code=400, detail="Invalid role name")
+        
+    existing = await db.execute(select(User).where((User.email == req.email) | (User.username == req.username)))
+    if existing.scalars().first():
+        raise HTTPException(status_code=400, detail="Email or username already exists")
+        
+    user = User(
+        username=req.username,
+        email=req.email,
+        full_name=req.full_name,
+        hashed_password=get_password_hash(req.password),
+        role_id=role.id,
+        is_active=True
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    
+    await log_audit(db, current_user.id, AuditAction.CREATE_USER, "User", user.id, f"Created staff user {user.username} with role {role.name}")
+    return {"id": user.id, "username": user.username, "role": role.name}
+
+@router.put("/staff/{user_id}", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def update_staff(user_id: int, req: StaffUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if req.role_name:
+        role_result = await db.execute(select(Role).where(Role.name == req.role_name))
+        role = role_result.scalars().first()
+        if not role:
+            raise HTTPException(status_code=400, detail="Invalid role name")
+        user.role_id = role.id
+        
+    if req.is_active is not None:
+        user.is_active = req.is_active
+        
+    if req.full_name is not None:
+        user.full_name = req.full_name
+        
+    await db.commit()
+    await log_audit(db, current_user.id, AuditAction.UPDATE_USER, "User", user.id, f"Updated staff user {user.username}")
+    return {"id": user.id, "message": "Updated successfully"}

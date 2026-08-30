@@ -36,12 +36,12 @@ export default function AccessControlPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+          <h1 className="text-3xl font-extrabold text-gradient pb-1">
             Quản lý quyền xem đáp án
           </h1>
-          <p className="text-sm text-neutral-500 mt-1">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             Cấp quyền cho thí sinh được phép xem đáp án và giải thích chi tiết.
           </p>
         </div>
@@ -53,42 +53,42 @@ export default function AccessControlPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      <div className="p-0 overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200 text-left text-sm">
-            <thead className="bg-neutral-50">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-slate-50/80 dark:bg-slate-950/50 border-b border-slate-200/60 dark:border-white/10 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
               <tr>
-                <th className="px-6 py-3 font-semibold text-neutral-900">ID</th>
-                <th className="px-6 py-3 font-semibold text-neutral-900">Email</th>
-                <th className="px-6 py-3 font-semibold text-neutral-900">Tên người dùng</th>
-                <th className="px-6 py-3 font-semibold text-neutral-900">Trạng thái quyền</th>
-                <th className="px-6 py-3 font-semibold text-neutral-900 text-right">Thao tác</th>
+                <th className="px-6 py-4 font-semibold">ID</th>
+                <th className="px-6 py-4 font-semibold">Email</th>
+                <th className="px-6 py-4 font-semibold">Tên người dùng</th>
+                <th className="px-6 py-4 font-semibold">Trạng thái quyền</th>
+                <th className="px-6 py-4 font-semibold text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-200">
+            <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
               {users.map((user) => (
-                <tr key={user.id} className="transition-colors hover:bg-neutral-50">
-                  <td className="whitespace-nowrap px-6 py-4 font-medium text-neutral-900">{user.id}</td>
-                  <td className="whitespace-nowrap px-6 py-4 text-neutral-600">{user.email}</td>
-                  <td className="whitespace-nowrap px-6 py-4 text-neutral-600">{user.username || "-"}</td>
-                  <td className="whitespace-nowrap px-6 py-4">
+                <tr key={user.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-all duration-200">
+                  <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">{user.id}</td>
+                  <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{user.email}</td>
+                  <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{user.username || "-"}</td>
+                  <td className="px-6 py-4">
                     {user.can_view_answers ? (
-                      <span className="inline-flex rounded-full bg-success-50 px-2 text-xs font-semibold leading-5 text-success-700">
+                      <span className="inline-flex rounded-full bg-success-500/10 px-2.5 py-1 text-xs font-semibold text-success-600 dark:text-success-400">
                         Đã cấp quyền
                       </span>
                     ) : (
-                      <span className="inline-flex rounded-full bg-neutral-100 px-2 text-xs font-semibold leading-5 text-neutral-600">
+                      <span className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                         Chưa cấp
                       </span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => toggleAccess(user.id, user.can_view_answers)}
                       className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                         user.can_view_answers 
-                          ? "bg-danger-50 text-danger-700 hover:bg-danger-100" 
-                          : "bg-primary-50 text-primary-700 hover:bg-primary-100"
+                          ? "bg-danger-50 text-danger-700 hover:bg-danger-100 dark:bg-danger-500/10 dark:text-danger-400 dark:hover:bg-danger-500/20" 
+                          : "bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400 dark:hover:bg-primary-500/20"
                       }`}
                     >
                       {user.can_view_answers ? "Thu hồi quyền" : "Cấp quyền"}
@@ -98,7 +98,7 @@ export default function AccessControlPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                     Không có người dùng nào.
                   </td>
                 </tr>

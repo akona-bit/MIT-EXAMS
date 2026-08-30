@@ -1,16 +1,25 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
-from app.models.question import QuestionType, QuestionStatus, ResourceType
+from app.models.question import QuestionType, QuestionStatus, ResourceType, KnowledgeNodeType
 
 # --- KnowledgeNode Schemas ---
 class KnowledgeNodeBase(BaseModel):
     name: str
     description: Optional[str] = None
+    note: Optional[str] = None
     parent_id: Optional[int] = None
+    node_type: Optional[KnowledgeNodeType] = None
 
 class KnowledgeNodeCreate(KnowledgeNodeBase):
     pass
+
+class KnowledgeNodeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    note: Optional[str] = None
+    parent_id: Optional[int] = None
+    node_type: Optional[KnowledgeNodeType] = None
 
 class KnowledgeNodeResponse(KnowledgeNodeBase):
     id: int
@@ -72,7 +81,10 @@ class QuestionBase(BaseModel):
     type: QuestionType = QuestionType.SINGLE_CHOICE
     knowledge_node_id: int
     resource_id: Optional[int] = None
+    passage_id: Optional[int] = None
     scoring_config: Optional[dict] = None
+    source_author: Optional[str] = None
+    source_title: Optional[str] = None
 
 class QuestionCreate(QuestionBase):
     answers: List[AnswerCreate] = []
@@ -84,17 +96,34 @@ class QuestionUpdate(BaseModel):
     type: Optional[QuestionType] = None
     knowledge_node_id: Optional[int] = None
     resource_id: Optional[int] = None
+    passage_id: Optional[int] = None
     scoring_config: Optional[dict] = None
+    source_author: Optional[str] = None
+    source_title: Optional[str] = None
     answers: Optional[List[AnswerCreate]] = None
     sub_items: Optional[List[QuestionSubItemCreate]] = None
+    public_code: Optional[str] = None  # Dùng khi update bulk
+
+class QuestionReviewRequest(BaseModel):
+    approve: bool
+    reject_reason: Optional[str] = None
 
 class QuestionResponse(QuestionBase):
     id: int
+    public_code: str
     status: QuestionStatus
+    reject_reason: Optional[str] = None
     creator_id: int
     parent_question_id: Optional[int] = None
+    usage_count: int = 0
     created_at: datetime
     updated_at: datetime
     answers: List[AnswerResponse] = []
     sub_items: List[QuestionSubItemResponse] = []
     model_config = ConfigDict(from_attributes=True)
+
+class QuestionSimilarityResponse(BaseModel):
+    question_id: int
+    similarity_score: float
+    content: str
+    status: str

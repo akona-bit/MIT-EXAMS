@@ -24,6 +24,7 @@ from app.models.grading import ExamResult, IrtTask
 from app.models.omr import OmrJob, OmrSheet
 from app.models.audit import AuditLog
 from app.models.obsidian import ObsidianSyncRun, ObsidianFile
+from app.models.passage import Passage
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:

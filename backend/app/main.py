@@ -102,7 +102,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(PostHogContextMiddleware)
 
-from app.api.v1 import auth, knowledge, questions, matrix, exams, grading, omr, statistics, admin, obsidian, resources, analytics
+from app.api.v1 import auth, knowledge, questions, matrix, exams, grading, omr, statistics, admin, obsidian, resources, analytics, advanced_analytics, passages
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -118,6 +118,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["Knowledge"])
 app.include_router(questions.router, prefix="/api/v1/questions", tags=["Questions"])
+app.include_router(passages.router, prefix="/api/v1/passages", tags=["Passages"])
 app.include_router(matrix.router, prefix="/api/v1/matrix", tags=["Matrix"])
 app.include_router(exams.router, prefix="/api/v1/exams", tags=["Exams"])
 app.include_router(grading.router, prefix="/api/v1/grading", tags=["Grading"])
@@ -127,6 +128,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(obsidian.router, prefix="/api/v1/obsidian", tags=["Obsidian"])
 app.include_router(resources.router, prefix="/api/v1/resources", tags=["Resources"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+app.include_router(advanced_analytics.router, prefix="/api/v1/advanced-analytics", tags=["Advanced Analytics"])
 
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)
@@ -138,3 +140,40 @@ async def health_check():
     Health check endpoint to verify the API is running.
     """
     return {"status": "ok"}
+
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Set
+import asyncio
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+        await self.broadcast_online_users()
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        # We can't await broadcast here because it's sync, we'll schedule it
+        asyncio.create_task(self.broadcast_online_users())
+
+    async def broadcast_online_users(self):
+        count = len(self.active_connections)
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json({"onlineUsers": count})
+            except Exception:
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/online")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)

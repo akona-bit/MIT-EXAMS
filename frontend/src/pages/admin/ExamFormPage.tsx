@@ -59,8 +59,8 @@ export default function ExamFormPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-primary-600">Exam setup</p>
-          <h1 className="text-2xl font-bold text-neutral-900">
+          <p className="text-sm font-medium text-primary-500">Exam setup</p>
+          <h1 className="text-3xl font-extrabold text-gradient pb-1">
             Tạo kỳ thi mới
           </h1>
         </div>
@@ -71,7 +71,7 @@ export default function ExamFormPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+        className="space-y-6 rounded-2xl glass-card p-6"
       >
         {errorMessage && (
           <div
@@ -93,7 +93,7 @@ export default function ExamFormPage() {
         <div>
           <label
             htmlFor="exam-description"
-            className="mb-1.5 block text-sm font-medium text-neutral-700"
+            className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100"
           >
             Mô tả
           </label>
@@ -103,7 +103,7 @@ export default function ExamFormPage() {
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Mục tiêu, đối tượng hoặc ghi chú cho kỳ thi"
-            className="w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
           />
         </div>
 
@@ -111,7 +111,7 @@ export default function ExamFormPage() {
           <div>
             <label
               htmlFor="exam-matrix"
-              className="mb-1.5 block text-sm font-medium text-neutral-700"
+              className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100"
             >
               Ma trận đặc tả
             </label>
@@ -121,7 +121,7 @@ export default function ExamFormPage() {
               value={matrixId}
               onChange={(event) => setMatrixId(event.target.value)}
               disabled={isFetching}
-              className="w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-300 disabled:bg-neutral-50"
+              className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md disabled:opacity-50"
             >
               <option value="">
                 {isFetching ? "Đang tải ma trận..." : "-- Chọn ma trận --"}
@@ -142,7 +142,7 @@ export default function ExamFormPage() {
           <div>
             <label
               htmlFor="form-count"
-              className="mb-1.5 block text-sm font-medium text-neutral-700"
+              className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100"
             >
               Số mã đề
             </label>
@@ -155,19 +155,21 @@ export default function ExamFormPage() {
               onChange={(event) =>
                 setFormCount(Math.max(1, Number(event.target.value)))
               }
-              className="w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-300"
+              className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
             />
-            <p className="mt-1.5 text-xs text-neutral-500">
+            <p className="mt-1.5 text-xs text-slate-500">
               Đề gốc sẽ được tạo kèm các mã đề xáo trộn.
             </p>
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-neutral-100 pt-4">
+        <div className="flex justify-end border-t border-slate-200 dark:border-white/10 pt-4">
           <Button
             type="submit"
             isLoading={isLoading}
             disabled={isFetching || matrices.length === 0}
+            size="lg"
+            className="shadow-lg shadow-primary-500/30 hover:-translate-y-0.5"
           >
             Tạo kỳ thi
           </Button>
