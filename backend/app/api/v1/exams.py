@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -16,7 +16,7 @@ from app.schemas.exam_session import AutosaveRequest, AutosaveResponse, Tracking
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.services.generator import generate_original_exam, generate_shuffled_forms
-from app.services.exam_session import publish_exam, assign_participants, get_or_assign_exam_form, get_exam_session_info, autosave_answers, submit_exam, log_tracking_event
+from app.services.exam_session import publish_exam, assign_participants, get_or_assign_exam_form, get_exam_session_info, autosave_answers, submit_exam, log_tracking_event, suspend_exam_session
 from app.core.analytics import capture
 
 router = APIRouter()
@@ -168,3 +168,9 @@ async def track_event(exam_id: int, req: TrackingEventRequest, db: AsyncSession 
     await log_tracking_event(db, exam_id, current_user.id, req)
     from datetime import datetime, timezone
     return {"success": True, "timestamp": datetime.now(timezone.utc)}
+
+@router.post("/{exam_id}/suspend", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def suspend(request: Request, exam_id: int, user_id: int = Query(..., description="The user_id of the participant to suspend"), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    await suspend_exam_session(db, exam_id, user_id, current_user.id)
+    capture(request, "exam_suspended", {"exam_id": exam_id, "suspended_user_id": user_id})
+    return {"message": "Exam session suspended successfully"}

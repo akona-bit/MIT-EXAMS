@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   { label: "Ma trận Đặc tả", path: "/admin/matrix", icon: <Network className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Kỳ thi", path: "/admin/exams", icon: <FileEdit className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Quản lý Thí sinh", path: "/admin/students", icon: <Users className="h-5 w-5" strokeWidth={1.8} /> },
+  { label: "Giám sát Gian lận", path: "/admin/analytics/fraud", icon: <Activity className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Phân tích DS", path: "/admin/analytics/ds", icon: <BarChart3 className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Kho ngữ liệu", path: "/admin/resources", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
   { label: "Quyền xem đáp án", path: "/admin/access", icon: <KeyRound className="h-5 w-5" strokeWidth={1.8} /> },

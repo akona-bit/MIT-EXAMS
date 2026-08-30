@@ -161,9 +161,47 @@ class ConnectionManager:
 
     async def broadcast_online_users(self):
         count = len(self.active_connections)
+        
+        # Lấy dữ liệu fraud từ DB
+        fraud_alerts = []
+        try:
+            from app.db.database import AsyncSessionLocal
+            from sqlalchemy import select, func
+            from sqlalchemy.orm import selectinload
+            from app.models.exam import ExamParticipant, ExamTrackingLog, ParticipantStatus
+            
+            async with AsyncSessionLocal() as session:
+                # Đếm số event theo participant đang thi
+                stmt = select(
+                    ExamParticipant,
+                    func.count(ExamTrackingLog.id).label('risk_score')
+                ).outerjoin(
+                    ExamTrackingLog, ExamParticipant.id == ExamTrackingLog.exam_participant_id
+                ).where(
+                    ExamParticipant.status == ParticipantStatus.IN_PROGRESS
+                ).group_by(ExamParticipant.id).options(selectinload(ExamParticipant.user))
+                
+                result = await session.execute(stmt)
+                for participant, risk_score in result.all():
+                    fraud_alerts.append({
+                        "session_id": participant.id,
+                        "exam_id": participant.exam_id,
+                        "user_id": participant.user_id,
+                        "student_name": participant.user.full_name if participant.user else "Unknown",
+                        "risk_score": risk_score,
+                        "status": participant.status.value,
+                        "flagged": risk_score > 3 # Ngưỡng tạm định, có thể thay đổi
+                    })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error fetching fraud alerts: {e}")
+
         for connection in list(self.active_connections):
             try:
-                await connection.send_json({"onlineUsers": count})
+                await connection.send_json({
+                    "onlineUsers": count,
+                    "fraud_alerts": fraud_alerts
+                })
             except Exception:
                 pass
 

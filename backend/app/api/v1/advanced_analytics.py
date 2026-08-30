@@ -224,3 +224,42 @@ async def get_flagged_items():
     flagged.sort(key=lambda x: x["a"])
     
     return {"items": flagged}
+
+@router.get("/fraud")
+async def get_fraud_alerts(exam_id: int = None, threshold: int = 3):
+    from app.db.database import AsyncSessionLocal
+    from sqlalchemy import select, func
+    from sqlalchemy.orm import selectinload
+    from app.models.exam import ExamParticipant, ExamTrackingLog, ParticipantStatus
+    
+    fraud_alerts = []
+    async with AsyncSessionLocal() as session:
+        stmt = select(
+            ExamParticipant,
+            func.count(ExamTrackingLog.id).label('risk_score')
+        ).outerjoin(
+            ExamTrackingLog, ExamParticipant.id == ExamTrackingLog.exam_participant_id
+        ).where(
+            ExamParticipant.status == ParticipantStatus.IN_PROGRESS
+        )
+        
+        if exam_id:
+            stmt = stmt.where(ExamParticipant.exam_id == exam_id)
+            
+        stmt = stmt.group_by(ExamParticipant.id).options(selectinload(ExamParticipant.user))
+        
+        result = await session.execute(stmt)
+        for participant, risk_score in result.all():
+            fraud_alerts.append({
+                "session_id": participant.id,
+                "exam_id": participant.exam_id,
+                "user_id": participant.user_id,
+                "student_name": participant.user.full_name if participant.user else "Unknown",
+                "risk_score": risk_score,
+                "status": participant.status.value,
+                "flagged": risk_score > threshold
+            })
+            
+    # Sort by risk_score descending
+    fraud_alerts.sort(key=lambda x: x["risk_score"], reverse=True)
+    return {"fraud_alerts": fraud_alerts}

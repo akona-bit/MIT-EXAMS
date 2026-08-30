@@ -26,6 +26,21 @@ class TrackingEventResponse(BaseModel):
     success: bool
     timestamp: datetime
 
+class SessionQuestionOption(BaseModel):
+    id: int
+    content: str
+
+class SessionQuestion(BaseModel):
+    exam_form_question_id: int
+    question_id: int
+    public_code: str
+    content: str
+    type: str
+    part: int
+    position: int
+    passage_id: Optional[int] = None
+    options: List[SessionQuestionOption]
+
 class ExamSessionInfoResponse(BaseModel):
     exam_id: int
     exam_name: str
@@ -33,3 +48,5 @@ class ExamSessionInfoResponse(BaseModel):
     remaining_seconds: int
     server_time: datetime
     participant_status: str
+    questions: List[SessionQuestion] = []
+    saved_answers: List[AnswerItem] = []

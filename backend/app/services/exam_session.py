@@ -92,7 +92,14 @@ from app.schemas.exam_session import AutosaveRequest, TrackingEventRequest
 async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
     stmt = select(ExamParticipant).options(
         selectinload(ExamParticipant.exam),
+        selectinload(ExamParticipant.submission).selectinload(ExamSubmission.answers),
         selectinload(ExamParticipant.exam_form)
+        .selectinload(ExamForm.questions)
+        .selectinload(ExamFormQuestion.question_ref),
+        selectinload(ExamParticipant.exam_form)
+        .selectinload(ExamForm.questions)
+        .selectinload(ExamFormQuestion.answers)
+        .selectinload(ExamFormAnswer.answer_ref)
     ).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
@@ -129,13 +136,51 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
     else:
         remaining_seconds = exam.duration_minutes * 60
         
+    saved_answers = []
+    if participant.submission:
+        for sa in participant.submission.answers:
+            saved_answers.append({
+                "exam_form_question_id": sa.exam_form_question_id,
+                "selected_answer_id": sa.selected_answer_id,
+                "selected_answer_ids": sa.selected_answer_ids,
+                "selected_subitem_answers": sa.selected_subitem_answers,
+            })
+            
+    questions = []
+    if participant.exam_form:
+        for fq in participant.exam_form.questions:
+            q = fq.question_ref
+            options = []
+            for fa in fq.answers:
+                ans = fa.answer_ref
+                options.append({
+                    "id": ans.id,
+                    "content": ans.content
+                })
+            questions.append({
+                "exam_form_question_id": fq.id,
+                "question_id": q.id,
+                "public_code": q.public_code,
+                "content": q.content,
+                "type": q.type.value,
+                "part": fq.part,
+                "position": fq.position,
+                "passage_id": q.passage_id,
+                "options": options
+            })
+            
+    # Sort questions by position
+    questions.sort(key=lambda x: x["position"])
+
     return {
         "exam_id": exam.id,
         "exam_name": exam.name,
         "form_code": participant.exam_form.code if participant.exam_form else "",
         "remaining_seconds": remaining_seconds,
         "server_time": now,
-        "participant_status": participant.status.value
+        "participant_status": participant.status.value,
+        "questions": questions,
+        "saved_answers": saved_answers
     }
 
 async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: AutosaveRequest):
@@ -144,8 +189,8 @@ async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: Au
         ExamParticipant.user_id == user_id
     ))
     participant = result.scalars().first()
-    if not participant or participant.status == ParticipantStatus.SUBMITTED:
-        raise HTTPException(status_code=400, detail="Cannot save answers")
+    if not participant or participant.status != ParticipantStatus.IN_PROGRESS:
+        raise HTTPException(status_code=403, detail="Session is not active (may be submitted or suspended)")
         
     if participant.is_banned:
         raise HTTPException(status_code=403, detail="You are banned from this exam")
@@ -185,8 +230,8 @@ async def submit_exam(db: AsyncSession, exam_id: int, user_id: int):
         ExamParticipant.user_id == user_id
     ))
     participant = result.scalars().first()
-    if not participant or participant.status == ParticipantStatus.SUBMITTED:
-        raise HTTPException(status_code=400, detail="Cannot submit")
+    if not participant or participant.status != ParticipantStatus.IN_PROGRESS:
+        raise HTTPException(status_code=403, detail="Session is not active (may be submitted or suspended)")
         
     if participant.is_banned:
         raise HTTPException(status_code=403, detail="You are banned from this exam")
@@ -215,4 +260,39 @@ async def log_tracking_event(db: AsyncSession, exam_id: int, user_id: int, req: 
     )
     db.add(log)
     await db.commit()
+    
+    try:
+        from app.main import manager
+        import asyncio
+        asyncio.create_task(manager.broadcast_online_users())
+    except Exception:
+        pass
+        
+    return True
+
+async def suspend_exam_session(db: AsyncSession, exam_id: int, user_id: int, admin_user_id: int):
+    result = await db.execute(select(ExamParticipant).where(
+        ExamParticipant.exam_id == exam_id,
+        ExamParticipant.user_id == user_id
+    ))
+    participant = result.scalars().first()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+        
+    if participant.status == ParticipantStatus.SUBMITTED:
+        raise HTTPException(status_code=400, detail="Cannot suspend a submitted session")
+        
+    participant.status = ParticipantStatus.SUSPENDED
+    participant.suspended_at = datetime.now(timezone.utc)
+    participant.suspended_by_id = admin_user_id
+    
+    await db.commit()
+    
+    try:
+        from app.main import manager
+        import asyncio
+        asyncio.create_task(manager.broadcast_online_users())
+    except Exception:
+        pass
+        
     return True

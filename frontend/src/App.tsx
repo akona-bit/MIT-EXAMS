@@ -22,6 +22,7 @@ import ExamsPage from "./pages/admin/ExamsPage";
 import ExamDetailPage from "./pages/admin/ExamDetailPage";
 import ExamFormPage from "./pages/admin/ExamFormPage";
 import StudentHomePage from "./pages/student/StudentHomePage";
+import StudentExamShell from "./pages/student/StudentExamShell";
 
 import ObsidianPage from "./pages/admin/ObsidianPage";
 import ResourcesPage from "./pages/admin/ResourcesPage";
@@ -31,6 +32,7 @@ import StudentManagementPage from "./pages/admin/analytics/StudentManagementPage
 import StudentDetailPage from "./pages/admin/analytics/StudentDetailPage";
 import StudentComparePage from "./pages/admin/analytics/StudentComparePage";
 import AdvancedAnalyticsPage from "./pages/admin/analytics/AdvancedAnalyticsPage";
+import FraudDetectionPage from "./pages/admin/analytics/FraudDetectionPage";
 import ExamComparePage from "./pages/admin/ExamComparePage";
 
 // --- Route Guards ---
@@ -118,13 +120,14 @@ function AppRoutes() {
           <Route path="students/compare" element={<StudentComparePage />} />
           <Route path="students/:id" element={<StudentDetailPage />} />
           <Route path="analytics/ds" element={<AdvancedAnalyticsPage />} />
+          <Route path="analytics/fraud" element={<FraudDetectionPage />} />
         </Route>
       </Route>
 
       {/* Student Routes */}
       <Route element={<ProtectedRoute allowedRoles={["STUDENT"]} />}>
         <Route path="/student" element={<StudentHomePage />} />
-        {/* Add more student routes here later */}
+        <Route path="/exam/:id/session" element={<StudentExamShell />} />
       </Route>
 
       {/* Fallback */}

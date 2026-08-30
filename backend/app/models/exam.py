@@ -69,6 +69,7 @@ class ParticipantStatus(str, enum.Enum):
     NOT_STARTED = "NOT_STARTED"
     IN_PROGRESS = "IN_PROGRESS"
     SUBMITTED = "SUBMITTED"
+    SUSPENDED = "SUSPENDED"
 
 class Exam(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -97,11 +98,14 @@ class ExamParticipant(Base):
     status: Mapped[ParticipantStatus] = mapped_column(SQLAlchemyEnum(ParticipantStatus), default=ParticipantStatus.NOT_STARTED)
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     submit_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), nullable=True)
     device_fingerprint: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     
     exam: Mapped["Exam"] = relationship(back_populates="participants")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    suspended_by = relationship("User", foreign_keys=[suspended_by_id])
     exam_form = relationship("ExamForm")
     
     submission: Mapped[Optional["ExamSubmission"]] = relationship(back_populates="participant", cascade="all, delete-orphan", uselist=False)
