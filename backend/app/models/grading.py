@@ -65,5 +65,30 @@ class IrtTask(Base):
     status: Mapped[str] = mapped_column(String(50))  # PENDING, STARTED, SUCCESS, FAILURE
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     exam = relationship("Exam")
+
+class ItemAnalysisResult(Base):
+    __tablename__ = "item_analysis_result"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"), index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("question.id"), index=True)
+    
+    # CTT Metrics
+    ctt_difficulty: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    ctt_discrimination: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    ctt_distractor_label: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # IRT Metrics
+    irt_a: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    irt_b: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    irt_a_se: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    irt_b_se: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    chi_square_p: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    exam = relationship("Exam")
+    question = relationship("Question")
+

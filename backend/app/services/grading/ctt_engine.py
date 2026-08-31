@@ -32,3 +32,39 @@ def cal_disc(data: pd.DataFrame):
         L = lower[j].sum()
         a[j] = ((U - L) / group)
     return a
+
+def b_category(b):
+    if b > 0.9: return 'Rất dễ'
+    if b > 0.75: return 'Dễ'
+    if b > 0.6: return 'Tương đối dễ'
+    if b > 0.4: return 'Bình thường'
+    if b > 0.25: return 'Tương đối khó'
+    if b > 0.1: return 'Khó'
+    return 'Rất khó'
+
+def a_category(a):
+    if a <= 0: return 'Kém'
+    if a <= 0.2: return 'Chưa tốt'
+    if a <= 0.4: return 'Chấp nhận được'
+    if a <= 0.6: return 'Tương đối tốt'
+    if a <= 0.8: return 'Tốt'
+    if a <= 1.0: return 'Rất tốt'
+    return 'Quá tốt'
+
+def label_distractor(points):
+    """
+    points: danh sách điểm point-biserial của các phương án sai (distractor)
+    """
+    count = sum(1 for p in points if p < 0)
+    total = len(points)
+    
+    if total == 0: return "Không có dữ liệu"
+    
+    if count == total:
+        return "Tốt"
+    elif count >= total - 1 and total >= 3:
+        return "Bình thường"
+    elif count >= total - 2 and total >= 3:
+        return "Yếu"
+    return "Kém"
+

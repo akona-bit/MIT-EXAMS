@@ -1,13 +1,15 @@
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update, delete, and_
+from sqlalchemy.sql import func
 
 from app.db.database import get_db
-from app.models.question import KnowledgeNode, KnowledgeNodeLink, Question
+from app.models.question import KnowledgeNode, KnowledgeNodeLink, Question, KnowledgeNodeParent
 from app.schemas.question import KnowledgeNodeCreate, KnowledgeNodeResponse, KnowledgeNodeUpdate
 from app.api.dependencies import RequireRole
 from app.core.analytics import capture
+from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
 
@@ -18,33 +20,37 @@ def _level_name(depth: int) -> str:
     return LEVEL_NAMES[depth] if depth < len(LEVEL_NAMES) else "NOTE"
 
 
-def _build_path(node_id: int, nodes_by_id: Dict[int, KnowledgeNode]) -> str:
+def _build_path(node_id: int, nodes_by_id: Dict[int, KnowledgeNode], primary_parents: Dict[int, Optional[int]]) -> str:
     names: List[str] = []
-    current: Optional[KnowledgeNode] = nodes_by_id.get(node_id)
-    while current:
-        names.append(current.name)
-        current = nodes_by_id.get(current.parent_id) if current.parent_id else None
+    current_id = node_id
+    while current_id:
+        node = nodes_by_id.get(current_id)
+        if not node:
+            break
+        names.append(node.name)
+        current_id = primary_parents.get(current_id)
     return "/".join(reversed(names))
 
 
 def _build_tree_node(
     node: KnowledgeNode,
-    children_by_parent: Dict[Optional[int], List[KnowledgeNode]],
+    children_by_primary_parent: Dict[Optional[int], List[KnowledgeNode]],
     nodes_by_id: Dict[int, KnowledgeNode],
     question_count_by_node: Dict[int, int],
+    primary_parents: Dict[int, Optional[int]],
     depth: int = 0,
 ) -> Dict[str, Any]:
     children = [
-        _build_tree_node(child, children_by_parent, nodes_by_id, question_count_by_node, depth + 1)
-        for child in sorted(children_by_parent.get(node.id, []), key=lambda item: item.name.lower())
+        _build_tree_node(child, children_by_primary_parent, nodes_by_id, question_count_by_node, primary_parents, depth + 1)
+        for child in sorted(children_by_primary_parent.get(node.id, []), key=lambda item: item.name.lower())
     ]
     return {
         "id": node.id,
         "name": node.name,
         "description": node.description,
-        "parent_id": node.parent_id,
+        "parent_id": primary_parents.get(node.id),
         "level": _level_name(depth),
-        "path": _build_path(node.id, nodes_by_id),
+        "path": _build_path(node.id, nodes_by_id, primary_parents),
         "question_count": question_count_by_node.get(node.id, 0),
         "children": children,
     }
@@ -55,9 +61,22 @@ async def _load_knowledge_state(db: AsyncSession):
     nodes = list(node_result.scalars().all())
     nodes_by_id = {node.id: node for node in nodes}
 
-    children_by_parent: Dict[Optional[int], List[KnowledgeNode]] = {}
+    # DAG relations
+    rel_result = await db.execute(select(KnowledgeNodeParent))
+    relations = rel_result.scalars().all()
+
+    primary_parents: Dict[int, Optional[int]] = {}
+    children_by_primary_parent: Dict[Optional[int], List[KnowledgeNode]] = {}
+    all_parents: Dict[int, List[int]] = {}
+
+    for rel in relations:
+        if rel.is_primary:
+            primary_parents[rel.child_id] = rel.parent_id
+        all_parents.setdefault(rel.child_id, []).append(rel.parent_id)
+
     for node in nodes:
-        children_by_parent.setdefault(node.parent_id, []).append(node)
+        p_id = primary_parents.get(node.id)
+        children_by_primary_parent.setdefault(p_id, []).append(node)
 
     question_result = await db.execute(select(Question.id, Question.knowledge_node_id))
     question_rows = question_result.all()
@@ -65,7 +84,7 @@ async def _load_knowledge_state(db: AsyncSession):
     for _, knowledge_node_id in question_rows:
         question_count_by_node[knowledge_node_id] = question_count_by_node.get(knowledge_node_id, 0) + 1
 
-    return nodes, nodes_by_id, children_by_parent, question_count_by_node
+    return nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents
 
 @router.get("/", response_model=List[KnowledgeNodeResponse])
 async def get_knowledge_nodes(db: AsyncSession = Depends(get_db)):
@@ -75,45 +94,48 @@ async def get_knowledge_nodes(db: AsyncSession = Depends(get_db)):
 
 @router.get("/tree")
 async def get_knowledge_tree(subject: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    nodes, nodes_by_id, children_by_parent, question_count_by_node = await _load_knowledge_state(db)
-    
-    roots = [node for node in nodes if node.parent_id is None]
+    nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents = await _load_knowledge_state(db)
+
+    roots = [node for node in nodes if primary_parents.get(node.id) is None]
     if subject:
         roots = [node for node in roots if node.subject == subject]
-        
+
     return [
-        _build_tree_node(root, children_by_parent, nodes_by_id, question_count_by_node)
+        _build_tree_node(root, children_by_primary_parent, nodes_by_id, question_count_by_node, primary_parents)
         for root in sorted(roots, key=lambda item: item.name.lower())
     ]
 
 
 @router.get("/{node_id}/context")
 async def get_knowledge_node_context(node_id: int, db: AsyncSession = Depends(get_db)):
-    nodes, nodes_by_id, children_by_parent, question_count_by_node = await _load_knowledge_state(db)
-    
+    nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents = await _load_knowledge_state(db)
+
     node = nodes_by_id.get(node_id)
     if not node:
         raise HTTPException(status_code=404, detail="Node không tồn tại")
-        
-    # Build breadcrumb
+
+    # Build breadcrumb (primary path)
     breadcrumb = []
-    current = node
-    while current:
+    current_id = node.id
+    while current_id:
+        curr_node = nodes_by_id.get(current_id)
+        if not curr_node:
+            break
         breadcrumb.insert(0, {
-            "id": current.id,
-            "name": current.name,
-            "node_type": current.node_type.value.lower() if current.node_type else "skill"
+            "id": curr_node.id,
+            "name": curr_node.name,
+            "node_type": curr_node.node_type.value.lower() if curr_node.node_type else "skill"
         })
-        current = nodes_by_id.get(current.parent_id) if current.parent_id else None
-        
-    # Build siblings
+        current_id = primary_parents.get(current_id)
+
+    # Build siblings (based on primary parent)
     siblings_list = []
-    # If node has a parent, siblings are children of the parent. Otherwise, roots with the same subject.
-    if node.parent_id:
-        sibs = children_by_parent.get(node.parent_id, [])
+    p_id = primary_parents.get(node.id)
+    if p_id:
+        sibs = children_by_primary_parent.get(p_id, [])
     else:
-        sibs = [n for n in nodes if n.parent_id is None and n.subject == node.subject]
-        
+        sibs = [n for n in nodes if primary_parents.get(n.id) is None and n.subject == node.subject]
+
     for sib in sibs:
         if sib.id != node.id:
             siblings_list.append({
@@ -121,7 +143,7 @@ async def get_knowledge_node_context(node_id: int, db: AsyncSession = Depends(ge
                 "name": sib.name,
                 "question_count": question_count_by_node.get(sib.id, 0)
             })
-            
+
     return {
         "id": node.id,
         "name": node.name,
@@ -129,13 +151,17 @@ async def get_knowledge_node_context(node_id: int, db: AsyncSession = Depends(ge
         "description": node.description,
         "breadcrumb": breadcrumb,
         "siblings": siblings_list,
-        "question_count": question_count_by_node.get(node.id, 0)
+        "question_count": question_count_by_node.get(node.id, 0),
+        "secondary_parents": [
+            {"id": pid, "name": nodes_by_id[pid].name}
+            for pid in all_parents.get(node.id, []) if pid != primary_parents.get(node.id)
+        ]
     }
 
 
 @router.get("/graph")
 async def get_knowledge_graph(db: AsyncSession = Depends(get_db)):
-    nodes, nodes_by_id, children_by_parent, question_count_by_node = await _load_knowledge_state(db)
+    nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents = await _load_knowledge_state(db)
     graph_nodes = []
     graph_edges = []
 
@@ -145,18 +171,21 @@ async def get_knowledge_graph(db: AsyncSession = Depends(get_db)):
             "entity_id": node.id,
             "label": node.name,
             "type": node.node_type.value if node.node_type else "SKILL",
-            "path": _build_path(node.id, nodes_by_id),
+            "path": _build_path(node.id, nodes_by_id, primary_parents),
             "question_count": question_count_by_node.get(node.id, 0),
             "description": node.description,
             "note": node.note,
         })
 
-        if node.parent_id:
+        # DAG Edges (All relations)
+        for pid in all_parents.get(node.id, []):
+            is_primary = (pid == primary_parents.get(node.id))
             graph_edges.append({
-                "id": f"knowledge:{node.parent_id}->knowledge:{node.id}",
-                "source": f"knowledge:{node.parent_id}",
+                "id": f"knowledge:{pid}->knowledge:{node.id}",
+                "source": f"knowledge:{pid}",
                 "target": f"knowledge:{node.id}",
                 "type": "PARENT_OF",
+                "is_primary": is_primary,
             })
 
     # Load manual links
@@ -180,11 +209,16 @@ async def create_knowledge_node(request: Request, node_in: KnowledgeNodeCreate, 
         result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == node_in.parent_id))
         if not result.scalars().first():
             raise HTTPException(status_code=400, detail="Parent node not found")
-            
+
     node = KnowledgeNode(**node_in.model_dump())
     db.add(node)
     await db.commit()
     await db.refresh(node)
+
+    if node_in.parent_id:
+        await KnowledgeService.add_relation(db, node.id, node_in.parent_id, is_primary=True)
+        await db.commit()
+
     capture(request, "knowledge_node_created", {"knowledge_node_id": node.id, "has_parent": node.parent_id is not None})
     return node
 
@@ -198,13 +232,16 @@ async def delete_knowledge_node(
     node = result.scalars().first()
     if not node:
         raise HTTPException(status_code=404, detail="Node không tồn tại")
-    
-    # Detach children
-    children_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.parent_id == node_id))
-    children = children_result.scalars().all()
-    for child in children:
-        child.parent_id = None
-        
+
+    # Remove all relations in DAG table
+    await db.execute(
+        delete(KnowledgeNodeParent)
+        .where(and_(
+            (KnowledgeNodeParent.parent_id == node_id) |
+            (KnowledgeNodeParent.child_id == node_id)
+        ))
+    )
+
     await db.delete(node)
     await db.commit()
     capture(request, "knowledge_node_deleted", {"node_id": node_id})
@@ -221,7 +258,7 @@ async def update_knowledge_node(
     node = result.scalars().first()
     if not node:
         raise HTTPException(status_code=404, detail="Node không tồn tại")
-        
+
     if node_in.parent_id is not None:
         if node_in.parent_id == node_id:
             raise HTTPException(status_code=400, detail="Không thể trỏ parent vào chính nó")
@@ -229,11 +266,17 @@ async def update_knowledge_node(
         parent_node = parent_result.scalars().first()
         if not parent_node:
             raise HTTPException(status_code=404, detail="Parent node không tồn tại")
-    
+
     update_data = node_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(node, key, value)
-        
+
+    if node_in.parent_id is not None:
+        try:
+            await KnowledgeService.add_relation(db, node_id, node_in.parent_id, is_primary=True)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     await db.commit()
     await db.refresh(node)
     capture(request, "knowledge_node_updated", {"node_id": node.id, "fields": list(update_data.keys())})

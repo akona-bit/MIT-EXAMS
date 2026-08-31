@@ -41,9 +41,21 @@ class KnowledgeNode(Base):
     subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_node.id"), nullable=True)
+    short_code: Mapped[Optional[str]] = mapped_column(String(50), index=True, nullable=True)
+    path_code: Mapped[Optional[str]] = mapped_column(String(255), index=True, nullable=True)
 
     sub_nodes: Mapped[List["KnowledgeNode"]] = relationship("KnowledgeNode", backref="parent", remote_side=[id])
     questions: Mapped[List["Question"]] = relationship(back_populates="knowledge_node")
+
+class KnowledgeNodeParent(Base):
+    """DAG relation: 1 node can have multiple parents, 1 must be primary"""
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    child_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
+    parent_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    child: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[child_id])
+    parent: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[parent_id])
 
 class KnowledgeNodeLink(Base):
     """Manual link between two knowledge nodes (non-hierarchical)"""

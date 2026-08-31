@@ -1,7 +1,10 @@
 venv/
+backend/venv3/
 node_modules/
 __pycache__/
 *.pyc
+.pytest_cache/
+*.tsbuildinfo
 *.db
 .env
 .DS_Store

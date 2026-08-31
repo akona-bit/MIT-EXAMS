@@ -20,11 +20,12 @@ from app.models.user import User, Role
 from app.models.question import KnowledgeNode, Resource, Question, Answer, QuestionSubItem
 from app.models.exam import Matrix, MatrixRule, Exam, ExamForm, ExamFormQuestion, ExamFormAnswer, ExamParticipant, ExamSubmission, ExamSubmissionAnswer, ExamTrackingLog
 from app.models.grading import ExamResult, IrtTask
-from app.models.grading import ExamResult, IrtTask
+from app.models.grading import ExamResult, IrtTask, ItemAnalysisResult
 from app.models.omr import OmrJob, OmrSheet
 from app.models.audit import AuditLog
 from app.models.obsidian import ObsidianSyncRun, ObsidianFile
 from app.models.passage import Passage
+from app.models.system import SystemSetting
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:

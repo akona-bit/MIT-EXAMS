@@ -21,6 +21,14 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     is_active: Optional[bool] = None
     role_id: Optional[int] = None
+    full_name: Optional[str] = None
+
+class UserUpdateMe(BaseModel):
+    full_name: Optional[str] = None
+
+class UserPasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
 
 # Role schema
 class RoleResponse(BaseModel):

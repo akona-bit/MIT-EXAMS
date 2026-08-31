@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List
 import os
 import shutil
@@ -164,3 +164,74 @@ async def update_staff(user_id: int, req: StaffUpdate, db: AsyncSession = Depend
     await db.commit()
     await log_audit(db, current_user.id, AuditAction.UPDATE_USER, "User", user.id, f"Updated staff user {user.username}")
     return {"id": user.id, "message": "Updated successfully"}
+
+from app.models.system import SystemSetting
+from app.models.audit import AuditLog
+from sqlalchemy.orm import selectinload
+from fastapi import Query
+
+class SystemSettingUpdate(BaseModel):
+    value: str
+    description: Optional[str] = None
+
+@router.get("/settings", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_settings(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(SystemSetting))
+    settings = result.scalars().all()
+    return [{"key": s.key, "value": s.value, "description": s.description, "updated_at": s.updated_at} for s in settings]
+
+@router.put("/settings/{key}", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def update_setting(key: str, req: SystemSettingUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalars().first()
+    
+    if not setting:
+        setting = SystemSetting(key=key, value=req.value, description=req.description)
+        db.add(setting)
+        action = AuditAction.OTHER
+        detail_msg = f"Created system setting {key}"
+    else:
+        setting.value = req.value
+        if req.description is not None:
+            setting.description = req.description
+        action = AuditAction.OTHER
+        detail_msg = f"Updated system setting {key}"
+        
+    await db.commit()
+    await log_audit(db, current_user.id, action, "SystemSetting", None, detail_msg)
+    
+    return {"key": setting.key, "value": setting.value, "description": setting.description}
+
+@router.get("/audit-logs", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_audit_logs(
+    skip: int = Query(0, ge=0), 
+    limit: int = Query(50, ge=1, le=100),
+    action: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(AuditLog).options(selectinload(AuditLog.user)).order_by(AuditLog.id.desc())
+    if action:
+        query = query.where(AuditLog.action == action)
+        
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    total_result = await db.execute(select(func.count(AuditLog.id)))
+    total = total_result.scalar()
+    
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": log.id,
+                "user": {"id": log.user.id, "username": log.user.username} if log.user else None,
+                "action": log.action.value if hasattr(log.action, 'value') else log.action,
+                "target_type": log.target_type,
+                "target_id": log.target_id,
+                "details": log.details,
+                "created_at": log.created_at
+            }
+            for log in logs
+        ]
+    }

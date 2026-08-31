@@ -100,6 +100,37 @@ async def get_exam_forms(exam_id: int, db: AsyncSession = Depends(get_db)):
     return [{"id": f.id, "code": f.code, "is_original": f.is_original, "created_at": f.created_at} for f in forms]
 
 
+@router.put("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def publish_exam_route(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
+    exam = await db.get(Exam, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    exam.status = ExamStatus.PUBLISHED
+    await db.commit()
+    await db.refresh(exam)
+    capture(request, "exam_published", {"exam_id": exam_id})
+    return exam
+
+@router.put("/{exam_id}/complete", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def complete_exam(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
+    exam = await db.get(Exam, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    exam.status = ExamStatus.COMPLETED
+    await db.commit()
+    await db.refresh(exam)
+    
+    # Trigger calculation background task automatically
+    from app.services.grading.scorer import run_irt_calibration_task
+    from app.models.grading import IrtTask
+    task = run_irt_calibration_task.delay(exam_id)
+    irt_task = IrtTask(exam_id=exam_id, celery_task_id=task.id, status="PENDING")
+    db.add(irt_task)
+    await db.commit()
+    
+    capture(request, "exam_completed", {"exam_id": exam_id})
+    return exam
+
 @router.post("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def publish_exam_with_defaults(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Exam).where(Exam.id == exam_id))

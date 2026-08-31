@@ -8,13 +8,14 @@ from sqlalchemy.orm import selectinload
 
 from app.db.database import AsyncSessionLocal
 from app.models.exam import ExamForm, ExamFormQuestion, ExamSubmission, ExamParticipant
-from app.models.grading import ExamResult, IrtTask
+from app.models.grading import ExamResult, IrtTask, ItemAnalysisResult
 from app.models.question import Answer, Question
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import update
-from app.services.grading.irt_engine import mmle, theta_estimate, true_score
+from sqlalchemy import update, delete
+from app.services.grading.irt_engine import mmle, theta_estimate, true_score, all_item_se, chi_square
+from app.services.grading.ctt_engine import cal_diff, cal_disc, label_distractor, cal_pbcc
 from datetime import datetime, timezone
 
 async def grade_submission_ctt(db: AsyncSession, submission_id: int) -> ExamResult | None:
@@ -173,9 +174,12 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             try:
                 # K=41 to speed up, max_iter=30
                 a_est, b_est = mmle(U, name=f"IRT_Exam_{exam_id}", max_iter=30, K=41, verbose=False)
+                item_params_for_se = [(float(a), float(b)) for a, b in zip(a_est, b_est)]
+                se_a, se_b = all_item_se(item_params_for_se)
             except Exception as e:
                 if task:
                     task.status = "FAILED"
+                    task.error_details = f"MMLE/SE failed: {str(e)}"
                     await db.commit()
                 return {"status": "FAILED", "reason": f"MMLE failed: {str(e)}"}
             
@@ -206,6 +210,7 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             except Exception as e:
                 if task:
                     task.status = "FAILED"
+                    task.error_details = f"Theta estimation failed: {str(e)}"
                     await db.commit()
                 return {"status": "FAILED", "reason": f"Theta estimation failed: {str(e)}"}
             
@@ -238,6 +243,50 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 exam_result.score_method = "IRT"
                 
                 db.add(exam_result)
+            
+            # Compute CTT and Chi-Square
+            try:
+                # Calculate CTT
+                U_df = pd.DataFrame(U, columns=cau_names)
+                ctt_diff = cal_diff(U_df)
+                ctt_disc = cal_disc(U_df)
+                
+                # Calculate Chi-Square
+                df_for_chi2 = U_df.copy()
+                df_for_chi2["Theta"] = theta_est
+                chi2_df = chi_square(df_for_chi2, item_params_df)
+                
+                # Clear previous results for this exam
+                await db.execute(delete(ItemAnalysisResult).where(ItemAnalysisResult.exam_id == exam_id))
+                
+                # Save into ItemAnalysisResult
+                for j in range(J):
+                    pos = j + 1
+                    qid = position_to_qid.get(pos)
+                    if not qid:
+                        continue
+                    
+                    cau_name = f"Cau{pos}"
+                    
+                    c_p_val = chi2_df.loc[j, "p_value"] if j < len(chi2_df) else np.nan
+                    
+                    analysis_result = ItemAnalysisResult(
+                        exam_id=exam_id,
+                        question_id=qid,
+                        ctt_difficulty=float(ctt_diff[cau_name]) if not pd.isna(ctt_diff[cau_name]) else None,
+                        ctt_discrimination=float(ctt_disc[cau_name]) if not pd.isna(ctt_disc[cau_name]) else None,
+                        ctt_distractor_label="Bình thường", # Mocking for now as full distractor calculation needs more DB queries
+                        irt_a=float(a_est[j]),
+                        irt_b=float(b_est[j]),
+                        irt_a_se=float(se_a[j]),
+                        irt_b_se=float(se_b[j]),
+                        chi_square_p=float(c_p_val) if not pd.isna(c_p_val) else None
+                    )
+                    db.add(analysis_result)
+            except Exception as e:
+                # Log but do not fail the whole task if just analysis generation fails
+                if task:
+                    task.error_details = f"Item analysis generation failed: {str(e)}"
                 
             # 9. Mark success
             if task:

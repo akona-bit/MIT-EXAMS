@@ -1,7 +1,9 @@
 from __future__ import annotations
+# Matrix generator module.
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Set, Tuple
 import random
+from collections import Counter, defaultdict
 from sqlalchemy.orm import Session
 from app.models.question import Question, KnowledgeNode
 from app.models.exam import MatrixRule, ExamGenerationRun, ExamGenerationStatus
@@ -12,12 +14,14 @@ LEVEL_MAP = {1: "NB", 2: "TH", 3: "VD", 4: "VDC"}
 
 @dataclass(frozen=True)
 class MatrixCell:
+    # Rule "đơn giản" (từ Matrix 2.1): level/question_type = None -> engine tự cân bằng
+    # theo phân bố thực tế của ngân hàng câu hỏi (proportional sampling)
     topic: str
     concept: str
     skill: str
-    level: str
-    question_type: str
     count: int
+    level: Optional[str] = None
+    question_type: Optional[str] = None
     target_irt_b: Optional[float] = None
     matrix_rule_id: Optional[int] = None
     part: int = 1
@@ -25,6 +29,8 @@ class MatrixCell:
     group_id: Optional[int] = None
     group_label: Optional[str] = None
     required_passage_id: Optional[int] = None
+    # Advanced mode: target tỷ lệ mức độ {"NB": 0.4, ...} (đã chuẩn hoá tổng = 1.0)
+    level_distribution: Optional[Dict[str, float]] = None
 
 @dataclass
 class CandidateQuestion:
@@ -44,6 +50,9 @@ class CellResult:
     cell: MatrixCell
     selected_ids: List[int] = field(default_factory=list)
     shortage: int = 0
+    # Breakdown thực tế đã chọn - chỉ fill khi rule đơn giản (engine tự cân bằng)
+    dang_cau_counts: Optional[Dict[str, int]] = None
+    muc_do_counts: Optional[Dict[str, int]] = None
 
 @dataclass
 class GenerationReport:
@@ -54,17 +63,145 @@ class GenerationReport:
     cell_results: List[CellResult] = field(default_factory=list)
 
 def _candidates_for_cell(cell: MatrixCell, pool: List[CandidateQuestion], used_ids: Set[int], passage_id: Optional[int] = None) -> List[CandidateQuestion]:
-    return [
-        q for q in pool
-        if q.status == "APPROVED"
-        and q.id not in used_ids
-        and q.topic == cell.topic
-        and q.concept == cell.concept
-        and q.skill == cell.skill
-        and q.level == cell.level
-        and q.question_type == cell.question_type
-        and (passage_id is None or q.passage_id == passage_id)
-    ]
+    # Filter approved questions matching the matrix cell.
+    def _matches(q: CandidateQuestion) -> bool:
+        if q.status != "APPROVED" or q.id in used_ids:
+            return False
+        if q.topic != cell.topic or q.concept != cell.concept or q.skill != cell.skill:
+            return False
+        # Chỉ filter level/type khi rule yêu cầu (không None)
+        if cell.level is not None and q.level != cell.level:
+            return False
+        if cell.question_type is not None and q.question_type != cell.question_type:
+            return False
+        if passage_id is not None and q.passage_id != passage_id:
+            return False
+        return True
+    return [q for q in pool if _matches(q)]
+
+def _largest_remainder(ratios: Dict[str, float], total: int) -> Dict[str, int]:
+    # Divide total according to ratios with the largest-remainder method.
+    if not ratios or total <= 0:
+        return {}
+    floors: Dict[str, int] = {}
+    remainders: Dict[str, float] = {}
+    for k, r in ratios.items():
+        if r <= 0:
+            continue
+        exact = r * total
+        floors[k] = int(exact)
+        remainders[k] = exact - int(exact)
+
+    allocated = sum(floors.values())
+    leftover = total - allocated
+    # Phân phối phần dư cho bucket có remainder lớn nhất (largest-remainder)
+    for k in sorted(remainders, key=lambda k: remainders[k], reverse=True):
+        if leftover <= 0:
+            break
+        floors[k] += 1
+        leftover -= 1
+    return {k: v for k, v in floors.items() if v > 0}
+
+def _pick_best(cands: List[CandidateQuestion], n: int, target_irt_b: Optional[float]) -> List[CandidateQuestion]:
+    # Pick the best candidates by exposure, IRT distance, and random tie-breaker.
+    if n <= 0:
+        return []
+    cands = sorted(cands, key=lambda q: _score(q, target_irt_b))
+    return cands[:n]
+
+def _select_for_cell(
+    cell: MatrixCell,
+    pool: List[CandidateQuestion],
+    used_ids: Set[int],
+    passage_id: Optional[int] = None,
+) -> CellResult:
+    # Select questions for a matrix cell.
+    cands = _candidates_for_cell(cell, pool, used_ids, passage_id=passage_id)
+
+    # ---- Rule cũ chính thức (đã set đủ level + dạng câu): strict cũ y hệt ----
+    if cell.level is not None and cell.question_type is not None:
+        chosen = _pick_best(cands, cell.count, cell.target_irt_b)
+        shortage = max(0, cell.count - len(chosen))
+        return CellResult(cell=cell, selected_ids=[q.id for q in chosen], shortage=shortage)
+
+    # ---- Rule đơn giản: strict-check mức node (tổng câu của node >= count) ----
+    if len(cands) < cell.count:
+        return CellResult(cell=cell, selected_ids=[], shortage=cell.count)
+
+    # 1 Xác định quota cho từng level
+    if cell.level is not None:
+        # Rule nâng cao một phần: cố định level, chỉ tự cân bằng dạng câu
+        level_quota = {cell.level: cell.count}
+        target_by_level: Dict[str, Dict[str, float]] = {}
+        actual_level_props: Dict[str, float] = {}
+    elif cell.level_distribution:
+        # Advanced mode: dùng đúng tỷ lệ admin đặt (đã chuẩn hoá tổng = 1.0)
+        target_by_level = {}
+        level_quota = _largest_remainder(cell.level_distribution, cell.count)
+        # Kiểm tra strict theo từng level sau khi làm tròn
+        avail_by_level: Dict[str, List[CandidateQuestion]] = defaultdict(list)
+        for q in cands:
+            avail_by_level[q.level].append(q)
+        for lv, quota in level_quota.items():
+            avail = avail_by_level.get(lv, [])
+            if len(avail) < quota:
+                return CellResult(cell=cell, selected_ids=[], shortage=cell.count, muc_do_counts={lv: quota - len(avail)})
+        actual_level_props = cell.level_distribution
+    else:
+        # Mode mặc định: phân bố thực tế của ngân hàng câu hỏi trong node
+        level_counts: Dict[str, int] = Counter(q.level for q in cands)
+        total = len(cands)
+        actual_level_props = {lv: c / total for lv, c in level_counts.items() if c > 0}
+        level_quota = _largest_remainder(actual_level_props, cell.count)
+        target_by_level = {}
+
+    # 2 Trong mỗi level, chia tiếp theo dạng câu (tỷ lệ thực tế của ngân hàng)
+    if cell.question_type is None:
+        pass  # self-balancing: tính per-level bên dưới
+    picked: List[CandidateQuestion] = []
+    temp_used = set(used_ids)
+
+    for lv, quota in level_quota.items():
+        lv_cands = [q for q in cands if q.level == lv and q.id not in temp_used]
+
+        # Quota theo dạng câu trong level này - dựa trên phân bố thực tế của ngân hàng
+        if cell.question_type is not None:
+            type_quota = {cell.question_type: quota}
+        elif lv in target_by_level:
+            type_quota = _largest_remainder(target_by_level[lv], quota)
+        else:
+            type_counts: Dict[str, int] = Counter(q.question_type for q in lv_cands)
+            if not type_counts:
+                continue
+            type_total = len(lv_cands)
+            type_ratios = {t: c / type_total for t, c in type_counts.items() if c > 0}
+            type_quota = _largest_remainder(type_ratios, quota)
+
+        for qt, qq in type_quota.items():
+            bucket = [q for q in lv_cands if q.question_type == qt and q.id not in temp_used]
+            chosen = _pick_best(bucket, qq, cell.target_irt_b)
+            if len(chosen) < qq:
+                # Không đủ câu ở bucket (advanced/partial): strict fail toàn bộ
+                return CellResult(
+                    cell=cell,
+                    selected_ids=[],
+                    shortage=cell.count,
+                    dang_cau_counts={qt: qq - len(chosen)},
+                )
+            picked.extend(chosen)
+            temp_used.update(q.id for q in chosen)
+
+    shortage = max(0, cell.count - len(picked))
+    # Breakdown thực tế cho frontend
+    dang_cau_counts: Dict[str, int] = Counter(q.question_type for q in picked)
+    muc_do_counts: Dict[str, int] = Counter(q.level for q in picked)
+    return CellResult(
+        cell=cell,
+        selected_ids=[q.id for q in picked],
+        shortage=shortage,
+        dang_cau_counts=dict(dang_cau_counts),
+        muc_do_counts=dict(muc_do_counts),
+    )
 
 def _score(q: CandidateQuestion, target_irt_b: Optional[float]) -> tuple:
     exposure_penalty = q.exposure_count
@@ -74,23 +211,19 @@ def _score(q: CandidateQuestion, target_irt_b: Optional[float]) -> tuple:
     return (exposure_penalty, irt_penalty, random.random())
 
 def _try_satisfy_group(cells: List[MatrixCell], pool: List[CandidateQuestion], used_ids: Set[int]) -> Optional[List[CellResult]]:
-    """Try to satisfy a group of cells. All cells in the group must share the same passage_id if grouped."""
+    # Try to satisfy a group of cells. All cells in the group must share the same passage_id if grouped.
     if not cells:
         return []
-        
+
     first_cell = cells[0]
     is_grouped = first_cell.group_id is not None
     req_passage_id = first_cell.required_passage_id if is_grouped else None
-    
+
     if not is_grouped:
-        # Normal single cell selection
+        # Normal single cell selection (rule cũ strict-mode hoặc rule đơn giản proportional)
         cell = cells[0]
-        candidates = _candidates_for_cell(cell, pool, used_ids)
-        candidates.sort(key=lambda q: _score(q, cell.target_irt_b))
-        chosen = candidates[: cell.count]
-        shortage = max(0, cell.count - len(chosen))
-        return [CellResult(cell=cell, selected_ids=[q.id for q in chosen], shortage=shortage)]
-    
+        return [_select_for_cell(cell, pool, used_ids)]
+
     # It's a group
     if req_passage_id is not None:
         possible_passages = [req_passage_id]
@@ -103,42 +236,28 @@ def _try_satisfy_group(cells: List[MatrixCell], pool: List[CandidateQuestion], u
                 if c.passage_id is not None:
                     possible_passages_set.add(c.passage_id)
         possible_passages = list(possible_passages_set)
-        
+
     for p_id in possible_passages:
         group_results = []
         temp_used = set(used_ids)
         success = True
-        
         for cell in cells:
-            candidates = _candidates_for_cell(cell, pool, temp_used, passage_id=p_id)
-            candidates.sort(key=lambda q: _score(q, cell.target_irt_b))
-            
-            chosen = candidates[: cell.count]
-            if len(chosen) < cell.count:
+            result = _select_for_cell(cell, pool, temp_used, passage_id=p_id)
+            if result.shortage > 0 or len(result.selected_ids) != cell.count:
                 success = False
                 break
-                
-            group_results.append(CellResult(cell=cell, selected_ids=[q.id for q in chosen], shortage=0))
-            temp_used.update([q.id for q in chosen])
-            
+            group_results.append(result)
+            temp_used.update(result.selected_ids)
+
         if success:
             return group_results
-            
+
     # If we get here, no passage could satisfy the group completely.
-    # We return the best partial? No, strict fail logic: if 1 group fails, all fail.
-    # We return partial results for the first passage so the outer loop knows it failed.
+    # Strict fail: if 1 group fails, all fail - no questions selected from this group.
     group_results = []
-    temp_used = set(used_ids)
-    p_id = possible_passages[0] if possible_passages else None
-    
     for cell in cells:
-        candidates = _candidates_for_cell(cell, pool, temp_used, passage_id=p_id)
-        candidates.sort(key=lambda q: _score(q, cell.target_irt_b))
-        chosen = candidates[: cell.count]
-        shortage = max(0, cell.count - len(chosen))
-        group_results.append(CellResult(cell=cell, selected_ids=[q.id for q in chosen], shortage=shortage))
-        temp_used.update([q.id for q in chosen])
-        
+        group_results.append(CellResult(cell=cell, selected_ids=[], shortage=cell.count))
+
     return group_results
 
 def generate_exam(matrix: List[MatrixCell], pool: List[CandidateQuestion], exclude_ids: Optional[Set[int]] = None, max_retries: int = 3) -> GenerationReport:
@@ -146,7 +265,7 @@ def generate_exam(matrix: List[MatrixCell], pool: List[CandidateQuestion], exclu
     warnings: List[str] = []
 
     best_attempt: Optional[Tuple[List[int], List[CellResult], List[CellResult]]] = None
-    
+
     # Group cells by group_id. None means individual group
     groups_dict = {}
     idx = 0
@@ -158,13 +277,13 @@ def generate_exam(matrix: List[MatrixCell], pool: List[CandidateQuestion], exclu
             if cell.group_id not in groups_dict:
                 groups_dict[cell.group_id] = []
             groups_dict[cell.group_id].append(cell)
-            
+
     groups = list(groups_dict.values())
 
     for attempt in range(1, max_retries + 1):
         used_ids: Set[int] = set(exclude_ids)
         cell_results: List[CellResult] = []
-        
+
         # Shuffle groups to avoid deterministic bias on which passage gets picked if multiple match
         random.shuffle(groups)
 
@@ -191,7 +310,7 @@ def generate_exam(matrix: List[MatrixCell], pool: List[CandidateQuestion], exclu
             else:
                 shortage_details.append(f"Ô độc lập (vị trí {r.cell.position})")
         unique_shortages = list(set(shortage_details))
-        
+
         warnings.append(f"Attempt {attempt}: Thiếu câu hỏi cho {len(shortages)} ô. Cụ thể: {', '.join(unique_shortages)}")
         if best_attempt is None or len(shortages) < len(best_attempt[1]):
             best_attempt = (all_ids, shortages, cell_results)
@@ -225,9 +344,9 @@ async def load_pool_from_db(db: AsyncSession, matrix_rules: List[MatrixRule]) ->
     kn_ids = set(rule.knowledge_node_id for rule in matrix_rules)
     if not kn_ids:
         return []
-        
+
     query = text("""
-        SELECT 
+        SELECT
             q.id, q.level, q.type as question_type, q.b_param as irt_b, q.status, q.passage_id,
             kn.name as skill,
             p1.name as concept,
@@ -238,13 +357,13 @@ async def load_pool_from_db(db: AsyncSession, matrix_rules: List[MatrixRule]) ->
         LEFT JOIN knowledge_node p1 ON kn.parent_id = p1.id
         LEFT JOIN knowledge_node p2 ON p1.parent_id = p2.id
         LEFT JOIN v_question_exposure v ON v.question_id = q.id
-        WHERE q.status = 'APPROVED' 
+        WHERE q.status = 'APPROVED'
         AND q.knowledge_node_id IN :kn_ids
     """)
     query = query.bindparams(bindparam("kn_ids", expanding=True))
     result = await db.execute(query, {"kn_ids": tuple(kn_ids)})
     rows = result.fetchall()
-    
+
     pool = []
     for r in rows:
         level_str = LEVEL_MAP.get(r.level, "NB")
@@ -266,9 +385,9 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
     from sqlalchemy.orm import selectinload
     from sqlalchemy import select
     from app.models.exam import MatrixRuleGroup
-    
+
     cells = []
-    
+
     # Pre-fetch groups
     group_ids = set(r.group_id for r in rules if r.group_id is not None)
     group_map = {}
@@ -278,11 +397,11 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
         group_res = await db.execute(group_query, {"gids": tuple(group_ids)})
         for row in group_res.fetchall():
             group_map[row.id] = row.required_passage_id
-            
+
     for r in rules:
         # Load knowledge node hierarchy to get topic, concept, skill names via SQL
         query = text("""
-            SELECT 
+            SELECT
                 kn.name as skill_name,
                 p1.name as concept_name,
                 p2.name as topic_name
@@ -293,32 +412,45 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
         """)
         result = await db.execute(query, {"kn_id": r.knowledge_node_id})
         row = result.fetchone()
-        
+
         if not row:
             continue
-            
+
         skill_name = row.skill_name or ""
         concept_name = row.concept_name or ""
         topic_name = row.topic_name or ""
-                
-        level_str = LEVEL_MAP.get(r.level, "NB")
-        
+
+        # Rule cũ: đã set sẵn level/dạng câu; Rule mới (đơn giản): None -> engine tự cân bằng
+        level_str = LEVEL_MAP.get(r.level) if r.level is not None else None
+        question_type = r.question_type.value if hasattr(r.question_type, 'value') else r.question_type
+        # level_distribution (JSONB) - tiền xử lý thành tỷ lệ chuẩn hoá (tổng = 1.0)
+        level_dist = None
+        if r.level_distribution:
+            total = 0.0
+            normalized = {}
+            for key, val in r.level_distribution.items():
+                total += float(val or 0)
+            if total > 0:
+                for key, val in r.level_distribution.items():
+                    normalized[key] = float(val or 0) / total
+            level_dist = normalized or None
         req_passage_id = None
         if r.group_id is not None:
             req_passage_id = group_map.get(r.group_id)
-        
+
         cells.append(MatrixCell(
             topic=topic_name,
             concept=concept_name,
             skill=skill_name,
             level=level_str,
-            question_type=r.question_type.value if hasattr(r.question_type, 'value') else r.question_type,
+            question_type=question_type,
             count=r.count,
             target_irt_b=r.target_irt_b,
             matrix_rule_id=r.id,
             part=r.part,
             position=r.position,
             group_id=r.group_id,
-            required_passage_id=req_passage_id
+            required_passage_id=req_passage_id,
+            level_distribution=level_dist
         ))
     return cells

@@ -12,6 +12,7 @@ from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdat
 from pydantic import BaseModel
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
+from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
 
@@ -176,13 +177,15 @@ async def create_question(
         if sum(1 for a in q_in.answers if a.is_correct) != 1:
             raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 1 đáp án đúng.")
 
-    # Validate knowledge node type is SKILL
+    # Validate knowledge node type is SKILL and it's a leaf
     kn_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == q_in.knowledge_node_id))
     kn = kn_result.scalars().first()
     if not kn:
         raise HTTPException(status_code=400, detail="Knowledge Node không tồn tại.")
     if kn.node_type != KnowledgeNodeType.SKILL:
         raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào chủ đề kiến thức dạng Kỹ năng (SKILL).")
+    if not await KnowledgeService.is_leaf(db, q_in.knowledge_node_id):
+        raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
 
     # Create question
     db_question = Question(
@@ -312,6 +315,8 @@ async def update_question(
             kn = kn_result.scalars().first()
             if not kn or kn.node_type != KnowledgeNodeType.SKILL:
                 raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào chủ đề kiến thức dạng Kỹ năng (SKILL).")
+            if not await KnowledgeService.is_leaf(db, q_in.knowledge_node_id):
+                raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
                 
         target_type = existing_q.type
         

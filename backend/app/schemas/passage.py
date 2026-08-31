@@ -24,10 +24,11 @@ class PassageResponse(PassageBase):
     updated_at: datetime
     question_count: int = 0
     questions: List[QuestionResponse] = []
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 class PassageSearchResponse(BaseModel):
+    id: int
     public_code: str
     preview: str
     source_title: Optional[str] = None
@@ -53,7 +54,7 @@ class QuestionBulkCreateRequest(BaseModel):
 
 class QuestionBulkUpdateItem(QuestionCreate):
     public_code: Optional[str] = None
-    
+
     @field_validator('answers')
     @classmethod
     def validate_answers(cls, v, info):

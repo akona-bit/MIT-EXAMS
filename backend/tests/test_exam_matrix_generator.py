@@ -78,3 +78,37 @@ def test_exposure_control():
     assert report.ok is True
     # The selected IDs must be exactly 3 and 4, because they have the lowest exposure penalty
     assert set(report.selected_ids) == {3, 4}
+
+
+def test_matrix_rule_group_strict_fail():
+    """3 ô trong 1 group, chỉ 1 passage đủ câu cho 2/3 ô, không đủ cho ô thứ 3 → strict fail."""
+    matrix = [
+        MatrixCell("T1", "C1", "S1", "NB", "SINGLE_CHOICE", count=2, group_id=1, group_label="Nhóm 1"),
+        MatrixCell("T2", "C2", "S2", "NB", "SINGLE_CHOICE", count=2, group_id=1, group_label="Nhóm 1"),
+        MatrixCell("T3", "C3", "S3", "NB", "SINGLE_CHOICE", count=2, group_id=1, group_label="Nhóm 1"),
+    ]
+    
+    pool = [
+        # Passage 1: đủ cho cell 1 (3 câu) và cell 2 (3 câu), nhưng chỉ 1 câu cho cell 3 → không đủ
+        CandidateQuestion(1, "T1", "C1", "S1", "NB", "SINGLE_CHOICE", passage_id=1),
+        CandidateQuestion(2, "T1", "C1", "S1", "NB", "SINGLE_CHOICE", passage_id=1),
+        CandidateQuestion(3, "T1", "C1", "S1", "NB", "SINGLE_CHOICE", passage_id=1),
+        CandidateQuestion(4, "T2", "C2", "S2", "NB", "SINGLE_CHOICE", passage_id=1),
+        CandidateQuestion(5, "T2", "C2", "S2", "NB", "SINGLE_CHOICE", passage_id=1),
+        CandidateQuestion(6, "T2", "C2", "S2", "NB", "SINGLE_CHOICE", passage_id=1),
+        CandidateQuestion(7, "T3", "C3", "S3", "NB", "SINGLE_CHOICE", passage_id=1),
+        # Passage 2: không đủ cho bất kỳ ô nào
+        CandidateQuestion(8, "T1", "C1", "S1", "NB", "SINGLE_CHOICE", passage_id=2),
+        CandidateQuestion(9, "T2", "C2", "S2", "NB", "SINGLE_CHOICE", passage_id=2),
+        CandidateQuestion(10, "T3", "C3", "S3", "NB", "SINGLE_CHOICE", passage_id=2),
+    ]
+    
+    report = generate_exam(matrix, pool)
+    assert report.ok is False
+    assert report.selected_ids == []
+    assert len(report.shortages) == 3
+    assert len(report.cell_results) == 3
+    # Assert không câu nào trong group được chọn
+    for sc in report.cell_results:
+        assert sc.cell.group_id == 1
+        assert sc.shortage == 2

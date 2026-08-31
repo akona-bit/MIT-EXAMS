@@ -187,13 +187,21 @@ async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: Au
     result = await db.execute(select(ExamParticipant).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
-    ))
+    ).with_for_update())
     participant = result.scalars().first()
     if not participant or participant.status != ParticipantStatus.IN_PROGRESS:
         raise HTTPException(status_code=403, detail="Session is not active (may be submitted or suspended)")
         
     if participant.is_banned:
         raise HTTPException(status_code=403, detail="You are banned from this exam")
+
+    # Explicitly block suspended sessions (defensive - status != IN_PROGRESS already covers this in most cases)
+    if participant.status == ParticipantStatus.SUSPENDED:
+        raise HTTPException(status_code=403, detail="This exam session has been suspended")
+
+    # Also block autosave if already submitted (defensive)
+    if participant.status == ParticipantStatus.SUBMITTED:
+        raise HTTPException(status_code=403, detail="You have already submitted this exam")
         
     result = await db.execute(select(ExamSubmission).where(ExamSubmission.exam_participant_id == participant.id))
     submission = result.scalars().first()
@@ -228,7 +236,7 @@ async def submit_exam(db: AsyncSession, exam_id: int, user_id: int):
     result = await db.execute(select(ExamParticipant).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
-    ))
+    ).with_for_update())
     participant = result.scalars().first()
     if not participant or participant.status != ParticipantStatus.IN_PROGRESS:
         raise HTTPException(status_code=403, detail="Session is not active (may be submitted or suspended)")
@@ -246,7 +254,7 @@ async def log_tracking_event(db: AsyncSession, exam_id: int, user_id: int, req: 
     result = await db.execute(select(ExamParticipant).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
-    ))
+    ).with_for_update())
     participant = result.scalars().first()
     if not participant:
         raise HTTPException(status_code=400, detail="Invalid participant")
@@ -274,11 +282,14 @@ async def suspend_exam_session(db: AsyncSession, exam_id: int, user_id: int, adm
     result = await db.execute(select(ExamParticipant).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
-    ))
+    ).with_for_update())
     participant = result.scalars().first()
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
         
+    if participant.status == ParticipantStatus.SUSPENDED:
+        raise HTTPException(status_code=400, detail="Participant session already suspended")
+
     if participant.status == ParticipantStatus.SUBMITTED:
         raise HTTPException(status_code=400, detail="Cannot suspend a submitted session")
         

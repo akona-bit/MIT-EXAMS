@@ -102,7 +102,21 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(PostHogContextMiddleware)
 
-from app.api.v1 import auth, knowledge, questions, matrix, exams, grading, omr, statistics, admin, obsidian, resources, analytics, advanced_analytics, passages
+from app.api.v1 import auth
+from app.api.v1 import users
+from app.api.v1 import knowledge
+from app.api.v1 import questions
+from app.api.v1 import matrix
+from app.api.v1 import exams
+from app.api.v1 import grading
+from app.api.v1 import omr
+from app.api.v1 import statistics
+from app.api.v1 import admin
+from app.api.v1 import obsidian
+from app.api.v1 import resources
+from app.api.v1 import analytics
+from app.api.v1 import advanced_analytics
+from app.api.v1 import passages
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -116,6 +130,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["Knowledge"])
 app.include_router(questions.router, prefix="/api/v1/questions", tags=["Questions"])
 app.include_router(passages.router, prefix="/api/v1/passages", tags=["Passages"])
@@ -169,8 +184,13 @@ class ConnectionManager:
             from sqlalchemy import select, func
             from sqlalchemy.orm import selectinload
             from app.models.exam import ExamParticipant, ExamTrackingLog, ParticipantStatus
+            from app.models.system import SystemSetting
             
             async with AsyncSessionLocal() as session:
+                setting_result = await session.execute(select(SystemSetting).where(SystemSetting.key == "FRAUD_THRESHOLD"))
+                setting = setting_result.scalars().first()
+                threshold = int(setting.value) if setting and setting.value.isdigit() else 3
+
                 # Đếm số event theo participant đang thi
                 stmt = select(
                     ExamParticipant,
@@ -190,7 +210,7 @@ class ConnectionManager:
                         "student_name": participant.user.full_name if participant.user else "Unknown",
                         "risk_score": risk_score,
                         "status": participant.status.value,
-                        "flagged": risk_score > 3 # Ngưỡng tạm định, có thể thay đổi
+                        "flagged": risk_score > threshold
                     })
         except Exception as e:
             import logging

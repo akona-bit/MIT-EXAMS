@@ -42,7 +42,7 @@ async def create_matrix(matrix_in: MatrixCreate, db: AsyncSession = Depends(get_
     matrix = Matrix(name=matrix_in.name, description=matrix_in.description)
     db.add(matrix)
     await db.flush()
-    
+
     local_to_group_id = {}
     if matrix_in.groups:
         for g in matrix_in.groups:
@@ -54,22 +54,24 @@ async def create_matrix(matrix_in: MatrixCreate, db: AsyncSession = Depends(get_
             db.add(group)
             await db.flush()
             local_to_group_id[g.local_id] = group.id
-    
+
     for r in matrix_in.rules:
         rule = MatrixRule(
             matrix_id=matrix.id,
             knowledge_node_id=r.knowledge_node_id,
-            question_type=r.question_type,
-            level=r.level,
+            question_type=r.question_type or None,
+            level=r.level if r.level is not None else None,
             count=r.count,
             part=r.part,
+            level_distribution=r.level_distribution,
+            target_irt_b=r.target_irt_b,
             group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
         )
         db.add(rule)
-        
+
     await db.commit()
     await db.refresh(matrix)
-    
+
     # Reload with rules and groups
     result = await db.execute(select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix.id))
     return result.scalars().first()
@@ -108,10 +110,12 @@ async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSessio
         db.add(MatrixRule(
             matrix_id=matrix.id,
             knowledge_node_id=r.knowledge_node_id,
-            question_type=r.question_type,
-            level=r.level,
+            question_type=r.question_type or None,
+            level=r.level if r.level is not None else None,
             count=r.count,
             part=r.part,
+            level_distribution=r.level_distribution,
+            target_irt_b=r.target_irt_b,
             group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
         ))
 
@@ -133,6 +137,8 @@ async def delete_matrix(matrix_id: int, db: AsyncSession = Depends(get_db)):
 from app.schemas.exam import GenerateExamRequest
 from app.models.exam import ExamGenerationRun, ExamGenerationStatus, Exam, ExamForm, ExamFormQuestion, ExamStatus
 from app.services.exam_matrix_generator import load_pool_from_db, parse_matrix_rules, generate_multiple_versions
+# Level enum cho message lỗi (đồng bộ với LEVEL_MAP trong exam_matrix_generator)
+LEVEL_NAMES = {1: "Nhận biết", 2: "Thông hiểu", 3: "Vận dụng", 4: "Vận dụng cao"}
 
 @router.post("/{matrix_id}/generate", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
@@ -141,19 +147,19 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db
     matrix = result.scalars().first()
     if not matrix:
         raise HTTPException(status_code=404, detail="Matrix not found")
-        
+
     # Validate Exam
     exam_result = await db.execute(select(Exam).where(Exam.id == req.exam_id))
     exam = exam_result.scalars().first()
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
-        
+
     # Create ExamGenerationRun (status RUNNING initially, but we don't have RUNNING enum, so just create later)
-    
+
     # Load rules and pool
     pool = await load_pool_from_db(db, matrix.rules)
     matrix_cells = await parse_matrix_rules(db, matrix.rules)
-    
+
     # Generate
     reports = generate_multiple_versions(
         matrix=matrix_cells,
@@ -161,15 +167,25 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db
         n_versions=req.number_of_forms,
         distinct_questions=req.distinct_questions
     )
-    
+
     # Check if FAILED
     failed_report = next((r for r in reports if not r.ok), None)
     if not reports or failed_report:
         shortages = []
         if failed_report:
             for s in failed_report.shortages:
-                shortages.append(f"{s.cell.topic} > {s.cell.concept} > {s.cell.skill}: missing {s.shortage}")
-        
+                if s.cell.level is not None:
+                    # Advanced mode: báo rõ thiếu ở mức độ nào trong rule
+                    level_name = LEVEL_NAMES.get(s.cell.level, str(s.cell.level))
+                    shortages.append(
+                        f"{s.cell.topic} > {s.cell.concept} > {s.cell.skill}"
+                        f" (mức độ {level_name}): missing {s.shortage}"
+                    )
+                else:
+                    shortages.append(
+                        f"{s.cell.topic} > {s.cell.concept} > {s.cell.skill}: missing {s.shortage}"
+                    )
+
         # Log failure
         gen_run = ExamGenerationRun(
             matrix_id=matrix.id,
@@ -181,7 +197,7 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db
         db.add(gen_run)
         await db.commit()
         raise HTTPException(status_code=422, detail={"message": "Failed to generate exam due to shortage", "shortages": shortages})
-        
+
     # SUCCESS
     gen_run = ExamGenerationRun(
         matrix_id=matrix.id,
@@ -192,9 +208,9 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db
     )
     db.add(gen_run)
     await db.flush() # To get gen_run.id
-    
+
     import random
-    
+
     for i, report in enumerate(reports):
         form_code = f"M{i+1:03d}"
         exam_form = ExamForm(
@@ -204,18 +220,18 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db
         )
         db.add(exam_form)
         await db.flush() # To get exam_form.id
-        
+
         # Attach questions
         # We need to map selected_ids back to cell results to store matrix_rule_id
         question_to_rule_id = {}
         for cell_res in report.cell_results:
             for q_id in cell_res.selected_ids:
                 question_to_rule_id[q_id] = cell_res.cell.matrix_rule_id
-                
+
         # Shuffle questions for this form
         shuffled_ids = list(report.selected_ids)
         random.shuffle(shuffled_ids)
-        
+
         for pos, q_id in enumerate(shuffled_ids):
             efq = ExamFormQuestion(
                 exam_form_id=exam_form.id,
@@ -226,6 +242,24 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db
                 exam_generation_run_id=gen_run.id
             )
             db.add(efq)
-            
+
     await db.commit()
-    return {"message": "Generation successful", "run_id": gen_run.id, "forms_generated": req.number_of_forms}
+
+    # Breakdown thực tế (dạng câu/mức độ) cho mỗi rule — chỉ có ý nghĩa với rule đơn giản,
+    # rule cũ (đã định dạng câu/mức độ) thì breakdown trùng với config.
+    breakdown = []
+    for cell_res in report.cell_results:
+        rule = cell_res.cell.matrix_rule_id
+        if cell_res.cell.question_type is None or cell_res.cell.level is None:
+            breakdown.append({
+                "rule_id": rule,
+                "dang_cau": dict(cell_res.dang_cau_counts or {}),
+                "muc_do": dict(cell_res.muc_do_counts or {}),
+            })
+
+    return {
+        "message": "Generation successful",
+        "run_id": gen_run.id,
+        "forms_generated": req.number_of_forms,
+        "breakdown": breakdown,
+    }

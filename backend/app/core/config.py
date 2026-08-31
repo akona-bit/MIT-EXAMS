@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -24,9 +25,23 @@ class Settings(BaseSettings):
     # PostHog analytics
     POSTHOG_PROJECT_TOKEN: Optional[str] = None
     POSTHOG_HOST: Optional[str] = None
-    
+
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v):
+        """Tolerate non-boolean DEBUG values from the environment.
+
+        Một số môi trường đặt DEBUG=release/production — coi như False.
+        """
+        if isinstance(v, str):
+            lowered = v.strip().lower()
+            if lowered in ("1", "true", "yes", "y", "on", "debug", "dev", "development", "local"):
+                return True
+            return False
+        return v
 
     class Config:
         env_file = BACKEND_DIR / ".env"
