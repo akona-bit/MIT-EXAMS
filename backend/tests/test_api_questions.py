@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from app.main import app
 from app.api import dependencies
 from app.schemas.question import QuestionCreate, AnswerCreate
-from app.models.question import QuestionType, QuestionStatus
+from app.models.question import QuestionType, QuestionStatus, KnowledgeNodeType
 
 
 @pytest.fixture(autouse=True)
@@ -48,13 +48,32 @@ def setup_client():
 
         def _execute_side_effect(stmt, *args, **kwargs):
             result = MagicMock()
-            stmt_str = str(stmt)
-            if "knowledge_node" in stmt_str.lower():
-                fake_kn = _question_obj()
-                fake_kn.node_type = "SKILL"
+            stmt_str = str(stmt).lower()
+            if "knowledge_node_parent" in stmt_str:
+                # is_leaf or calculate_path_code parent query
+                result.scalar.return_value = 0
+                result.scalar_one_or_none.return_value = None
+                result.scalars.return_value.first.return_value = _question_obj()
+                result.scalars.return_value.all.return_value = []
+            elif "from knowledge_node" in stmt_str:
+                # select(KnowledgeNode) query — only match "FROM knowledge_node" not "knowledge_node_id"
+                fake_kn = MagicMock()
+                fake_kn.node_type = KnowledgeNodeType.SKILL
+                fake_kn.id = 1
+                fake_kn.short_code = "KN01"
+                result.scalar.return_value = 1
+                result.scalar_one_or_none.return_value = fake_kn
                 result.scalars.return_value.first.return_value = fake_kn
                 result.scalars.return_value.all.return_value = []
+            elif "count()" in stmt_str:
+                # func.count() queries (e.g. public_code sequence)
+                result.scalar.return_value = 0
+                result.scalar_one_or_none.return_value = 0
+                result.scalars.return_value.first.return_value = _question_obj()
+                result.scalars.return_value.all.return_value = []
             else:
+                result.scalar.return_value = 0
+                result.scalar_one_or_none.return_value = None
                 result.scalars.return_value.first.return_value = _question_obj()
                 result.scalars.return_value.all.return_value = []
             return result

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import api from "../../lib/api";
+import api from "../../api/client";
 import QuestionRenderer from "./QuestionRenderer";
 
 interface PassageSplitPaneProps {

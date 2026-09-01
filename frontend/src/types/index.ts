@@ -158,8 +158,10 @@ export interface Matrix {
   id: number;
   name: string;
   description: string | null;
+  subject?: string | null;
   rules: MatrixRule[];
   groups?: MatrixRuleGroup[];
+  created_at?: string;
 }
 
 // --- Exam ---

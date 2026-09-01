@@ -13,11 +13,11 @@ from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
 
-LEVEL_NAMES = ("TOPIC", "CONCEPT", "SKILL")
+LEVEL_NAMES = ("TOPIC", "CONCEPT", "SKILL", "SUB_SKILL")
 
 
 def _level_name(depth: int) -> str:
-    return LEVEL_NAMES[depth] if depth < len(LEVEL_NAMES) else "NOTE"
+    return LEVEL_NAMES[depth] if depth < len(LEVEL_NAMES) else "SUB_SKILL"
 
 
 def _build_path(node_id: int, nodes_by_id: Dict[int, KnowledgeNode], primary_parents: Dict[int, Optional[int]]) -> str:
@@ -210,7 +210,9 @@ async def create_knowledge_node(request: Request, node_in: KnowledgeNodeCreate, 
         if not result.scalars().first():
             raise HTTPException(status_code=400, detail="Parent node not found")
 
-    node = KnowledgeNode(**node_in.model_dump())
+    # Exclude parent_id from node creation — use DAG table instead
+    node_data = node_in.model_dump(exclude={"parent_id"})
+    node = KnowledgeNode(**node_data)
     db.add(node)
     await db.commit()
     await db.refresh(node)
@@ -219,7 +221,10 @@ async def create_knowledge_node(request: Request, node_in: KnowledgeNodeCreate, 
         await KnowledgeService.add_relation(db, node.id, node_in.parent_id, is_primary=True)
         await db.commit()
 
-    capture(request, "knowledge_node_created", {"knowledge_node_id": node.id, "has_parent": node.parent_id is not None})
+    has_parent = False
+    if node_in.parent_id:
+        has_parent = True
+    capture(request, "knowledge_node_created", {"knowledge_node_id": node.id, "has_parent": has_parent})
     return node
 
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -233,15 +238,18 @@ async def delete_knowledge_node(
     if not node:
         raise HTTPException(status_code=404, detail="Node không tồn tại")
 
-    # Remove all relations in DAG table
+    # Bulk delete: DAG relations, manual links, and the node in one go
+    from app.models.question import KnowledgeNodeLink
     await db.execute(
-        delete(KnowledgeNodeParent)
-        .where(and_(
-            (KnowledgeNodeParent.parent_id == node_id) |
-            (KnowledgeNodeParent.child_id == node_id)
-        ))
+        delete(KnowledgeNodeLink).where(
+            (KnowledgeNodeLink.source_id == node_id) | (KnowledgeNodeLink.target_id == node_id)
+        )
     )
-
+    await db.execute(
+        delete(KnowledgeNodeParent).where(
+            (KnowledgeNodeParent.parent_id == node_id) | (KnowledgeNodeParent.child_id == node_id)
+        )
+    )
     await db.delete(node)
     await db.commit()
     capture(request, "knowledge_node_deleted", {"node_id": node_id})
@@ -267,7 +275,8 @@ async def update_knowledge_node(
         if not parent_node:
             raise HTTPException(status_code=404, detail="Parent node không tồn tại")
 
-    update_data = node_in.model_dump(exclude_unset=True)
+    # Exclude parent_id — handled via DAG table, not old column
+    update_data = node_in.model_dump(exclude_unset=True, exclude={"parent_id"})
     for key, value in update_data.items():
         setattr(node, key, value)
 

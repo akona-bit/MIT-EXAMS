@@ -5,8 +5,8 @@ from app.services.exam_matrix_generator import (
 
 def test_generate_exam_success():
     matrix = [
-        MatrixCell("Algebra", "Quadratic", "Find Vertex", "NB", "SINGLE_CHOICE", count=2),
-        MatrixCell("Algebra", "Quadratic", "Max Min", "VD", "SINGLE_CHOICE", count=1)
+        MatrixCell("Algebra", "Quadratic", "Find Vertex", count=2, level="NB", question_type="SINGLE_CHOICE"),
+        MatrixCell("Algebra", "Quadratic", "Max Min", count=1, level="VD", question_type="SINGLE_CHOICE")
     ]
     
     pool = [
@@ -24,8 +24,8 @@ def test_generate_exam_success():
 
 def test_generate_exam_shortage_strict_fail():
     matrix = [
-        MatrixCell("Algebra", "Quadratic", "Find Vertex", "NB", "SINGLE_CHOICE", count=2),
-        MatrixCell("Algebra", "Quadratic", "Max Min", "VD", "SINGLE_CHOICE", count=2) # Needs 2, only has 1
+        MatrixCell("Algebra", "Quadratic", "Find Vertex", count=2, level="NB", question_type="SINGLE_CHOICE"),
+        MatrixCell("Algebra", "Quadratic", "Max Min", count=2, level="VD", question_type="SINGLE_CHOICE")  # Needs 2, only has 1
     ]
     
     pool = [
@@ -42,7 +42,7 @@ def test_generate_exam_shortage_strict_fail():
     
 def test_generate_multiple_versions_distinct():
     matrix = [
-        MatrixCell("Algebra", "Quadratic", "Find Vertex", "NB", "SINGLE_CHOICE", count=1)
+        MatrixCell("Algebra", "Quadratic", "Find Vertex", count=1, level="NB", question_type="SINGLE_CHOICE")
     ]
     
     pool = [
@@ -64,7 +64,7 @@ def test_exposure_control():
     # Q1 and Q2 have high exposure. Q3 and Q4 have 0 exposure.
     # The algorithm should pick Q3 and Q4.
     matrix = [
-        MatrixCell("Algebra", "Quadratic", "Find Vertex", "NB", "SINGLE_CHOICE", count=2)
+        MatrixCell("Algebra", "Quadratic", "Find Vertex", count=2, level="NB", question_type="SINGLE_CHOICE")
     ]
     
     pool = [
@@ -83,9 +83,9 @@ def test_exposure_control():
 def test_matrix_rule_group_strict_fail():
     """3 ô trong 1 group, chỉ 1 passage đủ câu cho 2/3 ô, không đủ cho ô thứ 3 → strict fail."""
     matrix = [
-        MatrixCell("T1", "C1", "S1", "NB", "SINGLE_CHOICE", count=2, group_id=1, group_label="Nhóm 1"),
-        MatrixCell("T2", "C2", "S2", "NB", "SINGLE_CHOICE", count=2, group_id=1, group_label="Nhóm 1"),
-        MatrixCell("T3", "C3", "S3", "NB", "SINGLE_CHOICE", count=2, group_id=1, group_label="Nhóm 1"),
+        MatrixCell("T1", "C1", "S1", count=2, level="NB", question_type="SINGLE_CHOICE", group_id=1, group_label="Nhóm 1"),
+        MatrixCell("T2", "C2", "S2", count=2, level="NB", question_type="SINGLE_CHOICE", group_id=1, group_label="Nhóm 1"),
+        MatrixCell("T3", "C3", "S3", count=2, level="NB", question_type="SINGLE_CHOICE", group_id=1, group_label="Nhóm 1"),
     ]
     
     pool = [

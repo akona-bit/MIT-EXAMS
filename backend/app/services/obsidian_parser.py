@@ -4,6 +4,7 @@ from typing import Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.question import Question, Answer, KnowledgeNode, QuestionType, QuestionStatus
+from app.services.knowledge_service import KnowledgeService
 
 class ObsidianParser:
     def __init__(self, db: AsyncSession, creator_id: int):
@@ -15,28 +16,58 @@ class ObsidianParser:
         path: "Toan_Hoc/Dai_So/Phuong_Trinh"
         """
         parts = path.split('/')
-        parent_id = None
+        parent_node = None
         current_node = None
         for part in parts:
             part = part.strip()
             if not part:
                 continue
-            
-            stmt = select(KnowledgeNode).where(
-                KnowledgeNode.name == part,
-                KnowledgeNode.parent_id == parent_id
-            )
+
+            # Find existing node matching name and primary parent
+            stmt = select(KnowledgeNode).where(KnowledgeNode.name == part)
             result = await self.db.execute(stmt)
-            node = result.scalars().first()
-            
+            candidates = result.scalars().all()
+
+            node = None
+            if parent_node:
+                # Among candidates, find one that has parent_node as primary parent
+                from app.models.question import KnowledgeNodeParent
+                for c in candidates:
+                    check = await self.db.execute(
+                        select(KnowledgeNodeParent).where(
+                            KnowledgeNodeParent.child_id == c.id,
+                            KnowledgeNodeParent.parent_id == parent_node.id,
+                            KnowledgeNodeParent.is_primary == True
+                        )
+                    )
+                    if check.scalar_one_or_none():
+                        node = c
+                        break
+            else:
+                # Root level: find node with no primary parent
+                from app.models.question import KnowledgeNodeParent
+                for c in candidates:
+                    check = await self.db.execute(
+                        select(KnowledgeNodeParent).where(
+                            KnowledgeNodeParent.child_id == c.id,
+                            KnowledgeNodeParent.is_primary == True
+                        )
+                    )
+                    if not check.scalar_one_or_none():
+                        node = c
+                        break
+
             if not node:
-                node = KnowledgeNode(name=part, parent_id=parent_id)
+                node = KnowledgeNode(name=part)
                 self.db.add(node)
                 await self.db.flush()
-            
+
+            if parent_node and node:
+                await KnowledgeService.add_relation(self.db, node.id, parent_node.id, is_primary=True)
+
             current_node = node
-            parent_id = node.id
-            
+            parent_node = node
+
         return current_node
 
     async def parse_and_import(

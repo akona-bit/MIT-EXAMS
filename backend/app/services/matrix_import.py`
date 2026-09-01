@@ -1,0 +1,231 @@
+import csv
+import io
+from typing import Any, Dict, List, Optional, Tuple
+from difflib import get_close_matches
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.exam import MatrixRule
+from app.models.question import KnowledgeNode, KnowledgeNodeType
+
+class MatrixImportService:
+    @staticmethod
+    def largest_remainder(total: int, ratios: Dict[str, float]) -> Dict[str, int]:
+        """
+        Distributes a total count into categories based on ratios using the Largest Remainder Method.
+        ratios: {'NB': 0.2, 'TH': 0.3, ...}
+        """
+        if total < 0:
+            raise ValueError("total must be non-negative")
+        if not ratios:
+            return {}
+        if any(value < 0 for value in ratios.values()):
+            raise ValueError("ratios must be non-negative")
+        ratio_sum = sum(ratios.values())
+        if ratio_sum <= 0:
+            raise ValueError("ratios must contain a positive value")
+
+        normalized = {key: value / ratio_sum for key, value in ratios.items()}
+        exact_counts = {key: total * value for key, value in normalized.items()}
+        counts = {key: int(value) for key, value in exact_counts.items()}
+        remainders = {key: value - counts[key] for key, value in exact_counts.items()}
+        remaining = total - sum(counts.values())
+
+        # Stable insertion order resolves exact ties deterministically.
+        sorted_keys = sorted(remainders, key=lambda key: remainders[key], reverse=True)
+        for key in sorted_keys[:remaining]:
+            counts[key] += 1
+        return counts
+
+    @staticmethod
+    async def match_knowledge_node(
+        db: AsyncSession,
+        topic: str,
+        concept: str,
+        skill: str
+    ) -> Tuple[Optional[int], List[Dict[str, Any]]]:
+        """
+        Matches a skill to a leaf KnowledgeNode using breadcrumb Topic > Concept > Skill.
+        Returns (node_id, suggestions).
+        """
+        # 1. Try exact match with primary path
+        # We look for a node with name=skill and its primary ancestors match topic and concept.
+        # This requires traversing the DAG or using a recursive query.
+        # Simplified: look for a leaf node with name=skill, then check its ancestors.
+
+        result = await db.execute(select(KnowledgeNode))
+        all_nodes = result.scalars().all()
+        nodes_by_id = {node.id: node for node in all_nodes}
+        candidates = [node for node in all_nodes if node.node_type == KnowledgeNodeType.SKILL and node.name.strip().casefold() == skill.strip().casefold()]
+
+        def has_breadcrumb(node: KnowledgeNode) -> bool:
+            parent = nodes_by_id.get(node.parent_id)
+            concept_match = parent is not None and parent.name.strip().casefold() == concept.strip().casefold() and parent.node_type == KnowledgeNodeType.CONCEPT
+            topic_node = nodes_by_id.get(parent.parent_id) if parent else None
+            return concept_match and topic_node is not None and topic_node.name.strip().casefold() == topic.strip().casefold() and topic_node.node_type == KnowledgeNodeType.TOPIC
+        for node in candidates:
+            if has_breadcrumb(node):
+                return node.id, []
+        if len(candidates) == 1 and not topic.strip() and not concept.strip():
+            return candidates[0].id, []
+
+        skills = [node for node in all_nodes if node.node_type == KnowledgeNodeType.SKILL]
+        matches = get_close_matches(skill, [node.name for node in skills], n=5, cutoff=0.6)
+        suggestions = [{"id": node.id, "name": node.name} for name in matches for node in skills if node.name == name]
+        return None, suggestions[:5]
+
+    @staticmethod
+    def parse_tsv(content: str) -> List[Dict[str, Any]]:
+        """
+        Parses TSV content with carry-forward logic for merged cells.
+        Expected columns: Topic, Concept, Skill, Count
+        """
+        f = io.StringIO(content.strip())
+        reader = csv.reader(f, delimiter="\t")
+
+        rows = list(reader)
+        if not rows:
+            return []
+
+        # Remove header if exists (checks if first row contains 'Topic' or 'Kiến thức')
+        header = rows[0]
+        if any(word in header[0].lower() for word in ['topic', 'chủ đề', 'kiến thức', 'skill']):
+            rows = rows[1:]
+
+        parsed_data = []
+        current_topic = ""
+        current_concept = ""
+
+        for row in rows:
+            if not row or len(row) < 3:
+                continue
+
+            # carry-forward logic
+            topic = row[0].strip() if len(row) > 0 and row[0].strip() else current_topic
+            concept = row[1].strip() if len(row) > 1 and row[1].strip() else current_concept
+            skill = row[2].strip() if len(row) > 2 and row[2].strip() else ""
+            count_str = row[3].strip() if len(row) > 3 and row[3].strip() else "0"
+
+            current_topic = topic
+            current_concept = concept
+
+            try:
+                count = int(count_str)
+            except ValueError:
+                count = 0
+            count = max(count, 0)
+
+            parsed_data.append({
+                "topic": topic,
+                "concept": concept,
+                "skill": skill,
+                "count": count
+            })
+
+        return parsed_data
+
+    @staticmethod
+    async def preview_import(
+        db: AsyncSession,
+        content: str,
+        level_ratios: Dict[int, float], # {1: 0.2, 2: 0.3, ...}
+        type_ratios: Dict[str, float]   # {"SINGLE_CHOICE": 1.0, ...}
+    ) -> List[Dict[str, Any]]:
+        """
+        Previews the import: matches nodes and calculates distributions.
+        """
+        parsed_rows = MatrixImportService.parse_tsv(content)
+        preview = []
+
+        for row in parsed_rows:
+            node_id, suggestions = await MatrixImportService.match_knowledge_node(
+                db, row['topic'], row['concept'], row['skill']
+            )
+
+            status = "✅ Khớp chính xác" if node_id else ("⚠️ Cần xác nhận" if suggestions else "❌ Không tìm thấy")
+
+            # Distribute each level independently by question type. This preserves
+            # the exact row total and avoids producing a separate, inconsistent
+            # type distribution for every level.
+            level_counts = MatrixImportService.largest_remainder(row["count"], level_ratios)
+            refined_rules = []
+            for level, level_count in level_counts.items():
+                if level_count <= 0:
+                    continue
+                type_counts = MatrixImportService.largest_remainder(level_count, type_ratios)
+                for question_type, count in type_counts.items():
+                    if count > 0:
+                        refined_rules.append({
+                            "level": level,
+                            "question_type": question_type,
+                            "count": count,
+                        })
+
+            preview.append({
+                "topic": row['topic'],
+                "concept": row['concept'],
+                "skill": row['skill'],
+                "original_count": row['count'],
+                "status": status,
+                "node_id": node_id,
+                "suggestions": suggestions,
+                "distributed_rules": refined_rules
+            })
+
+        return preview
+
+    @staticmethod
+    async def execute_import(
+        db: AsyncSession,
+        matrix_id: int,
+        confirmed_rows: List[Dict[str, Any]],
+        strategy: str # "add" or "replace"
+    ) -> int:
+        """
+        Executes the import of confirmed rules into the matrix.
+        Returns total count of rules created/updated.
+        """
+        if strategy not in {"add", "replace"}:
+            raise ValueError("strategy must be 'add' or 'replace'")
+
+        total_rules_count = 0
+        for row in confirmed_rows:
+            node_id = row.get("node_id")
+            if not node_id:
+                continue
+            for rule_data in row.get("distributed_rules", []):
+                count = int(rule_data.get("count", 0))
+                if count <= 0:
+                    continue
+                # Check for existing rule
+                result = await db.execute(
+                    select(MatrixRule).where(
+                        and_(
+                            MatrixRule.matrix_id == matrix_id,
+                            MatrixRule.knowledge_node_id == node_id,
+                            MatrixRule.level == rule_data['level'],
+                            MatrixRule.question_type == rule_data['question_type']
+                        )
+                    )
+                )
+                existing_rule = result.scalars().first()
+
+                if existing_rule:
+                    if strategy == "add":
+                        existing_rule.count += count
+                    else:
+                        existing_rule.count = count
+                else:
+                    new_rule = MatrixRule(
+                        matrix_id=matrix_id,
+                        knowledge_node_id=node_id,
+                        level=rule_data['level'],
+                        question_type=rule_data['question_type'],
+                        count=count,
+                        part=int(rule_data.get("part", 1)),
+                    )
+                    db.add(new_rule)
+
+                total_rules_count += count
+
+        await db.commit()
+        return total_rules_count

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from posthog import Posthog
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -11,6 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import get_settings
+from app.core.error_log import log_error
 from app.schemas.user import TokenPayload
 
 logger = logging.getLogger(__name__)
@@ -102,6 +104,12 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(PostHogContextMiddleware)
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    log_error(f"Unhandled exception: {request.method} {request.url.path} - {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 from app.api.v1 import auth
 from app.api.v1 import users
 from app.api.v1 import knowledge
@@ -117,6 +125,7 @@ from app.api.v1 import resources
 from app.api.v1 import analytics
 from app.api.v1 import advanced_analytics
 from app.api.v1 import passages
+from app.api.v1 import vector
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -144,6 +153,7 @@ app.include_router(obsidian.router, prefix="/api/v1/obsidian", tags=["Obsidian"]
 app.include_router(resources.router, prefix="/api/v1/resources", tags=["Resources"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(advanced_analytics.router, prefix="/api/v1/advanced-analytics", tags=["Advanced Analytics"])
+app.include_router(vector.router, prefix="/api/v1/vector", tags=["Vector / Semantic Search"])
 
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)

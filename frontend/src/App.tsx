@@ -18,6 +18,7 @@ import QuestionFormPage from "./pages/admin/QuestionFormPage";
 import PassageGroupWizard from "./components/admin/passage/PassageGroupWizard";
 import MatrixPage from "./pages/admin/MatrixPage";
 import MatrixFormPage from "./pages/admin/MatrixFormPage";
+import MatrixDetailPage from "./pages/admin/MatrixDetailPage";
 import ExamsPage from "./pages/admin/ExamsPage";
 import ExamDetailPage from "./pages/admin/ExamDetailPage";
 import ExamFormPage from "./pages/admin/ExamFormPage";
@@ -108,6 +109,7 @@ function AppRoutes() {
           <Route path="questions/:id/edit" element={<QuestionFormPage />} />
           <Route path="matrix" element={<MatrixPage />} />
           <Route path="matrix/new" element={<MatrixFormPage />} />
+          <Route path="matrix/:id" element={<MatrixDetailPage />} />
           <Route path="matrix/:id/edit" element={<MatrixFormPage />} />
           <Route path="exams" element={<ExamsPage />} />
           <Route path="exams/new" element={<ExamFormPage />} />

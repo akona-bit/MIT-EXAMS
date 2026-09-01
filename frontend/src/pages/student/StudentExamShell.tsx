@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
-import api from "../../lib/api";
+import api from "../../api/client";
 import QuestionNavGrid from "../../components/student/QuestionNavGrid";
 import QuestionRenderer from "../../components/student/QuestionRenderer";
 import PassageSplitPane from "../../components/student/PassageSplitPane";

@@ -6,7 +6,7 @@ import numpy as np
 
 router = APIRouter()
 
-DATA_DIR = r"d:\MIT\data"
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data")
 
 def safe_float(val):
     try:

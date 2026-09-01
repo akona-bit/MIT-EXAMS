@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict, field_validator
-from typing import Optional, List, Dict
+from pydantic import BaseModel, ConfigDict, field_validator, Field
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.models.question import QuestionType
 from app.models.exam import ExamStatus, ParticipantStatus
@@ -51,6 +51,7 @@ class MatrixRuleResponse(MatrixRuleBase):
     id: int
     matrix_id: int
     group_id: Optional[int] = None
+    knowledge_node: Optional[Dict[str, Any]] = None
     model_config = ConfigDict(from_attributes=True)
 
 # --- Matrix Schemas ---
@@ -84,7 +85,35 @@ class ExamPublishRequest(BaseModel):
     show_score_mode: str
     show_answer_mode: str
 
-# --- Exam Response ---
+class ExamUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    show_score_mode: Optional[str] = None
+    show_answer_mode: Optional[str] = None
+
+# --- Matrix Import Schemas ---
+class MatrixImportPreviewRequest(BaseModel):
+    content: str
+    level_ratios: Dict[int, float] # {1: 0.2, 2: 0.3, 3: 0.3, 4: 0.2}
+    type_ratios: Dict[str, float]  # {"SINGLE_CHOICE": 1.0}
+
+class MatrixImportPreviewRow(BaseModel):
+    topic: str
+    concept: str
+    skill: str
+    original_count: int
+    status: str
+    node_id: Optional[int] = None
+    suggestions: List[Dict[str, Any]] = []
+    distributed_rules: List[Dict[str, Any]] = []
+
+class MatrixImportPreviewResponse(BaseModel):
+    preview: List[MatrixImportPreviewRow]
+
+class MatrixImportExecuteRequest(BaseModel):
+    confirmed_rows: List[MatrixImportPreviewRow]
+    strategy: str # "add" or "replace"
 class ExamResponse(BaseModel):
     id: int
     name: str
@@ -112,3 +141,54 @@ class ExamParticipantResponse(BaseModel):
     start_time: Optional[datetime] = None
     submit_time: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Smart Matrix Builder Schemas ---
+class SmartMatrixLeafNode(BaseModel):
+    node_id: int
+    name: str
+    node_type: str
+    path: str
+    question_count: int  # APPROVED questions in bank
+    topic_name: Optional[str] = None
+    concept_name: Optional[str] = None
+
+class SmartMatrixLeavesRequest(BaseModel):
+    node_ids: List[int] = Field(..., min_length=1, description="Selected scope node IDs")
+
+class SmartMatrixLeavesResponse(BaseModel):
+    leaves: List[SmartMatrixLeafNode]
+    total_questions_in_bank: int
+
+class SmartMatrixProposeRequest(BaseModel):
+    node_ids: List[int] = Field(..., min_length=1)
+    total_questions: int = Field(..., gt=0, description="Total questions wanted")
+    level_ratios: Dict[int, float] = Field(default={1: 0.25, 2: 0.30, 3: 0.30, 4: 0.15})
+    type_ratios: Dict[str, float] = Field(default={"SINGLE_CHOICE": 1.0})
+
+class SmartMatrixProposedSkill(BaseModel):
+    node_id: int
+    name: str
+    path: str
+    question_count: int  # actual in bank
+    proposed_count: int  # suggested allocation
+    percentage: float    # percentage of total proposed
+    has_warning: bool    # proposed > available
+
+class SmartMatrixProposeResponse(BaseModel):
+    skills: List[SmartMatrixProposedSkill]
+    total_proposed: int
+    total_in_bank: int
+
+class SmartMatrixSkillAllocation(BaseModel):
+    node_id: int
+    proposed_count: int
+
+class SmartMatrixConfirmRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    description: Optional[str] = None
+    subject: Optional[str] = None
+    allocations: List[SmartMatrixSkillAllocation] = Field(..., min_length=1)
+    total_questions: int = Field(..., gt=0)
+    level_ratios: Dict[int, float]
+    type_ratios: Dict[str, float]

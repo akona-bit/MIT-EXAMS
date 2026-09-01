@@ -4,6 +4,7 @@ import { getMatrices, deleteMatrix } from '../../api/matrix';
 import type { Matrix } from '../../types';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
+import { Eye, Pencil, Trash2, Sparkles } from 'lucide-react';
 
 export default function MatrixPage() {
   const navigate = useNavigate();
@@ -46,13 +47,26 @@ export default function MatrixPage() {
       render: (row) => <div className="truncate max-w-sm">{row.description}</div>
     },
     {
+      key: 'rules',
+      header: 'Số ô',
+      width: '80px',
+      render: (row) => <span className="font-mono text-sm">{row.rules?.length || 0}</span>
+    },
+    {
       key: 'actions',
       header: 'Thao tác',
-      width: '120px',
+      width: '200px',
       render: (row) => (
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/matrix/${row.id}/edit`)}>Sửa</Button>
-          <Button variant="destructive" size="sm" onClick={() => handleDelete(row.id)}>Xóa</Button>
+        <div className="flex gap-1.5">
+          <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/matrix/${row.id}`)} className="flex items-center gap-1">
+            <Eye className="w-3.5 h-3.5" /> Xem
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/matrix/${row.id}/edit`)} className="flex items-center gap-1">
+            <Pencil className="w-3.5 h-3.5" /> Sửa
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => handleDelete(row.id)} className="flex items-center gap-1">
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
         </div>
       )
     }
@@ -64,6 +78,14 @@ export default function MatrixPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-gradient pb-1">Ma trận Đặc tả</h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Quản lý cấu trúc đề thi</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" size="lg" className="w-full sm:w-auto" onClick={() => navigate('/admin/matrix/new?smart=1')}>
+            <Sparkles className="w-4 h-4 mr-1.5" /> Smart Builder
+          </Button>
+          <Button size="lg" className="w-full sm:w-auto shadow-lg shadow-primary-500/30 hover:-translate-y-0.5" onClick={() => navigate('/admin/matrix/new')}>
+            + Thêm ma trận
+          </Button>
         </div>
       </div>
 

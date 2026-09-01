@@ -3,6 +3,7 @@ import { Passage, Question, QuestionCreate } from '../types';
 
 export interface PassageSearchResponse {
   results: {
+    id: number;
     public_code: string;
     preview: string;
     source_title?: string | null;
@@ -27,27 +28,33 @@ export interface QuestionBulkUpdateItem extends QuestionCreate {
 }
 
 export const passageApi = {
-  search: (q: string = "", limit: number = 10) => {
-    return api.get<PassageSearchResponse>('/passages/search', { params: { q, limit } });
+  search: async (q: string = "", limit: number = 10) => {
+    const response = await api.get<PassageSearchResponse>('/api/v1/passages/search', { params: { q, limit } });
+    return response.data;
   },
   
-  getByCode: (code: string) => {
-    return api.get<Passage>(`/passages/${code}`);
+  getByCode: async (code: string) => {
+    const response = await api.get<Passage>(`/api/v1/passages/${code}`);
+    return response.data;
   },
   
-  create: (data: PassageCreate) => {
-    return api.post<Passage>('/passages/', data);
+  create: async (data: PassageCreate) => {
+    const response = await api.post<Passage>('/api/v1/passages/', data);
+    return response.data;
   },
   
-  update: (code: string, data: PassageUpdate) => {
-    return api.patch<Passage>(`/passages/${code}`, data);
+  update: async (code: string, data: PassageUpdate) => {
+    const response = await api.patch<Passage>(`/api/v1/passages/${code}`, data);
+    return response.data;
   },
   
-  bulkCreateQuestions: (code: string, questions: QuestionCreate[]) => {
-    return api.post<string[]>(`/passages/${code}/questions/bulk`, { questions });
+  bulkCreateQuestions: async (code: string, questions: QuestionCreate[]) => {
+    const response = await api.post<string[]>(`/api/v1/passages/${code}/questions/bulk`, { questions });
+    return response.data;
   },
   
-  bulkUpdateQuestions: (code: string, questions: QuestionBulkUpdateItem[]) => {
-    return api.put<string[]>(`/passages/${code}/questions/bulk`, { questions });
+  bulkUpdateQuestions: async (code: string, questions: QuestionBulkUpdateItem[]) => {
+    const response = await api.put<string[]>(`/api/v1/passages/${code}/questions/bulk`, { questions });
+    return response.data;
   }
 };

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, delete
 from typing import List
 import uuid
 
@@ -239,3 +239,19 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
 
     await db.commit()
     return created_codes
+
+
+@router.delete("/{public_code}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def delete_passage(public_code: str, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import update as sa_update
+    result = await db.execute(select(Passage).where(Passage.public_code == public_code))
+    passage = result.scalars().first()
+    if not passage:
+        raise HTTPException(status_code=404, detail="Passage không tồn tại")
+    # Unlink questions from this passage
+    await db.execute(
+        sa_update(Question).where(Question.passage_id == passage.id).values(passage_id=None)
+    )
+    await db.delete(passage)
+    await db.commit()
+    return None

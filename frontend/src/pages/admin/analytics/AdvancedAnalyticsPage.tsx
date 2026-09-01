@@ -18,26 +18,35 @@ export default function AdvancedAnalyticsPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [distRes, paramsRes, gamRes, boxRes, penaltyRes, leaderboardRes, statsRes, flaggedRes] = await Promise.all([
-        fetch("http://localhost:8000/api/v1/advanced-analytics/distributions"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/item-parameters"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/gam-curve"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/boxplots"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/penalty-vs-irt"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/leaderboard"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/descriptive-stats"),
-        fetch("http://localhost:8000/api/v1/advanced-analytics/flagged-items")
+      const base = "/api/v1/advanced-analytics";
+      const safeFetch = async (path: string) => {
+        try {
+          const res = await fetch(path);
+          if (!res.ok) return null;
+          return await res.json();
+        } catch { return null; }
+      };
+      const [dist, params, gam, box, penalty, leaderboard, stats, flagged] = await Promise.all([
+        safeFetch(`${base}/distributions`),
+        safeFetch(`${base}/item-parameters`),
+        safeFetch(`${base}/gam-curve`),
+        safeFetch(`${base}/boxplots`),
+        safeFetch(`${base}/penalty-vs-irt`),
+        safeFetch(`${base}/leaderboard`),
+        safeFetch(`${base}/descriptive-stats`),
+        safeFetch(`${base}/flagged-items`),
       ]);
-      const dist = await distRes.json();
-      const params = await paramsRes.json();
-      const gam = await gamRes.json();
-      const box = await boxRes.json();
-      const penalty = await penaltyRes.json();
-      const leaderboard = await leaderboardRes.json();
-      const stats = await statsRes.json();
-      const flagged = await flaggedRes.json();
       
-      setData({ dist, params: params.items, gam, box, penalty, leaderboard: leaderboard.top_students, stats, flagged: flagged.items });
+      setData({
+        dist,
+        params: params?.items ?? null,
+        gam,
+        box,
+        penalty,
+        leaderboard: leaderboard?.top_students ?? null,
+        stats,
+        flagged: flagged?.items ?? null,
+      });
     } catch (e) {
       console.error(e);
     } finally {
@@ -48,9 +57,10 @@ export default function AdvancedAnalyticsPage() {
   if (isLoading || !data) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <Skeleton className="h-[400px] rounded-xl" />
-          <Skeleton className="h-[400px] rounded-xl" />
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center">
+          <p className="text-sm text-slate-500">
+            {isLoading ? "Đang tải dữ liệu phân tích..." : "Không có dữ liệu phân tích. Hãy hoàn thành ít nhất 1 kỳ thi."}
+          </p>
         </div>
       </div>
     );
@@ -92,6 +102,19 @@ export default function AdvancedAnalyticsPage() {
       xanchor: 'center' as const 
     }
   };
+
+  // Early return if core data is missing
+  if (!data.params || !data.dist) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center">
+          <p className="text-sm text-slate-500">
+            Dữ liệu phân tích chưa đầy đủ. Hãy đảm bảo kỳ thi đã hoàn thành và có bài nộp.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const titleFont = { size: 18, color: isDark ? '#f8fafc' : '#0f172a', family: 'Inter' };
   const subTitleFont = { size: 16, color: isDark ? '#f8fafc' : '#0f172a', family: 'Inter' };

@@ -187,8 +187,20 @@ async def create_question(
     if not await KnowledgeService.is_leaf(db, q_in.knowledge_node_id):
         raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
 
+    # Resolve knowledge node path for public_code
+    kn_path = await KnowledgeService.calculate_path_code(db, q_in.knowledge_node_id)
+    # Get next sequence number for this path
+    seq_result = await db.execute(
+        select(func.count()).select_from(Question).where(
+            Question.public_code.like(f"{kn_path}-%")
+        )
+    )
+    next_seq = (seq_result.scalar() or 0) + 1
+    auto_public_code = f"{kn_path}-{next_seq:03d}"
+
     # Create question
     db_question = Question(
+        public_code=auto_public_code,
         content=q_in.content,
         level=q_in.level,
         type=q_in.type,

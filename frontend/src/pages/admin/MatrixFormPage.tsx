@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   createMatrix,
   getMatrix,
   updateMatrix,
+  getMatrixUsage,
+  createMatrixVersion,
 } from "../../api/matrix";
 import { getKnowledgeTree } from "../../api/knowledge";
 import { passageApi, PassageSearchResponse } from "../../api/passages";
@@ -11,15 +13,18 @@ import type { KnowledgeNode, MatrixRule, MatrixRuleGroup } from "../../types";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
+import SmartMatrixWizard from "../../components/admin/SmartMatrixWizard";
 import { Layers, Link2 } from "lucide-react";
 
 export default function MatrixFormPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(Boolean(id));
   const [nodes, setNodes] = useState<KnowledgeNode[]>([]);
   const isEditMode = Boolean(id);
+  const openSmartWizard = searchParams.get("smart") === "1";
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -35,6 +40,13 @@ export default function MatrixFormPage() {
   const [groupLabel, setGroupLabel] = useState("");
   const [reqPassageCode, setReqPassageCode] = useState("");
   const [passages, setPassages] = useState<PassageSearchResponse["results"]>([]);
+  
+  // Smart Builder state
+  const [isSmartWizardOpen, setIsSmartWizardOpen] = useState(openSmartWizard);
+  
+  // Versioning state
+  const [matrixUsage, setMatrixUsage] = useState<{ is_used: boolean; total_runs: number } | null>(null);
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
 
   useEffect(() => {
     getKnowledgeTree().then(setNodes).catch(console.error);
@@ -69,6 +81,9 @@ export default function MatrixFormPage() {
           ...r,
           group_local_id: r.group_id ? groupMap.get(r.group_id) : undefined
         })));
+        
+        // Check usage for versioning
+        getMatrixUsage(matrixId).then(setMatrixUsage).catch(console.error);
       })
       .catch((error) => {
         console.error(error);
@@ -77,6 +92,21 @@ export default function MatrixFormPage() {
       })
       .finally(() => setIsFetching(false));
   }, [id, navigate]);
+
+  const handleCreateVersion = async () => {
+    if (!id) return;
+    setIsCreatingVersion(true);
+    try {
+      const newMatrix = await createMatrixVersion(Number(id));
+      alert(`Đã tạo bản sao ma trận mới (ID: ${newMatrix.id}). Đang chuyển sang chỉnh sửa bản sao...`);
+      navigate(`/admin/matrix/${newMatrix.id}/edit`);
+    } catch (error) {
+      console.error(error);
+      alert("Có lỗi xảy ra khi tạo bản sao");
+    } finally {
+      setIsCreatingVersion(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,6 +300,29 @@ export default function MatrixFormPage() {
           onSubmit={handleSubmit}
           className="glass-card space-y-8"
         >
+          {/* Versioning Warning */}
+          {isEditMode && matrixUsage?.is_used && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                  Ma trận này đã dùng để sinh {matrixUsage.total_runs} đề
+                </p>
+                <p className="text-xs text-amber-600/80 dark:text-amber-400/80 mt-0.5">
+                  Lưu thay đổi sẽ tạo phiên bản mới thay vì ghi đè bản gốc.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCreateVersion}
+                isLoading={isCreatingVersion}
+                className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400"
+              >
+                Tạo bản sao ngay
+              </Button>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Input
               label="Tên ma trận"
@@ -467,6 +520,8 @@ export default function MatrixFormPage() {
             </div>
          </div>
       </Modal>
+
+      <SmartMatrixWizard isOpen={isSmartWizardOpen} onClose={() => { setIsSmartWizardOpen(false); navigate("/admin/matrix"); }} />
     </div>
   );
 }

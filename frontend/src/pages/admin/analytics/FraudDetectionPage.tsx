@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import api from "../../../lib/api";
+import api from "../../../api/client";
 
 interface FraudAlert {
   session_id: number;

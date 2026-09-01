@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { passageApi, PassageSearchResponse } from '../../../api/passages';
 import { PassageDraftState } from '../../../hooks/usePassageGroupDraft';
 
@@ -17,7 +17,7 @@ export default function PassageSelectStep({ draft, updateDraft, onNext }: Passag
     setLoading(true);
     try {
       const res = await passageApi.search(query);
-      setResults(res.data.results);
+      setResults(res.results);
     } catch (e) {
       console.error(e);
     } finally {
@@ -37,13 +37,13 @@ export default function PassageSelectStep({ draft, updateDraft, onNext }: Passag
       const res = await passageApi.getByCode(code);
       
       // Load questions into draft
-      const loadedQuestions = (res.data.questions || []).map(q => ({
+      const loadedQuestions = (res.questions || []).map((q: any) => ({
         public_code: q.public_code,
         content: q.content,
         level: q.level,
         type: q.type as 'SINGLE_CHOICE',
         knowledge_node_id: q.knowledge_node_id,
-        answers: q.answers.map(a => ({
+        answers: q.answers.map((a: any) => ({
           content: a.content,
           is_correct: a.is_correct,
           position: a.position
@@ -52,9 +52,9 @@ export default function PassageSelectStep({ draft, updateDraft, onNext }: Passag
       
       updateDraft({
         public_code: code,
-        passageContent: res.data.content,
-        sourceAuthor: res.data.source_author || '',
-        sourceTitle: res.data.source_title || '',
+        passageContent: res.content,
+        sourceAuthor: res.source_author || '',
+        sourceTitle: res.source_title || '',
         questions: loadedQuestions,
       });
       onNext();

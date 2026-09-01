@@ -1,0 +1,55 @@
+
+> frontend@0.0.0 dev
+> vite --host 0.0.0.0
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m5700[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.4:[1m5173[22m/[39m
+[2m1:38:14 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+[2m1:38:24 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+[2m1:38:37 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixPage.tsx, /src/index.css[22m
+[2m1:39:11 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixPage.tsx, /src/index.css[22m
+[2m1:39:25 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixPage.tsx, /src/index.css[22m
+[2m1:40:00 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/admin/MatrixPage.tsx, /src/pages/admin/MatrixFormPage.tsx, /src/pages/admin/ExamFormPage.tsx, /src/pages/admin/MatrixDetailPage.tsx[22m
+[2m1:41:55 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixDetailPage.tsx, /src/index.css[22m
+[2m1:45:01 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:45:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:45:32 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:45:55 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:47:20 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/admin/MatrixPage.tsx, /src/pages/admin/MatrixFormPage.tsx, /src/pages/admin/ExamFormPage.tsx, /src/pages/admin/MatrixDetailPage.tsx, /src/components/admin/SmartMatrixWizard.tsx[22m
+[2m1:47:39 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:47:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:48:05 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:48:24 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:48:47 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixFormPage.tsx, /src/index.css[22m
+[2m1:50:51 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/types/index.ts[22m
+[2m1:51:27 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/MatrixDistributionCharts.tsx, /src/index.css[22m
+[2m1:51:50 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m1:51:58 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m1:52:12 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m1:54:02 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/MatrixDistributionCharts.tsx, /src/index.css[22m
+[2m1:54:16 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/MatrixDistributionCharts.tsx, /src/index.css[22m
+[2m1:54:41 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/MatrixDistributionCharts.tsx, /src/index.css[22m
+[2m1:54:57 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:55:38 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:55:54 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:56:08 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:56:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:56:30 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:56:45 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:58:00 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/MatrixDistributionCharts.tsx, /src/index.css[22m
+[2m1:58:28 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:59:08 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m1:59:42 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m2:00:01 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixDetailPage.tsx, /src/index.css[22m
+[2m2:00:13 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixDetailPage.tsx, /src/index.css[22m
+[2m2:01:29 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/admin/MatrixFormPage.tsx, /src/pages/admin/ResourcesPage.tsx, /src/components/admin/passage/PassageGroupWizard.tsx, /src/components/admin/passage/PassageSelectStep.tsx[22m
+[2m2:01:39 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m2:02:00 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m2:02:20 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m2:03:00 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/admin/SmartMatrixWizard.tsx, /src/index.css[22m
+[2m2:03:09 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/admin/MatrixDetailPage.tsx, /src/index.css[22m
+[2m2:03:17 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/pages/admin/MatrixImportModal.tsx[22m
+[2m2:03:54 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/admin/MatrixPage.tsx, /src/pages/admin/MatrixFormPage.tsx, /src/pages/admin/ExamFormPage.tsx, /src/pages/admin/MatrixDetailPage.tsx, /src/components/admin/SmartMatrixWizard.tsx[22m

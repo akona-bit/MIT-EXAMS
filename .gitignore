@@ -1,5 +1,6 @@
 venv/
 backend/venv3/
+backend/venv2/
 backend/.venv/
 node_modules/
 __pycache__/

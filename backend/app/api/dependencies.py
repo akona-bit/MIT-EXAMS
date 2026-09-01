@@ -65,19 +65,30 @@ async def get_current_user(
             else:
                 # User doesn't exist in our DB at all, auto-create them.
                 # Find the default role (e.g. STUDENT). If no role exists, we create one.
-                role_result = await db.execute(select(Role).where(Role.name == "ADMIN"))
-                admin_role = role_result.scalars().first()
-                if not admin_role:
-                    admin_role = Role(name="ADMIN", description="Administrator")
-                    db.add(admin_role)
+                role_result = await db.execute(select(Role).where(Role.name == "STUDENT"))
+                student_role = role_result.scalars().first()
+                if not student_role:
+                    student_role = Role(name="STUDENT", description="Student")
+                    db.add(student_role)
                     await db.commit()
-                    await db.refresh(admin_role)
+                    await db.refresh(student_role)
+
+                # Generate unique username
+                base_username = email.split("@")[0]
+                username = base_username
+                counter = 1
+                while True:
+                    existing = await db.execute(select(User).where(User.username == username))
+                    if not existing.scalars().first():
+                        break
+                    username = f"{base_username}{counter}"
+                    counter += 1
 
                 user = User(
                     email=email,
                     supabase_id=supabase_id,
-                    username=email.split("@")[0],
-                    role_id=admin_role.id,
+                    username=username,
+                    role_id=student_role.id,
                     is_active=True
                 )
                 db.add(user)

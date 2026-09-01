@@ -30,6 +30,7 @@ class KnowledgeNodeType(str, enum.Enum):
     TOPIC = "TOPIC"
     CONCEPT = "CONCEPT"
     SKILL = "SKILL"
+    SUB_SKILL = "SUB_SKILL"
 
 class KnowledgeNode(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -67,6 +68,20 @@ class KnowledgeNodeLink(Base):
 
     source: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[source_id])
     target: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[target_id])
+
+class QuestionEmbedding(Base):
+    """Vector embedding for semantic search of questions."""
+    __tablename__ = "question_embedding"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("question.id", ondelete="CASCADE"), unique=True, index=True)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # stored as JSON string, pgvector handles vector type
+    model_name: Mapped[str] = mapped_column(String(50), default="text-embedding-3-small")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    question: Mapped["Question"] = relationship("Question", foreign_keys=[question_id])
 
 class Resource(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

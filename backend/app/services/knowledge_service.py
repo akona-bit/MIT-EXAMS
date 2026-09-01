@@ -5,6 +5,13 @@ from app.models.question import KnowledgeNode, KnowledgeNodeParent, Question
 
 class KnowledgeService:
     @staticmethod
+    async def is_leaf(db: AsyncSession, node_id: int) -> bool:
+        """Check if a node is a leaf (has no children in the DAG)."""
+        stmt = select(func.count()).select_from(KnowledgeNodeParent).where(KnowledgeNodeParent.parent_id == node_id)
+        result = await db.execute(stmt)
+        return (result.scalar() or 0) == 0
+
+    @staticmethod
     async def count_approved_questions(db: AsyncSession, node_id: int) -> int:
         """Counts the number of APPROVED questions attached to this node."""
         from app.models.question import Question, QuestionStatus

@@ -354,8 +354,10 @@ async def load_pool_from_db(db: AsyncSession, matrix_rules: List[MatrixRule]) ->
             COALESCE(v.exposure_count, 0) as exposure_count
         FROM question q
         JOIN knowledge_node kn ON q.knowledge_node_id = kn.id
-        LEFT JOIN knowledge_node p1 ON kn.parent_id = p1.id
-        LEFT JOIN knowledge_node p2 ON p1.parent_id = p2.id
+        LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
+        LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
+        LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
+        LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
         LEFT JOIN v_question_exposure v ON v.question_id = q.id
         WHERE q.status = 'APPROVED'
         AND q.knowledge_node_id IN :kn_ids
@@ -406,8 +408,10 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
                 p1.name as concept_name,
                 p2.name as topic_name
             FROM knowledge_node kn
-            LEFT JOIN knowledge_node p1 ON kn.parent_id = p1.id
-            LEFT JOIN knowledge_node p2 ON p1.parent_id = p2.id
+            LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
+            LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
+            LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
+            LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
             WHERE kn.id = :kn_id
         """)
         result = await db.execute(query, {"kn_id": r.knowledge_node_id})
