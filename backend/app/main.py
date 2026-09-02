@@ -187,7 +187,7 @@ resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resourc
 resource_upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads/resources", StaticFiles(directory=resource_upload_dir), name="resource-files")
 
-@app.get("/api/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"], methods=["GET", "HEAD"])
 async def health_check():
     """
     Health check endpoint to verify the API is running.
