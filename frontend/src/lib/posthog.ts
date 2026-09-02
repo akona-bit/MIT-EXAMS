@@ -9,8 +9,6 @@ if (posthogKey) {
     autocapture: true,
     capture_pageview: true,
   });
-} else {
-  console.warn('PostHog Key is missing. Analytics will be disabled.');
 }
 
 export default posthog;
