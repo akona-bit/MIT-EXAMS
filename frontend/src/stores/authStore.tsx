@@ -8,8 +8,6 @@ import {
 } from "react";
 import type { User, LoginRequest } from "../types";
 import { getMe } from "../api/auth";
-import { supabase } from "../lib/supabase";
-import posthog from "../lib/posthog";
 
 interface AuthContextType {
   user: User | null;
@@ -17,62 +15,60 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (data: LoginRequest) => Promise<User>;
-  logout: () => Promise<void>;
+  loginWithToken: (token: string) => Promise<User>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('access_token'));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        setToken(session.access_token);
+    const initAuth = async () => {
+      const storedToken = localStorage.getItem('access_token');
+      if (storedToken) {
         try {
-          // getMe() calls the backend, which now will lazily create/sync the user
-          // based on the Supabase JWT.
+          setToken(storedToken);
           const u = await getMe();
           setUser(u);
-          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            posthog.identify(session.user.id, { email: session.user.email });
-          }
-        } catch (e) {
-          console.error("Failed to fetch user profile", e);
+        } catch {
+          localStorage.removeItem('access_token');
+          setToken(null);
           setUser(null);
         }
-      } else {
-        setToken(null);
-        setUser(null);
-        posthog.reset();
       }
       setIsLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
     };
+    initAuth();
   }, []);
 
   const login = useCallback(async (data: LoginRequest) => {
     setIsLoading(true);
-    const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email: data.username, // Using the username field as email
-      password: data.password,
-    });
-    
-    if (error) {
-      setIsLoading(false);
-      throw error;
-    }
-    
-    // onAuthStateChange will trigger, but we also return immediately
-    setToken(authData.session.access_token);
     try {
+      // Use Supabase signInWithPassword for password-based login
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error("Supabase not configured");
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.username,
+        password: data.password,
+      });
+
+      if (error) throw error;
+
+      const jwtToken = authData.session.access_token;
+      localStorage.setItem('access_token', jwtToken);
+      setToken(jwtToken);
+
       const u = await getMe();
       setUser(u);
       return u;
@@ -82,8 +78,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+  const loginWithToken = useCallback(async (jwtToken: string) => {
+    setIsLoading(true);
+    try {
+      localStorage.setItem('access_token', jwtToken);
+      setToken(jwtToken);
+
+      const u = await getMe();
+      setUser(u);
+      return u;
+    } catch (e) {
+      localStorage.removeItem('access_token');
+      setToken(null);
+      setUser(null);
+      setIsLoading(false);
+      throw e;
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('access_token');
+    setToken(null);
+    setUser(null);
   }, []);
 
   return (
@@ -94,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithToken,
         logout,
       }}
     >

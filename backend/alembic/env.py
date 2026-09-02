@@ -17,6 +17,7 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 from app.models.base import Base
 from app.models.user import User, Role
+from app.models.otp import OTPToken
 from app.models.question import KnowledgeNode, Resource, Question, Answer, QuestionSubItem
 from app.models.exam import Matrix, MatrixRule, Exam, ExamForm, ExamFormQuestion, ExamFormAnswer, ExamParticipant, ExamSubmission, ExamSubmissionAnswer, ExamTrackingLog
 from app.models.grading import ExamResult, IrtTask

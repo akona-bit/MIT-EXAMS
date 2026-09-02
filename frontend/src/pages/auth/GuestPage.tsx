@@ -2,8 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
-import { supabase } from "../../lib/supabase";
-import { updateMe } from "../../api/auth";
+import { sendOtp, verifyOtp, updateMe } from "../../api/auth";
+import { useAuth } from "../../stores/authStore";
 
 export default function GuestPage() {
   const [fullName, setFullName] = useState("");
@@ -16,6 +16,7 @@ export default function GuestPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   const navigate = useNavigate();
+  const { loginWithToken } = useAuth();
 
   const handleSendOtp = async (e: FormEvent) => {
     e.preventDefault();
@@ -23,21 +24,11 @@ export default function GuestPage() {
     setIsLoading(true);
 
     try {
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          data: {
-            full_name: fullName,
-          }
-        }
-      });
-      
-      if (otpError) throw otpError;
-      
+      await sendOtp(email);
       setOtpStep(true);
     } catch (err: any) {
       setError(
-        err.message || "Không thể gửi OTP. Vui lòng kiểm tra lại thông tin.",
+        err.response?.data?.detail || err.message || "Không thể gửi OTP. Vui lòng kiểm tra lại thông tin.",
       );
     } finally {
       setIsLoading(false);
@@ -49,26 +40,19 @@ export default function GuestPage() {
     setError("");
     setIsLoading(true);
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: "email",
-      });
+      const result = await verifyOtp(email, otp);
+      await loginWithToken(result.access_token);
       
-      if (verifyError) throw verifyError;
-      
-      // Wait for AuthProvider to sync context and set token
-      // After login, we want to update the full name on our backend
-      setTimeout(async () => {
-        try {
-          await updateMe(fullName);
-        } catch (e) {
-          console.error("Failed to update guest full name", e);
-        }
-        navigate("/student");
-      }, 1500);
+      try {
+        await updateMe(fullName);
+      } catch (e) {
+        console.error("Failed to update guest full name", e);
+      }
+      navigate("/student");
     } catch (err: any) {
-      setError("Mã OTP không đúng hoặc đã hết hạn.");
+      setError(
+        err.response?.data?.detail || "Mã OTP không đúng hoặc đã hết hạn."
+      );
       setIsLoading(false);
     }
   };

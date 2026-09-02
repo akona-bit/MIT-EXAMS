@@ -30,3 +30,4 @@ pygam
 tzdata
 supabase>=2.3.4
 pgvector>=0.2.4
+resend>=2.0.0

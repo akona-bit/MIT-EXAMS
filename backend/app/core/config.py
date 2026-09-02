@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
 
+    # Resend email
+    RESEND_API_KEY: str = ""
+
+    # Frontend URL for password reset redirect
+    FRONTEND_URL: str = "http://localhost:5173"
+
     @field_validator("DEBUG", mode="before")
     @classmethod
     def parse_debug(cls, v):

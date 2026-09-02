@@ -98,6 +98,7 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/guest" element={<GuestPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ForgotPasswordPage />} />
       </Route>
 
       {/* Admin/Teacher Routes */}
