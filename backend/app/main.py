@@ -1,5 +1,6 @@
 import atexit
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -87,11 +88,27 @@ async def lifespan(app: FastAPI):
             raise RuntimeError(message)
         logger.warning(message)
 
+    # Start keep-alive background task
+    asyncio.create_task(keep_alive())
+
     yield
 
     posthog_client = getattr(app.state, "posthog_client", None)
     if posthog_client:
+        posthog_client.shutdown()
         posthog_client.flush()
+
+
+async def keep_alive():
+    """Ping self every 10 minutes to prevent Render free tier from sleeping."""
+    import httpx
+    while True:
+        await asyncio.sleep(600)
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                await client.get("http://127.0.0.1:8000/api/health")
+        except Exception:
+            pass
 
 
 app = FastAPI(
