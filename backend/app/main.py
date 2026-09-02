@@ -130,9 +130,20 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 # Configure CORS
+CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:8000",
+    "https://mit-2143.vercel.app",
+    "https://frontend-n5k5c5t7s-mit-5f38.vercel.app",
+    "https://frontend.vercel.app",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://localhost:8000"],
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=r"https://frontend-.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
