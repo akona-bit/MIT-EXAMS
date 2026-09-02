@@ -11,6 +11,7 @@ import {
   FileEdit,
   BarChart3,
   BookMarked,
+  FileText,
   KeyRound,
   LogOut,
   Menu,
@@ -57,7 +58,8 @@ const navSections: NavSection[] = [
     items: [
       { label: "Ngân hàng Câu hỏi", path: "/admin/questions", icon: <Library className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Chủ đề Kiến thức", path: "/admin/obsidian", icon: <Share2 className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Kho ngữ liệu", path: "/admin/resources", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Kho ngữ liệu (Đọc)", path: "/admin/passages", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Lưu trữ (File/Ảnh)", path: "/admin/resources", icon: <FileText className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Ma trận Đặc tả", path: "/admin/matrix", icon: <Network className="h-5 w-5" strokeWidth={1.8} /> },
     ],
   },

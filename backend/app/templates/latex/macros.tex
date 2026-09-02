@@ -133,25 +133,22 @@
 }
 
 \newcommand{\reading}[2]{ 
+\par
 \textbf{Dựa vào thông tin dưới đây để trả lời các câu từ 
 \the\numexpr\value{question}+1\relax\ đến 
 \the\numexpr\value{question}+#1\relax}
+\par
 \noindent
 #2 
 }
 \newcommand{\engread}[2]{
+\par
 \noindent\textbf{Questions 
 \the\numexpr\value{question}+1\relax-\the\numexpr\value{question}+#1\relax:} \textit{Read the passage carefully.}%
-\begin{list}{\arabic{enumi}.}{
-    \usecounter{enumi}
-    \leftmargin=2em
-    \itemindent=0pt
-    \itemsep=-0.5em
-    \topsep=0pt
-    \partopsep=0pt
-}
+\par
 #2
-\end{list}
+\par
 \noindent
 \textit{Choose an option (A, B, C, or D) that best answers each question.}
+\par
 }

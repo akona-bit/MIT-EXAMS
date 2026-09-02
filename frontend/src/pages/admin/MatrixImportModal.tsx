@@ -1,8 +1,8 @@
 import { useState } from "react";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
-import { previewMatrixImport, executeMatrixImport } from "../../api/matrix";
-import { CheckCircle2, ArrowRight, ArrowLeft, FileUp } from "lucide-react";
+import { previewMatrixImport, executeMatrixImport, previewVisionImport } from "../../api/matrix";
+import { CheckCircle2, ArrowRight, ArrowLeft, FileUp, Image as ImageIcon } from "lucide-react";
 
 interface MatrixImportModalProps {
   isOpen: boolean;
@@ -31,7 +31,9 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
   const [typeRatios, setTypeRatios] = useState<Record<string, number>>({ "SINGLE_CHOICE": 1.0 });
 
   // Step 2: Input
+  const [inputType, setInputType] = useState<'text' | 'image'>('text');
   const [content, setContent] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   // Step 3: Preview
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
@@ -42,18 +44,31 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
   };
 
   const handleNextInput = async () => {
-    if (!content.trim()) {
+    if (inputType === 'text' && !content.trim()) {
       alert("Vui lòng nhập dữ liệu bảng");
+      return;
+    }
+    if (inputType === 'image' && !imageFile) {
+      alert("Vui lòng chọn ảnh để phân tích");
       return;
     }
 
     setIsLoading(true);
     try {
-      const res = await previewMatrixImport(matrixId, {
-        content,
-        level_ratios: levelRatios,
-        type_ratios: typeRatios
-      });
+      let res;
+      if (inputType === 'text') {
+        res = await previewMatrixImport(matrixId, {
+          content,
+          level_ratios: levelRatios,
+          type_ratios: typeRatios
+        });
+      } else {
+        const formData = new FormData();
+        formData.append("file", imageFile!);
+        formData.append("level_ratios", JSON.stringify(levelRatios));
+        formData.append("type_ratios", JSON.stringify(typeRatios));
+        res = await previewVisionImport(matrixId, formData);
+      }
       setPreviewRows(res.preview);
       setStep('preview');
     } catch (error) {
@@ -165,17 +180,53 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
 
         {step === 'input' && (
           <div className="space-y-6">
-            <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-              <FileUp className="w-4 h-4" />
-              <span>Hãy copy dữ liệu từ Excel (cột Topic, Concept, Kiến thức, Số lượng) và dán vào đây.</span>
+            <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg w-fit">
+              <button
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  inputType === 'text' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                onClick={() => setInputType('text')}
+              >
+                <FileUp className="w-4 h-4" /> Dán văn bản (TSV)
+              </button>
+              <button
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  inputType === 'image' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                onClick={() => setInputType('image')}
+              >
+                <ImageIcon className="w-4 h-4" /> Đọc từ Ảnh (Vision AI)
+              </button>
             </div>
-            <textarea
-              rows={12}
-              className="w-full p-4 text-sm font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:ring-4 focus:ring-primary-500/20"
-              placeholder="Topic\tConcept\tKiến thức\tSố lượng"
-              value={content}
-              onChange={e => setContent(e.target.value)}
-            />
+
+            {inputType === 'text' ? (
+              <>
+                <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
+                  <span>Hãy copy dữ liệu từ Excel (cột Topic, Concept, Kiến thức, Số lượng) và dán vào đây.</span>
+                </div>
+                <textarea
+                  rows={12}
+                  className="w-full p-4 text-sm font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl outline-none focus:ring-4 focus:ring-primary-500/20"
+                  placeholder="Topic\tConcept\tKiến thức\tSố lượng"
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                />
+              </>
+            ) : (
+              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-12 text-center flex flex-col items-center justify-center">
+                <ImageIcon className="w-12 h-12 text-slate-400 mb-4" />
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                  Kéo thả hoặc tải lên hình ảnh bảng ma trận đặc tả
+                </p>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={e => setImageFile(e.target.files?.[0] || null)}
+                  className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+            )}
+            
             <div className="flex justify-between pt-4">
               <Button variant="ghost" onClick={() => setStep('config')}><ArrowLeft className="w-4 h-4 mr-1" /> Quay lại</Button>
               <Button onClick={handleNextInput} isLoading={isLoading} size="lg">Xem trước kết quả <ArrowRight className="w-4 h-4 ml-1" /></Button>

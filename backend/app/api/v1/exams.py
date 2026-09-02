@@ -282,3 +282,27 @@ async def get_student_exam_result_route(exam_id: int, db: AsyncSession = Depends
     from app.services.exam_result import get_student_exam_result
 
     return await get_student_exam_result(db, exam_id, current_user.id, current_user)
+@router.get("/{exam_id}/export/latex", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def export_exam_latex(exam_id: int, form_code: str | None = None, db: AsyncSession = Depends(get_db)):
+    from app.services.latex_service import LatexService
+    from fastapi.responses import Response
+    try:
+        zip_bytes = await LatexService.generate_latex_zip(db, exam_id, form_code)
+        
+        # Determine filename
+        filename = f"Exam_{exam_id}"
+        if form_code:
+            filename += f"_Form_{form_code}"
+        filename += ".zip"
+            
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

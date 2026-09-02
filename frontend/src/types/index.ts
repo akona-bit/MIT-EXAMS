@@ -174,7 +174,7 @@ export interface Exam {
   status: string; // DRAFT | PUBLISHED | COMPLETED
   start_time: string | null;
   end_time: string | null;
-  duration_minutes: number;
+  duration_minutes: number | null;
   show_score_mode: string;
   show_answer_mode: string;
   created_at: string;
@@ -203,7 +203,7 @@ export interface ExamSessionInfo {
   exam_id: number;
   exam_name: string;
   form_code: string;
-  remaining_seconds: number;
+  remaining_seconds: number | null;
   server_time: string;
   participant_status: string;
 }

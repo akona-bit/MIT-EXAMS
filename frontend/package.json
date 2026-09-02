@@ -24,6 +24,7 @@
     "@types/canvas-confetti": "^1.9.0",
     "@types/plotly.js": "^3.0.13",
     "@types/react-plotly.js": "^2.6.4",
+    "@uiw/react-md-editor": "^4.1.2",
     "axios": "^1.7.7",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",

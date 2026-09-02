@@ -1,4 +1,3 @@
-import { mergeAttributes, Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import Image from '@tiptap/extension-image'
 import PandocImageComponent from './PandocImageComponent'

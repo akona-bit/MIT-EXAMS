@@ -4,8 +4,8 @@
 
 ## Trạng thái tổng quan
 
-**Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH (BACKEND)
-**Cập nhật lần cuối:** 2026-08-24
+**Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND)
+**Cập nhật lần cuối:** 2026-09-02
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -71,7 +71,7 @@
 - [x] KPI cards + phổ điểm
 - [x] Phân tích câu hỏi (cảnh báo misfit)
 - [x] So sánh chất lượng đề
-- [x] Export Excel tổng hợp kỳ thi (backend; file chi tiết từng thí sinh và UI còn tiếp tục)
+- [x] Export Excel tổng hợp kỳ thi & Xuất đề LaTeX offline
 
 ### Giai đoạn 9 — Hoàn thiện
 
@@ -81,6 +81,10 @@
 - [x] Danh sách học sinh bị cấm thi (Cột `is_banned`, báo lỗi 403 ngay lập tức)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-02` — **Hoàn thiện UI Kho Ngữ Liệu & Tính năng Xuất Đề LaTeX**: Đã xây dựng hoàn chỉnh giao diện danh sách Ngữ liệu (`PassagesPage`) và form soạn thảo Markdown (`PassageFormPage`) cho "Kho ngữ liệu (Đọc)" riêng biệt với Kho Lưu trữ Media. Cùng với đó, hoàn thành API xuất đề thi định dạng `.tex` qua `LatexService` tích hợp thẳng vào giao diện Admin (`ExamDetailPage`), hỗ trợ tự động gộp nội dung passage cho các câu hỏi và inject template tiếng Việt (`fontenc T5`).
+
+- `2026-09-02` — **Hoàn thành Giai đoạn 5: Frontend UI (Ma trận đặc tả)**: Đã tích hợp thành công 5 loại biểu đồ đa cấp (Sunburst, Treemap, Sankey, Stacked Bar, Radar) vào `MatrixVisualization` sử dụng `recharts` và `react-plotly.js`. Cập nhật `MatrixFormPage` với Widget Health Score real-time (tự động gọi API check-feasibility-local mỗi khi sửa lưới) và thêm Banner cảnh báo Versioning đỏ gắt nếu cố lưu đè lên ma trận đã dùng. Tích hợp nút tải ảnh vào `MatrixImportModal` để kết nối với Vision API backend. Đã check-off task Giai đoạn 5.
 
 - `2026-09-02` — **Hoàn thành Phần 0 (Refactor Database & API core)**: Chuyển hoàn toàn `Question` sang mô hình đa-skill (bảng `question_skill_tag`), xoá `knowledge_node_id` trong Question và `parent_id` trong KnowledgeNode. Các service đếm câu hỏi (`knowledge_service.py`), sinh ma trận (`exam_matrix_generator.py`), sinh đề (`generator.py`), search vector (`embedding_service.py`, `vector.py`), nhập import (`obsidian_parser.py`, `passages.py`) đã được map lại để sử dụng query JOIN qua `question_skill_tag`. Migration `c1234567890a` đã upgrade `head` thành công trên DB. Báo cáo lại để xin phép tiến hành Phần 1-7 tiếp theo.
 

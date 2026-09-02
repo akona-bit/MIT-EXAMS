@@ -13,7 +13,6 @@ import {
   getKnowledgeGraph,
   deleteKnowledgeNode,
   updateKnowledgeNode,
-  createManualLink,
   deleteManualLink,
 } from "../../api/knowledge";
 import type { KnowledgeGraphEdge, KnowledgeGraphNode } from "../../types";
@@ -128,6 +127,7 @@ function GraphCanvas({
   const fgRef = useRef<ForceGraphMethods>();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const containerRef = useRef<HTMLDivElement>(null);
+
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -205,11 +205,11 @@ function GraphCanvas({
     }
 
     const nodeIds = new Set(currentNodes.map((n) => n.id));
-    const currentEdges = edges.filter((e) => {
+    const currentEdges = edges.filter((e: any) => {
       const sourceId =
-        typeof e.source === "object" ? (e.source as any).id : e.source;
+        typeof e.source === "object" ? e.source.id : e.source;
       const targetId =
-        typeof e.target === "object" ? (e.target as any).id : e.target;
+        typeof e.target === "object" ? e.target.id : e.target;
       return nodeIds.has(sourceId) && nodeIds.has(targetId);
     });
 
@@ -220,7 +220,7 @@ function GraphCanvas({
         name: n.label,
         val: (n.question_count || 1) * 1.5,
       })),
-      links: currentEdges.map((e) => ({ source: e.source, target: e.target })),
+      links: currentEdges.map((e: any) => ({ source: e.source, target: e.target })),
     };
   }, [nodes, edges, replayProgress, chronologicalNodes]);
 
@@ -717,11 +717,11 @@ export default function ObsidianPage() {
     allNodes.find((node) => node.id === selectedId) ?? visibleNodes[0] ?? null;
   const connectedNodes = selectedNode
     ? allEdges
-        .flatMap((edge) => {
-          if (edge.source === selectedNode.id)
-            return [allNodes.find((node) => node.id === edge.target)];
-          if (edge.target === selectedNode.id)
-            return [allNodes.find((node) => node.id === edge.source)];
+        .flatMap((edge: any) => {
+          if (edge.source === selectedNode.id || (typeof edge.source === 'object' && edge.source.id === selectedNode.id))
+            return [allNodes.find((node) => node.id === (typeof edge.target === 'object' ? edge.target.id : edge.target))];
+          if (edge.target === selectedNode.id || (typeof edge.target === 'object' && edge.target.id === selectedNode.id))
+            return [allNodes.find((node) => node.id === (typeof edge.source === 'object' ? edge.source.id : edge.source))];
           return [];
         })
         .filter((node): node is KnowledgeGraphNode => Boolean(node))

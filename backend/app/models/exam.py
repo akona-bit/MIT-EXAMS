@@ -86,7 +86,7 @@ class Exam(Base):
 
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    duration_minutes: Mapped[int] = mapped_column(Integer, default=150)
+    duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=150)
     show_score_mode: Mapped[str] = mapped_column(String(50), default="NONE")
     show_answer_mode: Mapped[str] = mapped_column(String(50), default="NONE")
     status: Mapped[ExamStatus] = mapped_column(SQLAlchemyEnum(ExamStatus), default=ExamStatus.DRAFT)

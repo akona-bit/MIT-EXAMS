@@ -1,4 +1,3 @@
-import React from 'react';
 import QuestionBlock from './QuestionBlock';
 import { PassageDraftState } from '../../../hooks/usePassageGroupDraft';
 import { QuestionBulkUpdateItem } from '../../../api/passages';

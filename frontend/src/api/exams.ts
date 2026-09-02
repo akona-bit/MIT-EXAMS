@@ -74,3 +74,33 @@ export async function assignParticipants(
   const response = await client.post(`/api/v1/exams/${id}/assign`, userIds);
   return response.data;
 }
+
+export function exportExamLaTeX(examId: number, formCode?: string) {
+  let url = `/api/v1/exams/${examId}/export/latex`;
+  if (formCode) {
+    url += `?form_code=${formCode}`;
+  }
+  // Extract token to add to URL if needed, or assume cookie-based/URL-based auth
+  // But wait, it's a GET request, so window.open doesn't send Authorization header
+  // Let's use fetch and trigger download
+  
+  return client.get(url, { responseType: 'blob' }).then(response => {
+    const blob = new Blob([response.data], { type: 'text/plain' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    
+    // Attempt to extract filename from Content-Disposition
+    const disposition = response.headers['content-disposition'];
+    let filename = `Exam_${examId}.zip`;
+    if (disposition && disposition.indexOf('filename=') !== -1) {
+        const matches = /filename="([^"]*)"/.exec(disposition);
+        if (matches != null && matches[1]) filename = matches[1];
+    }
+    
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
+}

@@ -8,7 +8,7 @@ interface PassageSelectStepProps {
   onNext: () => void;
 }
 
-export default function PassageSelectStep({ draft, updateDraft, onNext }: PassageSelectStepProps) {
+export default function PassageSelectStep({ updateDraft, onNext }: PassageSelectStepProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PassageSearchResponse['results']>([]);
   const [loading, setLoading] = useState(false);

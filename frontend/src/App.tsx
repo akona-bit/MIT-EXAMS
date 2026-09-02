@@ -13,6 +13,8 @@ import AdminShell from "./components/layout/AdminShell";
 // Pages
 import LoginPage from "./pages/auth/LoginPage";
 import DashboardPage from "./pages/admin/DashboardPage";
+import PassagesPage from "./pages/admin/PassagesPage";
+import PassageFormPage from "./pages/admin/PassageFormPage";
 import QuestionsPage from "./pages/admin/QuestionsPage";
 import QuestionFormPage from "./pages/admin/QuestionFormPage";
 import PassageGroupWizard from "./components/admin/passage/PassageGroupWizard";
@@ -104,6 +106,9 @@ function AppRoutes() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="passages" element={<PassagesPage />} />
+          <Route path="passages/new" element={<PassageFormPage />} />
+          <Route path="passages/:id/edit" element={<PassageFormPage />} />
           <Route path="questions" element={<QuestionsPage />} />
           <Route path="questions/new" element={<QuestionFormPage />} />
           <Route path="questions/new-group" element={<PassageGroupWizard />} />

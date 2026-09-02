@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Card } from "../../../components/ui/Card";
-import { Skeleton } from "../../../components/ui/Skeleton";
 import Plot from "react-plotly.js";
 import { useTheme } from "../../../stores/themeStore";
 import { Users, TrendingUp, AlertTriangle, Target } from "lucide-react";
@@ -119,22 +118,7 @@ export default function AdvancedAnalyticsPage() {
   const titleFont = { size: 18, color: isDark ? '#f8fafc' : '#0f172a', family: 'Inter' };
   const subTitleFont = { size: 16, color: isDark ? '#f8fafc' : '#0f172a', family: 'Inter' };
 
-  // 1. Phân bố điểm thành phần (Histograms with text on bars)
-  const createHistWithText = (values: number[], color: string, name: string) => {
-    return {
-      x: values,
-      type: 'histogram',
-      name: name,
-      marker: { color: color, line: { color: isDark ? '#0f172a' : 'white', width: 1.5 } },
-      texttemplate: '%{y}',
-      textfont: { family: '"Times New Roman", Times, serif', size: 12 },
-      textposition: 'outside',
-      xbins: { start: 0, end: 300, size: 10 },
-      opacity: 0.8
-    };
-  };
 
-  // 2. Plot Item Parameters (Scatter a vs b)
   const mathParams = data.params.filter((p: any) => p.subject === "Toán");
   const sciParams = data.params.filter((p: any) => p.subject === "TDKH");
   
@@ -532,7 +516,7 @@ export default function AdvancedAnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {['Mean', 'Median', 'SD', 'Min', 'Max'].map((metric, idx) => (
+              {['Mean', 'Median', 'SD', 'Min', 'Max'].map((metric) => (
                 <tr key={metric} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
                     {metric === 'Mean' ? 'Điểm Trung bình' : metric === 'Median' ? 'Trung vị' : metric === 'SD' ? 'Độ lệch chuẩn' : metric === 'Min' ? 'Thấp nhất' : 'Cao nhất'}

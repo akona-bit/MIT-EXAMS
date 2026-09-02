@@ -25,13 +25,41 @@ export async function deleteMatrix(id: number): Promise<void> {
   await client.delete(`/api/v1/matrix/${id}`);
 }
 
-export async function checkMatrixFeasibility(matrixId: number): Promise<{ feasible: boolean; message?: string; shortages?: string[] }> {
+export async function checkMatrixFeasibility(matrixId: number): Promise<{ 
+  feasible: boolean; 
+  message?: string; 
+  shortages?: string[];
+  health_score?: number;
+  total_required?: number;
+  total_shortage?: number;
+}> {
   const response = await client.post(`/api/v1/matrix/${matrixId}/check-feasibility`);
+  return response.data;
+}
+
+export async function checkMatrixFeasibilityLocal(rules: any[]): Promise<{ 
+  feasible: boolean; 
+  message?: string; 
+  shortages?: string[];
+  health_score?: number;
+  total_required?: number;
+  total_shortage?: number;
+}> {
+  const response = await client.post(`/api/v1/matrix/check-feasibility-local`, { rules });
   return response.data;
 }
 
 export async function previewMatrixImport(matrixId: number, data: { content: string; level_ratios: Record<number, number>; type_ratios: Record<string, number> }): Promise<{ preview: any[] }> {
   const response = await client.post(`/api/v1/matrix/${matrixId}/import/preview`, data);
+  return response.data;
+}
+
+export async function previewVisionImport(matrixId: number, formData: FormData): Promise<{ preview: any[] }> {
+  const response = await client.post(`/api/v1/matrix/${matrixId}/import/vision`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
   return response.data;
 }
 

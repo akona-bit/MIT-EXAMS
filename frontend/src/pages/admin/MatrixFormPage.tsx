@@ -6,6 +6,7 @@ import {
   updateMatrix,
   getMatrixUsage,
   createMatrixVersion,
+  checkMatrixFeasibilityLocal,
 } from "../../api/matrix";
 import { getKnowledgeTree } from "../../api/knowledge";
 import { passageApi, PassageSearchResponse } from "../../api/passages";
@@ -14,7 +15,8 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import SmartMatrixWizard from "../../components/admin/SmartMatrixWizard";
-import { Layers, Link2 } from "lucide-react";
+import MatrixVisualization from "../../components/matrix/MatrixVisualization";
+import { Layers, Link2, AlertTriangle, Activity } from "lucide-react";
 
 export default function MatrixFormPage() {
   const { id } = useParams();
@@ -47,6 +49,12 @@ export default function MatrixFormPage() {
   // Versioning state
   const [matrixUsage, setMatrixUsage] = useState<{ is_used: boolean; total_runs: number } | null>(null);
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
+
+  // Health Score State
+  const [healthScore, setHealthScore] = useState<number | null>(null);
+  const [shortages, setShortages] = useState<string[]>([]);
+  const [isCheckingFeasibility, setIsCheckingFeasibility] = useState(false);
+  const [showVisualization, setShowVisualization] = useState(false);
 
   useEffect(() => {
     getKnowledgeTree().then(setNodes).catch(console.error);
@@ -93,6 +101,33 @@ export default function MatrixFormPage() {
       .finally(() => setIsFetching(false));
   }, [id, navigate]);
 
+  // Debounced Feasibility Check
+  useEffect(() => {
+    if (rules.length === 0) {
+      setHealthScore(null);
+      setShortages([]);
+      return;
+    }
+    
+    const validRules = rules.filter(r => r.knowledge_node_id && r.count && r.count > 0);
+    if (validRules.length === 0) return;
+
+    const timer = setTimeout(() => {
+      setIsCheckingFeasibility(true);
+      checkMatrixFeasibilityLocal(validRules)
+        .then(res => {
+          setHealthScore(res.health_score ?? 100);
+          setShortages(res.shortages || []);
+        })
+        .catch(err => {
+          console.error("Lỗi kiểm tra khả thi:", err);
+        })
+        .finally(() => setIsCheckingFeasibility(false));
+    }, 1000); // 1s debounce
+
+    return () => clearTimeout(timer);
+  }, [rules]);
+
   const handleCreateVersion = async () => {
     if (!id) return;
     setIsCreatingVersion(true);
@@ -113,6 +148,11 @@ export default function MatrixFormPage() {
 
     if (!name.trim()) {
       alert("Tên ma trận không được để trống");
+      return;
+    }
+
+    if (isEditMode && matrixUsage?.is_used) {
+      alert("Ma trận này đã được sử dụng. Vui lòng bấm 'Tạo bản sao ngay' để chỉnh sửa an toàn trên phiên bản mới.");
       return;
     }
 
@@ -300,27 +340,70 @@ export default function MatrixFormPage() {
           onSubmit={handleSubmit}
           className="glass-card space-y-8"
         >
-          {/* Versioning Warning */}
+          {/* Versioning Warning (Prominent) */}
           {isEditMode && matrixUsage?.is_used && (
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50 flex items-center justify-between">
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-amber-800 dark:text-amber-300">Cảnh báo: Ma trận đang được sử dụng</h4>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 mb-3">
+                    Ma trận này đã dùng để sinh <strong>{matrixUsage.total_runs}</strong> đề thi.
+                    Lưu thay đổi sẽ ảnh hưởng đến lịch sử sinh đề cũ. Hệ thống đã khóa tính năng lưu đè, vui lòng <strong>Tạo bản sao</strong> để chỉnh sửa an toàn.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleCreateVersion}
+                    isLoading={isCreatingVersion}
+                    className="bg-amber-600 hover:bg-amber-700 text-white border-transparent"
+                  >
+                    <Layers className="w-4 h-4 mr-2" /> Tạo bản sao ngay
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Health Score Widget */}
+          <div className="p-4 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center justify-between transition-all">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-full">
+                <Activity className={`w-6 h-6 ${isCheckingFeasibility ? 'text-slate-400 animate-pulse' : 'text-blue-500'}`} />
+              </div>
               <div>
-                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-                  Ma trận này đã dùng để sinh {matrixUsage.total_runs} đề
-                </p>
-                <p className="text-xs text-amber-600/80 dark:text-amber-400/80 mt-0.5">
-                  Lưu thay đổi sẽ tạo phiên bản mới thay vì ghi đè bản gốc.
+                <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Chỉ số sức khỏe (Health Score)
+                  {isCheckingFeasibility && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal animate-pulse">Đang kiểm tra...</span>}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Đánh giá khả năng sinh đề thành công dựa trên ngân hàng câu hỏi.
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCreateVersion}
-                isLoading={isCreatingVersion}
-                className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400"
-              >
-                Tạo bản sao ngay
-              </Button>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              {healthScore !== null && !isCheckingFeasibility && (
+                <div className="text-right">
+                  <div className="flex items-end justify-end gap-1">
+                    <span className={`text-2xl font-black ${healthScore === 100 ? 'text-green-500' : healthScore >= 80 ? 'text-amber-500' : 'text-red-500'}`}>
+                      {healthScore}%
+                    </span>
+                  </div>
+                  {shortages.length > 0 && (
+                    <p className="text-xs text-red-500 font-medium mt-1">Thiếu {shortages.length} ô/nhóm</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {shortages.length > 0 && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-lg">
+              <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1">Cảnh báo thiếu câu hỏi:</p>
+              <ul className="list-disc list-inside text-xs text-red-600 dark:text-red-300 space-y-0.5">
+                {shortages.slice(0, 5).map((s, i) => <li key={i}>{s}</li>)}
+                {shortages.length > 5 && <li>...và {shortages.length - 5} ô khác</li>}
+              </ul>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -358,10 +441,32 @@ export default function MatrixFormPage() {
                   </Button>
                 )}
               </div>
-              <Button type="button" onClick={addRule} size="sm" variant="outline">
-                + Thêm quy tắc
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  type="button" 
+                  onClick={() => setShowVisualization(!showVisualization)} 
+                  size="sm" 
+                  variant="outline"
+                  className={showVisualization ? 'bg-primary-50 text-primary-600 border-primary-200' : ''}
+                >
+                  {showVisualization ? 'Ẩn Biểu đồ' : 'Xem Biểu đồ'}
+                </Button>
+                <Button type="button" onClick={addRule} size="sm" variant="outline">
+                  + Thêm quy tắc
+                </Button>
+              </div>
             </div>
+            
+            {showVisualization && rules.length > 0 && (
+              <div className="mb-4">
+                <MatrixVisualization 
+                  data={rules.map(r => ({
+                    ...r,
+                    knowledge_node: nodes.find(n => n.id === r.knowledge_node_id)
+                  }))} 
+                />
+              </div>
+            )}
 
             {rules.length === 0 ? (
               <div className="text-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">

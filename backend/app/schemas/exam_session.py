@@ -47,7 +47,7 @@ class ExamSessionInfoResponse(BaseModel):
     exam_id: int
     exam_name: str
     form_code: str
-    remaining_seconds: int
+    remaining_seconds: Optional[int] = None
     server_time: datetime
     participant_status: str
     questions: List[SessionQuestion] = []

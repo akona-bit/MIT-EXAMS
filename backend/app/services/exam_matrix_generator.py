@@ -78,28 +78,7 @@ def _candidates_for_cell(cell: MatrixCell, pool: List[CandidateQuestion], used_i
         return True
     return [q for q in pool if _matches(q)]
 
-def _largest_remainder(ratios: Dict[str, float], total: int) -> Dict[str, int]:
-    # Divide total according to ratios with the largest-remainder method.
-    if not ratios or total <= 0:
-        return {}
-    floors: Dict[str, int] = {}
-    remainders: Dict[str, float] = {}
-    for k, r in ratios.items():
-        if r <= 0:
-            continue
-        exact = r * total
-        floors[k] = int(exact)
-        remainders[k] = exact - int(exact)
-
-    allocated = sum(floors.values())
-    leftover = total - allocated
-    # Phân phối phần dư cho bucket có remainder lớn nhất (largest-remainder)
-    for k in sorted(remainders, key=lambda k: remainders[k], reverse=True):
-        if leftover <= 0:
-            break
-        floors[k] += 1
-        leftover -= 1
-    return {k: v for k, v in floors.items() if v > 0}
+from app.services.matrix.allocator import _largest_remainder
 
 def _pick_best(cands: List[CandidateQuestion], n: int, target_irt_b: Optional[float]) -> List[CandidateQuestion]:
     # Pick the best candidates by exposure, IRT distance, and random tie-breaker.

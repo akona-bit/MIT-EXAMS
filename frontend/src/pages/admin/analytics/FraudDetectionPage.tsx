@@ -12,7 +12,6 @@ interface FraudAlert {
 
 export default function FraudDetectionPage() {
   const [alerts, setAlerts] = useState<FraudAlert[]>([]);
-  const [ws, setWs] = useState<WebSocket | null>(null);
   
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<FraudAlert | null>(null);
@@ -35,8 +34,6 @@ export default function FraudDetectionPage() {
         console.error("Error parsing WS data", e);
       }
     };
-    
-    setWs(socket);
     
     return () => {
       socket.close();

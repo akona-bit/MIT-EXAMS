@@ -1,4 +1,3 @@
-import React from 'react';
 import MarkdownEditor from '../../editor/MarkdownEditor';
 import { PassageDraftState } from '../../../hooks/usePassageGroupDraft';
 

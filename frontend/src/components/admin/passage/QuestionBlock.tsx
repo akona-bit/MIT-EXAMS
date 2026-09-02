@@ -1,4 +1,3 @@
-import React from 'react';
 import MarkdownEditor from '../../editor/MarkdownEditor';
 import { QuestionBulkUpdateItem } from '../../../api/passages';
 import KnowledgeNodeSelector from '../question/KnowledgeNodeSelector';

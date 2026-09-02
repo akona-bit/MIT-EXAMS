@@ -41,7 +41,7 @@ export default function ExamsPage() {
         </div>
       )
     },
-    { key: "duration_minutes", header: "Thời gian (phút)", render: (row) => `${row.duration_minutes} phút` },
+    { key: "duration_minutes", header: "Thời gian (phút)", render: (row) => row.duration_minutes !== null ? `${row.duration_minutes} phút` : "Không giới hạn" },
     {
       key: "status",
       header: "Trạng thái",

@@ -1,5 +1,5 @@
 import api from './client';
-import { Passage, Question, QuestionCreate } from '../types';
+import { Passage, QuestionCreate } from '../types';
 
 export interface PassageSearchResponse {
   results: {
@@ -56,5 +56,9 @@ export const passageApi = {
   bulkUpdateQuestions: async (code: string, questions: QuestionBulkUpdateItem[]) => {
     const response = await api.put<string[]>(`/api/v1/passages/${code}/questions/bulk`, { questions });
     return response.data;
+  },
+  
+  delete: async (code: string) => {
+    await api.delete(`/api/v1/passages/${code}`);
   }
 };

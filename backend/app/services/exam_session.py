@@ -144,6 +144,8 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
     
     if participant.status == ParticipantStatus.SUBMITTED:
         remaining_seconds = 0
+    elif exam.duration_minutes is None:
+        remaining_seconds = None
     elif participant.start_time:
         # Nếu exam.end_time có giá trị, giới hạn thời gian nộp bài tại end_time
         end_time_limit = exam.end_time if exam.end_time else None

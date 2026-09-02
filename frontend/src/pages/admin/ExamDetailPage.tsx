@@ -151,7 +151,7 @@ export default function ExamDetailPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-slate-500 dark:text-slate-400">Thời gian làm bài</p>
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.duration_minutes} phút</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.duration_minutes !== null ? `${exam.duration_minutes} phút` : "Không giới hạn"}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-slate-500 dark:text-slate-400">ID Ma trận</p>
@@ -248,6 +248,13 @@ export default function ExamDetailPage() {
                   {irtStatus === 'PENDING' || irtStatus === 'STARTED' ? `Đang chạy IRT... (${irtStatus})` : 'Chạy phân tích IRT'}
                 </Button>
               </>
+            )}
+            {hasExistingForms && (
+                <Button variant="outline" onClick={() => {
+                  import('../../api/exams').then(api => api.exportExamLaTeX(exam.id));
+                }} className="w-full justify-center">
+                  Xuất Đề (LaTeX)
+                </Button>
             )}
             {exam.status === 'PUBLISHED' && (
               <Button variant="secondary" disabled className="w-full justify-center">Đang diễn ra</Button>

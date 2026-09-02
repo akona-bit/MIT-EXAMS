@@ -105,7 +105,7 @@ def test_create_question_singles_choice_3_answers_returns_400():
         content="Test question",
         level=1,
         type=QuestionType.SINGLE_CHOICE,
-        knowledge_node_id=1,
+        primary_knowledge_node_id=1,
         answers=_make_answers(3, [0]),
     )
     with TestClient(app) as client:
@@ -118,7 +118,7 @@ def test_create_question_singles_choice_4_answers_2_correct_returns_400():
         content="Test question",
         level=1,
         type=QuestionType.SINGLE_CHOICE,
-        knowledge_node_id=1,
+        primary_knowledge_node_id=1,
         answers=_make_answers(4, [0, 1]),
     )
     with TestClient(app) as client:
@@ -131,7 +131,7 @@ def test_create_question_singles_choice_4_answers_1_correct_returns_200():
         content="Test question",
         level=1,
         type=QuestionType.SINGLE_CHOICE,
-        knowledge_node_id=1,
+        primary_knowledge_node_id=1,
         answers=_make_answers(4, [0]),
     )
     with TestClient(app) as client:

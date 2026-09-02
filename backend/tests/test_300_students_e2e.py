@@ -23,7 +23,7 @@ from app.models.user import Role, User
 from app.models.passage import Passage
 from app.models.question import (
     Question, Answer, KnowledgeNode, KnowledgeNodeType,
-    QuestionType, QuestionStatus,
+    QuestionType, QuestionStatus, QuestionSkillTag,
 )
 from app.models.exam import (
     Exam, ExamStatus, ExamForm, ExamFormQuestion, ExamFormAnswer,
@@ -108,11 +108,11 @@ def seed_knowledge_and_questions(session, creator_id, n=NUM_QUESTIONS):
             content=f"Câu {i} - Phần {part}",
             level=random.choice([1, 2, 3]),
             type=QuestionType.SINGLE_CHOICE,
-            knowledge_node_id=kn.id,
             status=QuestionStatus.APPROVED,
             public_code=f"Q{i:04d}",
             creator_id=creator_id,
         )
+        q.skill_tags = [QuestionSkillTag(knowledge_node_id=kn.id, is_primary=True)]
         questions.append(q)
         session.add(q)
         session.flush()

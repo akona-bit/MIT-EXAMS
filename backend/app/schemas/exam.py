@@ -67,7 +67,7 @@ class GenerateExamRequest(BaseModel):
 class ExamPublishRequest(BaseModel):
     start_time: datetime
     end_time: datetime
-    duration_minutes: int
+    duration_minutes: Optional[int] = None
     show_score_mode: str
     show_answer_mode: str
 
@@ -108,7 +108,7 @@ class ExamResponse(BaseModel):
     created_at: datetime
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    duration_minutes: int
+    duration_minutes: Optional[int] = None
     show_score_mode: str
     show_answer_mode: str
     status: ExamStatus

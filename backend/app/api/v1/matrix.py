@@ -12,6 +12,7 @@ from app.schemas.exam import (
     MatrixImportExecuteRequest, SmartMatrixLeavesRequest, SmartMatrixLeavesResponse,
     SmartMatrixLeafNode, SmartMatrixProposeRequest, SmartMatrixProposeResponse,
     SmartMatrixProposedSkill, SmartMatrixConfirmRequest, SmartMatrixSkillAllocation,
+    MatrixRuleCreate
 )
 from app.services.matrix_import import MatrixImportService
 from app.services.knowledge_service import KnowledgeService
@@ -254,24 +255,54 @@ async def create_matrix_version(request: Request, matrix_id: int, db: AsyncSessi
     return result.scalars().first()
 
 
-@router.post("/{matrix_id}/check-feasibility", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def check_matrix_feasibility(matrix_id: int, db: AsyncSession = Depends(get_db)):
-    """Dry-run exam generation to check if matrix is feasible without saving results."""
-    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix_id))
-    matrix = result.scalars().first()
-    if not matrix:
-        raise HTTPException(status_code=404, detail="Matrix not found")
+from pydantic import BaseModel
+from typing import List, Optional
 
-    if not matrix.rules:
-        return {"feasible": True, "shortages": [], "message": "Ma trận trống — không có ô nào cần kiểm tra"}
+class FeasibilityCheckRequest(BaseModel):
+    rules: List[MatrixRuleCreate]
 
-    pool = await load_pool_from_db(db, matrix.rules)
-    matrix_cells = await parse_matrix_rules(db, matrix.rules)
-
+@router.post("/check-feasibility-local", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def check_matrix_feasibility_local(req: FeasibilityCheckRequest, db: AsyncSession = Depends(get_db)):
+    if not req.rules:
+        return {
+            "feasible": True, 
+            "shortages": [], 
+            "message": "Ma trận trống — không có ô nào cần kiểm tra",
+            "health_score": 100.0,
+            "total_required": 0,
+            "total_shortage": 0
+        }
+        
+    # We need to map MatrixRuleCreate to MatrixRule objects to reuse the generator logic
+    rules_obj = []
+    for i, r in enumerate(req.rules):
+        rules_obj.append(MatrixRule(
+            id=i,
+            knowledge_node_id=r.knowledge_node_id,
+            question_type=r.question_type,
+            level=r.level,
+            count=r.count,
+            part=r.part,
+            group_id=r.group_local_id # hacky but works for local check if needed
+        ))
+        
+    pool = await load_pool_from_db(db, rules_obj)
+    matrix_cells = await parse_matrix_rules(db, rules_obj)
     report = generate_exam(matrix=matrix_cells, pool=pool)
 
+    total_required = sum(c.count for c in matrix_cells)
+    total_shortage = sum(s.shortage for s in report.shortages)
+    health_score = round((total_required - total_shortage) / total_required * 100, 1) if total_required > 0 else 100.0
+
     if report.ok:
-        return {"feasible": True, "shortages": [], "message": "Ma trận khả thi — đủ câu cho mọi ô/nhóm"}
+        return {
+            "feasible": True, 
+            "shortages": [], 
+            "message": "Ma trận khả thi — đủ câu cho mọi ô/nhóm",
+            "health_score": health_score,
+            "total_required": total_required,
+            "total_shortage": 0
+        }
 
     shortages = []
     for s in report.shortages:
@@ -286,7 +317,74 @@ async def check_matrix_feasibility(matrix_id: int, db: AsyncSession = Depends(ge
         else:
             shortages.append(f"{label}: thiếu {s.shortage} câu")
 
-    return {"feasible": False, "shortages": shortages, "message": f"Ma trận THẤT BẠI — thiếu câu cho {len(shortages)} ô/nhóm"}
+    return {
+        "feasible": False, 
+        "shortages": shortages, 
+        "message": f"Ma trận THẤT BẠI — thiếu câu cho {len(shortages)} ô/nhóm",
+        "health_score": health_score,
+        "total_required": total_required,
+        "total_shortage": total_shortage
+    }
+
+
+@router.post("/{matrix_id}/check-feasibility", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def check_matrix_feasibility(matrix_id: int, db: AsyncSession = Depends(get_db)):
+    """Dry-run exam generation to check if matrix is feasible without saving results."""
+    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix_id))
+    matrix = result.scalars().first()
+    if not matrix:
+        raise HTTPException(status_code=404, detail="Matrix not found")
+
+    if not matrix.rules:
+        return {
+            "feasible": True, 
+            "shortages": [], 
+            "message": "Ma trận trống — không có ô nào cần kiểm tra",
+            "health_score": 100.0,
+            "total_required": 0,
+            "total_shortage": 0
+        }
+
+    pool = await load_pool_from_db(db, matrix.rules)
+    matrix_cells = await parse_matrix_rules(db, matrix.rules)
+
+    report = generate_exam(matrix=matrix_cells, pool=pool)
+
+    total_required = sum(c.count for c in matrix_cells)
+    total_shortage = sum(s.shortage for s in report.shortages)
+    health_score = round((total_required - total_shortage) / total_required * 100, 1) if total_required > 0 else 100.0
+
+    if report.ok:
+        return {
+            "feasible": True, 
+            "shortages": [], 
+            "message": "Ma trận khả thi — đủ câu cho mọi ô/nhóm",
+            "health_score": health_score,
+            "total_required": total_required,
+            "total_shortage": 0
+        }
+
+    shortages = []
+    for s in report.shortages:
+        cell = s.cell
+        label = f"Nhóm '{cell.group_label}'" if cell.group_label else f"Ô node#{cell.matrix_rule_id}"
+        if cell.level is not None:
+            level_name = LEVEL_NAMES.get(
+                {"NB": 1, "TH": 2, "VD": 3, "VDC": 4}.get(cell.level, 0),
+                cell.level
+            )
+            shortages.append(f"{label}: thiếu {s.shortage} câu (mức {level_name})")
+        else:
+            shortages.append(f"{label}: thiếu {s.shortage} câu")
+
+    return {
+        "feasible": False, 
+        "shortages": shortages, 
+        "message": f"Ma trận THẤT BẠI — thiếu câu cho {len(shortages)} ô/nhóm",
+        "health_score": health_score,
+        "total_required": total_required,
+        "total_shortage": total_shortage
+    }
 
 @router.post("/{matrix_id}/generate", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
@@ -426,6 +524,49 @@ async def preview_matrix_import(matrix_id: int, req: MatrixImportPreviewRequest,
     )
     return {"preview": preview}
 
+from fastapi import UploadFile, File, Form
+import json
+
+@router.post("/{matrix_id}/import/vision", response_model=MatrixImportPreviewResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def preview_vision_import(
+    matrix_id: int, 
+    file: UploadFile = File(...),
+    level_ratios: str = Form("{}"),
+    type_ratios: str = Form('{"SINGLE_CHOICE": 1.0}'),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Matrix).where(Matrix.id == matrix_id))
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Matrix not found")
+
+    image_bytes = await file.read()
+    try:
+        from app.services.matrix.vision import MatrixVisionService
+        tsv_content = await MatrixVisionService.parse_image_to_tsv(image_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    try:
+        level_ratios_dict = json.loads(level_ratios)
+        # convert keys to int
+        level_ratios_dict = {int(k): float(v) for k, v in level_ratios_dict.items()}
+    except:
+        level_ratios_dict = {}
+        
+    try:
+        type_ratios_dict = json.loads(type_ratios)
+    except:
+        type_ratios_dict = {"SINGLE_CHOICE": 1.0}
+
+    preview = await MatrixImportService.preview_import(
+        db=db,
+        content=tsv_content,
+        level_ratios=level_ratios_dict,
+        type_ratios=type_ratios_dict
+    )
+    return {"preview": preview}
+
+
 @router.post("/{matrix_id}/import/execute", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def execute_matrix_import(matrix_id: int, req: MatrixImportExecuteRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Matrix).where(Matrix.id == matrix_id))
@@ -450,98 +591,9 @@ async def get_smart_leaves(
     req: SmartMatrixLeavesRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all descendant leaf nodes for selected scope nodes, with question counts.
-    
-    Traverses ALL DAG relations (not just primary) to find every skill
-    that belongs to the selected scope.
-    """
-    # Deduplicate input
-    unique_ids = list(set(req.node_ids))
-    
-    # Get descendant leaf nodes via DAG traversal (all paths)
-    leaf_ids = await KnowledgeService.get_all_descendant_leaves(db, unique_ids)
-    
-    # If a selected node IS a leaf itself, include it
-    for nid in unique_ids:
-        if await KnowledgeService.is_leaf(db, nid) and nid not in leaf_ids:
-            leaf_ids.append(nid)
-    
-    # Deduplicate
-    leaf_ids = list(set(leaf_ids))
-    
-    if not leaf_ids:
-        return SmartMatrixLeavesResponse(leaves=[], total_questions_in_bank=0)
-    
-    # Load node details + question counts
-    leaves = []
-    total_count = 0
-    
-    for lid in leaf_ids:
-        node_res = await db.execute(
-            select(KnowledgeNode).where(KnowledgeNode.id == lid)
-        )
-        node = node_res.scalars().first()
-        if not node:
-            continue
-        
-        # Count APPROVED questions
-        q_count = await KnowledgeService.count_approved_questions(db, lid)
-        total_count += q_count
-        
-        # Resolve path (topic > concept > skill)
-        path_parts = await _resolve_node_path(db, lid)
-        
-        # Find topic and concept names from path
-        topic_name = None
-        concept_name = None
-        if len(path_parts) >= 1:
-            topic_name = path_parts[0]
-        if len(path_parts) >= 2:
-            concept_name = path_parts[1]
-        
-        leaves.append(SmartMatrixLeafNode(
-            node_id=lid,
-            name=node.name,
-            node_type=node.node_type.value if node.node_type else "SKILL",
-            path=" > ".join(path_parts),
-            question_count=q_count,
-            topic_name=topic_name,
-            concept_name=concept_name,
-        ))
-    
-    # Sort: leaves with more questions first
-    leaves.sort(key=lambda x: x.question_count, reverse=True)
-    
+    from app.services.matrix.smart_builder import SmartBuilderService
+    leaves, total_count = await SmartBuilderService.get_leaves(db, req.node_ids)
     return SmartMatrixLeavesResponse(leaves=leaves, total_questions_in_bank=total_count)
-
-
-async def _resolve_node_path(db: AsyncSession, node_id: int) -> List[str]:
-    """Resolve the path from leaf up to root via primary parents."""
-    path = []
-    current_id = node_id
-    visited = set()
-    
-    while current_id and current_id not in visited:
-        visited.add(current_id)
-        node_res = await db.execute(
-            select(KnowledgeNode).where(KnowledgeNode.id == current_id)
-        )
-        node = node_res.scalars().first()
-        if not node:
-            break
-        path.append(node.name)
-        
-        # Find primary parent
-        parent_res = await db.execute(
-            select(KnowledgeNodeParent.parent_id)
-            .where(and_(
-                KnowledgeNodeParent.child_id == current_id,
-                KnowledgeNodeParent.is_primary == True
-            ))
-        )
-        current_id = parent_res.scalar_one_or_none()
-    
-    return list(reversed(path))
 
 
 @router.post("/smart/propose", response_model=SmartMatrixProposeResponse)
@@ -549,128 +601,15 @@ async def propose_smart_distribution(
     req: SmartMatrixProposeRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Propose question distribution across skills based on available bank.
-    
-    Algorithm:
-    1. Get all descendant leaves with question counts
-    2. Distribute total_questions proportionally to available questions
-    3. Each skill gets minimum 1 if it has any questions (unless bank = 0)
-    4. Use largest-remainder method for exact integer distribution
-    """
-    unique_ids = list(set(req.node_ids))
-    leaf_ids = await KnowledgeService.get_all_descendant_leaves(db, unique_ids)
-    
-    for nid in unique_ids:
-        if await KnowledgeService.is_leaf(db, nid) and nid not in leaf_ids:
-            leaf_ids.append(nid)
-    leaf_ids = list(set(leaf_ids))
-    
-    # Load leaves with counts
-    skill_data = []
-    for lid in leaf_ids:
-        node_res = await db.execute(
-            select(KnowledgeNode).where(KnowledgeNode.id == lid)
-        )
-        node = node_res.scalars().first()
-        if not node:
-            continue
-        
-        q_count = await KnowledgeService.count_approved_questions(db, lid)
-        path_parts = await _resolve_node_path(db, lid)
-        
-        skill_data.append({
-            "node_id": lid,
-            "name": node.name,
-            "path": " > ".join(path_parts),
-            "question_count": q_count,
-        })
-    
-    # Filter out skills with 0 questions for allocation
-    # (they will be listed but proposed = 0)
-    skills_with_questions = [s for s in skill_data if s["question_count"] > 0]
-    skills_without_questions = [s for s in skill_data if s["question_count"] == 0]
-    
-    total_available = sum(s["question_count"] for s in skills_with_questions)
-    
-    # Proportional allocation using largest-remainder
-    if total_available > 0 and skills_with_questions:
-        raw_shares = []
-        for s in skills_with_questions:
-            share = (s["question_count"] / total_available) * req.total_questions
-            raw_shares.append(share)
-        
-        # Largest-remainder method
-        allocated = _largest_remainder_round(raw_shares, req.total_questions)
-        
-        for i, s in enumerate(skills_with_questions):
-            s["proposed_count"] = allocated[i]
-    else:
-        for s in skills_with_questions:
-            s["proposed_count"] = 0
-    
-    # Skills without questions get 0
-    for s in skills_without_questions:
-        s["proposed_count"] = 0
-    
-    # Build response
-    all_skills = skills_with_questions + skills_without_questions
-    all_skills.sort(key=lambda x: x["proposed_count"], reverse=True)
-    
-    total_proposed = sum(s["proposed_count"] for s in all_skills)
-    
-    skills = []
-    for s in all_skills:
-        pct = (s["proposed_count"] / total_proposed * 100) if total_proposed > 0 else 0
-        skills.append(SmartMatrixProposedSkill(
-            node_id=s["node_id"],
-            name=s["name"],
-            path=s["path"],
-            question_count=s["question_count"],
-            proposed_count=s["proposed_count"],
-            percentage=round(pct, 1),
-            has_warning=s["proposed_count"] > s["question_count"],
-        ))
-    
+    from app.services.matrix.smart_builder import SmartBuilderService
+    skills, total_proposed, total_available = await SmartBuilderService.propose_distribution(
+        db, req.node_ids, req.total_questions
+    )
     return SmartMatrixProposeResponse(
         skills=skills,
         total_proposed=total_proposed,
         total_in_bank=total_available,
     )
-
-
-def _largest_remainder_round(values: List[float], target_total: int) -> List[int]:
-    """Round float values to integers preserving exact total using largest-remainder method.
-    
-    Ensures each value gets at least 1 if it's > 0 (minimum allocation).
-    """
-    if not values:
-        return []
-    
-    n = len(values)
-    
-    # Floor each value
-    floored = [int(v) for v in values]
-    remainders = [v - int(v) for v in values]
-    
-    # How many more we need
-    deficit = target_total - sum(floored)
-    
-    # Distribute remaining by largest remainder
-    indices_by_remainder = sorted(range(n), key=lambda i: remainders[i], reverse=True)
-    
-    for i in range(deficit):
-        floored[indices_by_remainder[i % n]] += 1
-    
-    # Ensure minimum 1 for any with raw value > 0
-    for i in range(n):
-        if values[i] > 0 and floored[i] == 0:
-            # Find the skill with the most to spare
-            max_idx = max(range(n), key=lambda j: floored[j])
-            if floored[max_idx] > 1:
-                floored[max_idx] -= 1
-                floored[i] = 1
-    
-    return floored
 
 
 @router.post("/smart/confirm", response_model=MatrixResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -679,52 +618,16 @@ async def confirm_smart_matrix(
     req: SmartMatrixConfirmRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Create matrix with rules from smart builder allocations.
-    
-    Each skill allocation becomes multiple MatrixRules based on level_ratios
-    and type_ratios (using largest-remainder for distribution).
-    """
-    # Create matrix
-    matrix = Matrix(name=req.name, description=req.description, subject=req.subject)
-    db.add(matrix)
-    await db.flush()
-    
-    # Generate rules from allocations
-    for alloc in req.allocations:
-        if alloc.proposed_count <= 0:
-            continue
-        
-        # Distribute across levels using level_ratios
-        level_counts = _distribute_by_ratios(
-            alloc.proposed_count,
-            req.level_ratios,
-            list(req.level_ratios.keys()),
-        )
-        
-        # For each level, distribute across question types
-        for level_val, level_count in level_counts.items():
-            if level_count <= 0:
-                continue
-            
-            type_counts = _distribute_by_ratios(
-                level_count,
-                req.type_ratios,
-                list(req.type_ratios.keys()),
-            )
-            
-            for type_name, type_count in type_counts.items():
-                if type_count <= 0:
-                    continue
-                
-                rule = MatrixRule(
-                    matrix_id=matrix.id,
-                    knowledge_node_id=alloc.node_id,
-                    question_type=type_name,
-                    level=level_val,
-                    count=type_count,
-                    part=1,  # default part, admin can adjust later
-                )
-                db.add(rule)
+    from app.services.matrix.smart_builder import SmartBuilderService
+    matrix = await SmartBuilderService.confirm_matrix(
+        db=db,
+        name=req.name,
+        description=req.description,
+        subject=req.subject,
+        allocations=req.allocations,
+        level_ratios=req.level_ratios,
+        type_ratios=req.type_ratios
+    )
     
     await db.commit()
     
@@ -745,23 +648,4 @@ async def confirm_smart_matrix(
     return result.scalars().first()
 
 
-def _distribute_by_ratios(
-    total: int,
-    ratios: dict,
-    keys: list,
-) -> dict:
-    """Distribute total across keys by ratios, returning dict of {key: count}."""
-    if not ratios or total <= 0:
-        return {k: 0 for k in keys}
-    
-    # Normalise ratios
-    total_ratio = sum(ratios.values())
-    if total_ratio <= 0:
-        return {k: 0 for k in keys}
-    
-    normalised = {k: v / total_ratio for k, v in ratios.items()}
-    
-    raw_values = [normalised.get(k, 0) * total for k in keys]
-    allocated = _largest_remainder_round(raw_values, total)
-    
-    return {keys[i]: allocated[i] for i in range(len(keys))}
+# Bỏ _distribute_by_ratios, đã chuyển sang app.services.matrix.allocator

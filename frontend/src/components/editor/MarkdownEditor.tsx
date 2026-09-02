@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
@@ -7,7 +7,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { PandocImage } from "./PandocImage";
-import { LayoutGrid, Type, Image as ImageIcon } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 
 interface MarkdownEditorProps {
   value: string;

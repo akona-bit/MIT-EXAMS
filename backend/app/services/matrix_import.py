@@ -9,30 +9,7 @@ from app.models.exam import MatrixRule
 
 class MatrixImportService:
 
-    @staticmethod
-    def largest_remainder(total: int, ratios: Dict[Any, float]) -> Dict[Any, int]:
-        # Distribute total deterministically while preserving the exact total.
-        if total < 0:
-            raise ValueError("total must be non-negative")
-        if not ratios:
-            return {}
-        if any(ratio < 0 for ratio in ratios.values()):
-            raise ValueError("ratios must be non-negative")
-        ratio_sum = sum(ratios.values())
-        if ratio_sum <= 0:
-            raise ValueError("ratios must contain a positive value")
 
-        normalized = {key: value / ratio_sum for key, value in ratios.items()}
-        exact = {key: total * value for key, value in normalized.items()}
-        counts = {key: int(value) for key, value in exact.items()}
-        remainder_order = sorted(
-            exact,
-            key=lambda key: exact[key] - counts[key],
-            reverse=True,
-        )
-        for key in remainder_order[: total - sum(counts.values())]:
-            counts[key] += 1
-        return counts
     @staticmethod
     def parse_csv_content(content: str) -> List[Dict[str, str]]:
         """Parse CSV/TSV content into rows of dicts."""
@@ -209,12 +186,14 @@ class MatrixImportService:
 
             # Distribute each level independently by type. Every row keeps
             # exactly its declared count, even when ratios do not sum to 1.
+            from app.services.matrix.allocator import _largest_remainder
+            
             distributed_rules = []
             effective_level_ratios = level_ratios or {1: 1.0}
             effective_type_ratios = type_ratios or {"SINGLE_CHOICE": 1.0}
-            level_counts = MatrixImportService.largest_remainder(count, effective_level_ratios)
+            level_counts = _largest_remainder(effective_level_ratios, count)
             for level, level_count in level_counts.items():
-                type_counts = MatrixImportService.largest_remainder(level_count, effective_type_ratios)
+                type_counts = _largest_remainder(effective_type_ratios, level_count)
                 for question_type, question_count in type_counts.items():
                     if question_count > 0:
                         distributed_rules.append({
