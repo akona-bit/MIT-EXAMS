@@ -46,9 +46,13 @@ async def search_passages(q: str = "", limit: int = 10, db: AsyncSession = Depen
 
     return {"results": response_data}
 
-@router.get("/{public_code}", response_model=PassageResponse)
-async def get_passage(public_code: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Passage).where(Passage.public_code == public_code))
+@router.get("/{id_or_code}", response_model=PassageResponse)
+async def get_passage(id_or_code: str, db: AsyncSession = Depends(get_db)):
+    if id_or_code.isdigit():
+        result = await db.execute(select(Passage).where(Passage.id == int(id_or_code)))
+    else:
+        result = await db.execute(select(Passage).where(Passage.public_code == id_or_code))
+        
     passage = result.scalars().first()
     if not passage:
         raise HTTPException(status_code=404, detail="Passage not found")

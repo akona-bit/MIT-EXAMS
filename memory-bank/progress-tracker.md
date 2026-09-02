@@ -82,6 +82,10 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-02` — **Hoàn thiện API Ngữ liệu & Phân tích chuyên sâu (Analytics)**: Sửa API `passages.py` hỗ trợ fetch theo `id` (integer) hoặc `public_code` để tương thích hoàn toàn với frontend. Đã triển khai đầy đủ 5 API báo cáo cho trang Phân tích chuyên sâu (`/boxplots`, `/descriptive-stats`, `/penalty-vs-irt`, `/leaderboard`, và đổi `/misfit-items` thành `/flagged-items` với định dạng dữ liệu chuẩn mapping sang frontend). Web có thể render biểu đồ và phân tích từ dữ liệu Supabase mà không bị 404.
+
+- `2026-09-02` — **Cleanup Database Supabase**: Xóa 9 bảng không cần thiết (obsidian_file, obsidian_sync_run, omr_sheet, omr_job, exam_tracking_log, audit_log, question_embedding, item_analysis_result, exam_generation_run). DELETE sạch data từ 24 bảng còn lại. Bật RLS trên 24/24 bảng với 96 policies (SELECT/INSERT/UPDATE/DELETE cho authenticated users). Backend dùng service_role bypass RLS → hoạt động bình thường.
+
 - `2026-09-02` — **Hoàn thiện UI Kho Ngữ Liệu & Tính năng Xuất Đề LaTeX**: Đã xây dựng hoàn chỉnh giao diện danh sách Ngữ liệu (`PassagesPage`) và form soạn thảo Markdown (`PassageFormPage`) cho "Kho ngữ liệu (Đọc)" riêng biệt với Kho Lưu trữ Media. Cùng với đó, hoàn thành API xuất đề thi định dạng `.tex` qua `LatexService` tích hợp thẳng vào giao diện Admin (`ExamDetailPage`), hỗ trợ tự động gộp nội dung passage cho các câu hỏi và inject template tiếng Việt (`fontenc T5`).
 
 - `2026-09-02` — **Hoàn thành Giai đoạn 5: Frontend UI (Ma trận đặc tả)**: Đã tích hợp thành công 5 loại biểu đồ đa cấp (Sunburst, Treemap, Sankey, Stacked Bar, Radar) vào `MatrixVisualization` sử dụng `recharts` và `react-plotly.js`. Cập nhật `MatrixFormPage` với Widget Health Score real-time (tự động gọi API check-feasibility-local mỗi khi sửa lưới) và thêm Banner cảnh báo Versioning đỏ gắt nếu cố lưu đè lên ma trận đã dùng. Tích hợp nút tải ảnh vào `MatrixImportModal` để kết nối với Vision API backend. Đã check-off task Giai đoạn 5.

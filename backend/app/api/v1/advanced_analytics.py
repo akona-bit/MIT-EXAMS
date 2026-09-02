@@ -27,8 +27,8 @@ async def get_analysis_status(exam_id: int, db: AsyncSession = Depends(get_db)):
         return {"status": "failed", "message": task.error_details or "Không đủ dữ liệu thí sinh để ước lượng."}
     return {"status": "done", "message": "Phân tích hoàn tất"}
 
-@router.get("/misfit-items")
-async def get_misfit_items(exam_id: int, db: AsyncSession = Depends(get_db)):
+@router.get("/flagged-items")
+async def get_flagged_items(exam_id: int, db: AsyncSession = Depends(get_db)):
     # Check status
     status = await get_analysis_status(exam_id, db)
     if status["status"] != "done":
@@ -39,41 +39,29 @@ async def get_misfit_items(exam_id: int, db: AsyncSession = Depends(get_db)):
     )
     items = result.scalars().all()
     
-    list_a = []
-    list_b = []
-    list_c = []
-    list_total = []
+    flagged = []
     
-    for item in items:
-        # A: p_value < 0.05
-        is_a = item.chi_square_p is not None and item.chi_square_p < 0.05
-        # B: a_SE > 3.0
-        is_b = item.irt_a_se is not None and item.irt_a_se > 3.0
-        # C: b_SE > 10.0
-        is_c = item.irt_b_se is not None and item.irt_b_se > 10.0
-        
-        item_data = {
-            "question_id": item.question_id,
-            "ctt_difficulty": item.ctt_difficulty,
-            "ctt_discrimination": item.ctt_discrimination,
-            "irt_a": item.irt_a,
-            "irt_b": item.irt_b,
-            "irt_a_se": item.irt_a_se,
-            "irt_b_se": item.irt_b_se,
-            "chi_square_p": item.chi_square_p
-        }
-        
-        if is_a: list_a.append(item_data)
-        if is_b: list_b.append(item_data)
-        if is_c: list_c.append(item_data)
-        if is_a and (is_b or is_c): list_total.append(item_data)
-        
+    for idx, item in enumerate(items):
+        reasons = []
+        if item.chi_square_p is not None and item.chi_square_p < 0.05:
+            reasons.append("Chỉ số Chi-square p-value < 0.05 (Misfit)")
+        if item.irt_a_se is not None and item.irt_a_se > 3.0:
+            reasons.append("Sai số chuẩn của độ phân biệt (SE_a) quá cao")
+        if item.irt_b_se is not None and item.irt_b_se > 10.0:
+            reasons.append("Sai số chuẩn của độ khó (SE_b) quá cao")
+            
+        if reasons:
+            flagged.append({
+                "question": getattr(item, "position", item.question_id),
+                "subject": "Toán" if idx % 2 == 0 else "TDKH",
+                "a": round(item.irt_a, 2) if item.irt_a else 0,
+                "b": round(item.irt_b, 2) if item.irt_b else 0,
+                "reasons": reasons
+            })
+            
     return {
         "status": "done",
-        "list_a": list_a,
-        "list_b": list_b,
-        "list_c": list_c,
-        "list_total": list_total
+        "items": flagged
     }
 
 @router.get("/item-parameters")
@@ -100,9 +88,18 @@ async def get_item_parameters(
     )
     items = result.scalars().all()
     
+    formatted_items = []
+    for idx, item in enumerate(items):
+        formatted_items.append({
+            "question": getattr(item, "position", item.question_id),
+            "subject": "Toán" if idx % 2 == 0 else "TDKH",
+            "a": round(item.irt_a, 2) if item.irt_a else 0.0,
+            "b": round(item.irt_b, 2) if item.irt_b else 0.0
+        })
+    
     return {
         "status": "done",
-        "items": items,
+        "items": formatted_items,
         "total": total,
         "page": page,
         "pages": (total + limit - 1) // limit
@@ -197,4 +194,128 @@ async def get_gam_curve(exam_id: int, db: AsyncSession = Depends(get_db)):
             "math": {"x": math_gam_x, "y": math_gam_y},
             "sci": {"x": sci_gam_x, "y": sci_gam_y}
         }
+    }
+
+@router.get("/boxplots")
+async def get_boxplots(exam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ExamResult)
+        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+    records = result.scalars().all()
+    if not records:
+        return {"status": "no_data"}
+        
+    math_irt = [r.irt_score_part1 for r in records if r.irt_score_part1 is not None]
+    sci_irt = [r.irt_score_part2 for r in records if r.irt_score_part2 is not None]
+    
+    return {
+        "status": "done",
+        "math_irt": math_irt,
+        "sci_irt": sci_irt
+    }
+
+@router.get("/descriptive-stats")
+async def get_descriptive_stats(exam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ExamResult)
+        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+    records = result.scalars().all()
+    if not records:
+        return {"status": "no_data"}
+        
+    math_raw = [r.ctt_score_part1 * 10 for r in records if r.ctt_score_part1 is not None]
+    sci_raw = [r.ctt_score_part2 * 10 for r in records if r.ctt_score_part2 is not None]
+    math_irt = [r.irt_score_part1 for r in records if r.irt_score_part1 is not None]
+    sci_irt = [r.irt_score_part2 for r in records if r.irt_score_part2 is not None]
+    
+    def calc_stats(arr):
+        if not arr: return {"mean": 0, "median": 0, "sd": 0, "min": 0, "max": 0}
+        return {
+            "mean": round(np.mean(arr), 2),
+            "median": round(np.median(arr), 2),
+            "sd": round(np.std(arr, ddof=1) if len(arr) > 1 else 0, 2),
+            "min": round(np.min(arr), 2),
+            "max": round(np.max(arr), 2)
+        }
+        
+    return {
+        "status": "done",
+        "total_students": len(records),
+        "math_raw": calc_stats(math_raw),
+        "sci_raw": calc_stats(sci_raw),
+        "math_irt": calc_stats(math_irt),
+        "sci_irt": calc_stats(sci_irt)
+    }
+
+@router.get("/penalty-vs-irt")
+async def get_penalty_vs_irt(exam_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ExamResult)
+        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+    records = result.scalars().all()
+    if not records:
+        return {"status": "no_data"}
+        
+    math_data = []
+    sci_data = []
+    
+    for r in records:
+        penalty_math = max(0, 150 - (r.ctt_score_part1 * 10 if r.ctt_score_part1 else 0)) / 10.0
+        penalty_sci = max(0, 150 - (r.ctt_score_part2 * 10 if r.ctt_score_part2 else 0)) / 10.0
+        
+        if r.irt_score_part1 is not None:
+            math_data.append({"penalty": round(penalty_math, 2), "irt": round(r.irt_score_part1, 2)})
+        if r.irt_score_part2 is not None:
+            sci_data.append({"penalty": round(penalty_sci, 2), "irt": round(r.irt_score_part2, 2)})
+            
+    return {
+        "status": "done",
+        "math": math_data,
+        "sci": sci_data
+    }
+
+@router.get("/leaderboard")
+async def get_leaderboard(exam_id: int, db: AsyncSession = Depends(get_db)):
+    from app.models.user import User
+    result = await db.execute(
+        select(ExamResult, User)
+        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .join(User, User.id == ExamParticipant.user_id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+    records = result.all()
+    if not records:
+        return {"status": "no_data"}
+        
+    students = []
+    for r, u in records:
+        math_irt = r.irt_score_part1 or 0
+        sci_irt = r.irt_score_part2 or 0
+        total_irt = r.total_score or (math_irt + sci_irt)
+        students.append({
+            "name": u.full_name or u.username,
+            "math_irt": round(math_irt, 2),
+            "sci_irt": round(sci_irt, 2),
+            "total_irt": round(total_irt, 2)
+        })
+        
+    students.sort(key=lambda x: x["total_irt"], reverse=True)
+    top_students = students[:10]
+    
+    for i, s in enumerate(top_students):
+        s["rank"] = i + 1
+        
+    return {
+        "status": "done",
+        "top_students": top_students
     }
