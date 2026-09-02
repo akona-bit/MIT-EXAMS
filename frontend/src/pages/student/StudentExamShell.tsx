@@ -4,6 +4,8 @@ import { useAuth } from "../../stores/authStore";
 import api from "../../api/client";
 import QuestionRenderer from "../../components/student/QuestionRenderer";
 import QuestionNavStrip from "../../components/student/QuestionNavGrid";
+import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
+import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -37,10 +39,25 @@ export default function StudentExamShell() {
   // Passage cache
   const [passageCache, setPassageCache] = useState<Record<number, any>>({});
   const [loadingPassage, setLoadingPassage] = useState(false);
+  const [maintenance, setMaintenance] = useState<MaintenanceStatus | null>(null);
 
   // ─── Fetch session ───
   useEffect(() => {
-    fetchSession();
+    const checkMaintenance = async () => {
+      try {
+        const status = await getMaintenanceStatus();
+        setMaintenance(status);
+        if (!status.maintenance_mode_all && !status.maintenance_mode_exam) {
+          fetchSession();
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        // Fallback
+        fetchSession();
+      }
+    };
+    checkMaintenance();
   }, [id]);
 
   const fetchSession = async () => {
@@ -257,6 +274,10 @@ export default function StudentExamShell() {
   const answeredCount = Object.keys(savedAnswers).length;
   const totalQuestions = sessionInfo?.questions?.length || 0;
   const isUrgent = timeLeft < 300;
+
+  if (maintenance?.maintenance_mode_all || maintenance?.maintenance_mode_exam) {
+    return <MaintenanceScreen />;
+  }
 
   // ─── Loading / Error / Terminal states ───
   if (loading) {

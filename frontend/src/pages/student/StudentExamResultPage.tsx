@@ -19,6 +19,8 @@ import {
   type ReviewQuestion,
   type StudentExamResult,
 } from "../../api/studentExamResult";
+import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
+import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 
 type ReviewFilter = "all" | "wrong" | "skipped";
 
@@ -39,6 +41,7 @@ export default function StudentExamResultPage() {
   const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
+  const [maintenance, setMaintenance] = useState<MaintenanceStatus | null>(null);
 
   const loadResult = useCallback(async () => {
     if (!examId) return;
@@ -66,10 +69,27 @@ export default function StudentExamResultPage() {
   }, [examId]);
 
   useEffect(() => {
-    loadResult();
+    const checkMaintenance = async () => {
+      try {
+        const status = await getMaintenanceStatus();
+        setMaintenance(status);
+        if (!status.maintenance_mode_all && !status.maintenance_mode_result) {
+          loadResult();
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        loadResult();
+      }
+    };
+    checkMaintenance();
   }, [loadResult]);
 
   // --- Trạng thái chờ / lỗi ---
+  if (maintenance?.maintenance_mode_all || maintenance?.maintenance_mode_result) {
+    return <MaintenanceScreen />;
+  }
+
   if (isLoading) {
     return (
       <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">

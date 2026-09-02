@@ -82,6 +82,10 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-02` — **Hoàn thiện Tính năng Đăng nhập & Xác thực**: Tích hợp luồng Supabase OTP cho chức năng Guest Login và Forgot Password. Bổ sung `registration_number` (Số báo danh SBD - 6 số tự động) vào `User` model, cập nhật `dependencies.py` để auto-generate SBD khi người dùng được tạo. Thay thế toàn bộ `LoginPage.tsx` hỗ trợ đăng nhập qua SBD hoặc Email và lựa chọn Mật khẩu hoặc OTP. Cập nhật `AccessControlPage.tsx` và `admin.py` hỗ trợ tính năng mời hàng loạt (multi-select/invite qua mảng emails). Đã verify frontend build thành công.
+
+- `2026-09-02` — **Hoàn thiện tính năng Mời người dùng & Chế độ Bảo trì**: Cập nhật `AccessControlPage` để Admin có thể mời người dùng mới bằng Gmail thông qua hệ thống `invite_user_by_email` của Supabase Auth (bao gồm chọn phân quyền: Học sinh, Giáo viên, Admin). Xây dựng `SystemSettingsPage` cho phép Admin bật/tắt **Chế độ bảo trì** theo các mức độ (toàn bộ, phòng thi, kết quả). Chế độ bảo trì tự động chặn truy cập của học sinh và hiển thị màn hình `MaintenanceScreen`, nhưng hoàn toàn không ảnh hưởng đến Giáo viên và Admin để đảm bảo vận hành.
+
 - `2026-09-02` — **Hoàn thiện API Ngữ liệu & Phân tích chuyên sâu (Analytics)**: Sửa API `passages.py` hỗ trợ fetch theo `id` (integer) hoặc `public_code` để tương thích hoàn toàn với frontend. Đã triển khai đầy đủ 5 API báo cáo cho trang Phân tích chuyên sâu (`/boxplots`, `/descriptive-stats`, `/penalty-vs-irt`, `/leaderboard`, và đổi `/misfit-items` thành `/flagged-items` với định dạng dữ liệu chuẩn mapping sang frontend). Web có thể render biểu đồ và phân tích từ dữ liệu Supabase mà không bị 404.
 
 - `2026-09-02` — **Cleanup Database Supabase**: Xóa 9 bảng không cần thiết (obsidian_file, obsidian_sync_run, omr_sheet, omr_job, exam_tracking_log, audit_log, question_embedding, item_analysis_result, exam_generation_run). DELETE sạch data từ 24 bảng còn lại. Bật RLS trên 24/24 bảng với 96 policies (SELECT/INSERT/UPDATE/DELETE cho authenticated users). Backend dùng service_role bypass RLS → hoạt động bình thường.

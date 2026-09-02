@@ -141,6 +141,85 @@ async def create_staff(req: StaffCreate, db: AsyncSession = Depends(get_db), cur
     await log_audit(db, current_user.id, AuditAction.CREATE_USER, "User", user.id, f"Created staff user {user.username} with role {role.name}")
     return {"id": user.id, "username": user.username, "role": role.name}
 
+class UserInviteRequest(BaseModel):
+    emails: List[str]
+    role_name: str
+    full_name: Optional[str] = None
+
+@router.post("/users/invite", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def invite_user(req: UserInviteRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    role_result = await db.execute(select(Role).where(Role.name == req.role_name))
+    role = role_result.scalars().first()
+    if not role:
+        raise HTTPException(status_code=400, detail="Invalid role name")
+        
+    from supabase import create_client
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not url or not key:
+        raise HTTPException(status_code=500, detail="Supabase admin config missing")
+        
+    client = create_client(url, key)
+    
+    results = []
+    
+    for email_raw in req.emails:
+        email = email_raw.strip().lower()
+        if not email:
+            continue
+            
+        existing = await db.execute(select(User).where(User.email == email))
+        if existing.scalars().first():
+            results.append({"email": email, "status": "error", "message": "A user with this email already exists"})
+            continue
+            
+        try:
+            response = client.auth.admin.invite_user_by_email(email, options={"data": {"full_name": req.full_name, "role": req.role_name}})
+            auth_user = getattr(response, "user", None)
+            if auth_user is None and isinstance(response, dict):
+                auth_user = response.get("user")
+            auth_id = getattr(auth_user, "id", None)
+            if auth_id is None and isinstance(auth_user, dict):
+                auth_id = auth_user.get("id")
+                
+            if not auth_id:
+                results.append({"email": email, "status": "error", "message": "No user ID returned from Supabase"})
+                continue
+                
+            # Add to local DB
+            username = email.split("@", 1)[0]
+            existing_username = await db.execute(select(User).where(User.username == username))
+            if existing_username.scalars().first():
+                import random
+                username = f"{username}_{random.randint(1000, 9999)}"
+                
+            import random
+            while True:
+                reg_num = f"{random.randint(100000, 999999)}"
+                existing_reg = await db.execute(select(User).where(User.registration_number == reg_num))
+                if not existing_reg.scalars().first():
+                    break
+                
+            user = User(
+                username=username,
+                email=email,
+                full_name=req.full_name,
+                supabase_id=str(auth_id),
+                registration_number=reg_num,
+                role_id=role.id,
+                is_active=True
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+            
+            await log_audit(db, current_user.id, AuditAction.CREATE_USER, "User", user.id, f"Invited user {email} with role {role.name}")
+            results.append({"email": email, "status": "success", "id": user.id})
+        except Exception as e:
+            results.append({"email": email, "status": "error", "message": str(e)})
+            
+    return {"results": results, "message": f"Processed {len(req.emails)} invitations"}
+
 @router.put("/staff/{user_id}", dependencies=[Depends(RequireRole(["ADMIN"]))])
 async def update_staff(user_id: int, req: StaffUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(select(User).where(User.id == user_id))

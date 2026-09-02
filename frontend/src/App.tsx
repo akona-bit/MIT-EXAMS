@@ -12,6 +12,8 @@ import AdminShell from "./components/layout/AdminShell";
 
 // Pages
 import LoginPage from "./pages/auth/LoginPage";
+import GuestPage from "./pages/auth/GuestPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import DashboardPage from "./pages/admin/DashboardPage";
 import PassagesPage from "./pages/admin/PassagesPage";
 import PassageFormPage from "./pages/admin/PassageFormPage";
@@ -38,6 +40,7 @@ import StudentComparePage from "./pages/admin/analytics/StudentComparePage";
 import AdvancedAnalyticsPage from "./pages/admin/analytics/AdvancedAnalyticsPage";
 import FraudDetectionPage from "./pages/admin/analytics/FraudDetectionPage";
 import ExamComparePage from "./pages/admin/ExamComparePage";
+import SystemSettingsPage from "./pages/admin/settings/SystemSettingsPage";
 
 // --- Route Guards ---
 
@@ -93,6 +96,8 @@ function AppRoutes() {
       {/* Public Routes */}
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/guest" element={<GuestPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
 
       {/* Admin/Teacher Routes */}
@@ -129,6 +134,7 @@ function AppRoutes() {
           <Route path="students/:id" element={<StudentDetailPage />} />
           <Route path="analytics/ds" element={<AdvancedAnalyticsPage />} />
           <Route path="analytics/fraud" element={<FraudDetectionPage />} />
+          <Route path="settings" element={<SystemSettingsPage />} />
         </Route>
       </Route>
 

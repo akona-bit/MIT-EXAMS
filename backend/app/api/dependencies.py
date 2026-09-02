@@ -84,10 +84,19 @@ async def get_current_user(
                     username = f"{base_username}{counter}"
                     counter += 1
 
+                import random
+                # Generate unique 6-digit registration_number
+                while True:
+                    reg_num = f"{random.randint(100000, 999999)}"
+                    existing_reg = await db.execute(select(User).where(User.registration_number == reg_num))
+                    if not existing_reg.scalars().first():
+                        break
+
                 user = User(
                     email=email,
                     supabase_id=supabase_id,
                     username=username,
+                    registration_number=reg_num,
                     role_id=student_role.id,
                     is_active=True
                 )

@@ -1,10 +1,22 @@
 import { useState, useEffect } from "react";
-import { getUsers, updateUserAccess, type UserAccess } from "../../api/admin";
+import { getUsers, updateUserAccess, inviteUser, type UserAccess } from "../../api/admin";
+import Button from "../../components/ui/Button";
+import Modal from "../../components/ui/Modal";
+import Input from "../../components/ui/Input";
 
 export default function AccessControlPage() {
   const [users, setUsers] = useState<UserAccess[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Invite User state
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteFullName, setInviteFullName] = useState("");
+  const [inviteRole, setInviteRole] = useState("STUDENT");
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteError, setInviteError] = useState("");
 
   const loadUsers = async () => {
     try {
@@ -30,6 +42,43 @@ export default function AccessControlPage() {
     }
   };
 
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsInviting(true);
+    setInviteMessage("");
+    setInviteError("");
+    try {
+      const emailList = inviteEmail
+        .split(/[,;\n]+/)
+        .map(email => email.trim())
+        .filter(email => email.length > 0);
+        
+      if (emailList.length === 0) {
+        throw new Error("Vui lòng nhập ít nhất một email hợp lệ.");
+      }
+      
+      const res = await inviteUser({
+        emails: emailList,
+        full_name: inviteFullName,
+        role_name: inviteRole,
+      });
+      setInviteMessage(res.message || "Đã gửi lời mời thành công!");
+      setInviteEmail("");
+      setInviteFullName("");
+      setInviteRole("STUDENT");
+      // Reload user list
+      loadUsers();
+      setTimeout(() => {
+        setIsInviteModalOpen(false);
+        setInviteMessage("");
+      }, 2000);
+    } catch (err: any) {
+      setInviteError(err.response?.data?.detail || "Lỗi khi gửi lời mời.");
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center text-neutral-500">Đang tải danh sách...</div>;
   }
@@ -42,9 +91,12 @@ export default function AccessControlPage() {
             Quản lý quyền xem đáp án
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Cấp quyền cho thí sinh được phép xem đáp án và giải thích chi tiết.
+            Quản lý quyền xem đáp án và mời người dùng mới vào hệ thống.
           </p>
         </div>
+        <Button onClick={() => setIsInviteModalOpen(true)}>
+          + Mời người dùng
+        </Button>
       </div>
 
       {error && (
@@ -107,6 +159,73 @@ export default function AccessControlPage() {
           </table>
         </div>
       </div>
+
+      <Modal
+        isOpen={isInviteModalOpen}
+        onClose={() => !isInviting && setIsInviteModalOpen(false)}
+        title="Mời người dùng bằng Gmail"
+      >
+        <form onSubmit={handleInvite} className="space-y-4 mt-4">
+          {inviteMessage && (
+            <div className="rounded-lg bg-success-50 p-4 text-sm text-success-700">
+              {inviteMessage}
+            </div>
+          )}
+          {inviteError && (
+            <div className="rounded-lg bg-danger-50 p-4 text-sm text-danger-700">
+              {inviteError}
+            </div>
+          )}
+          
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Danh sách Email (ngăn cách bởi dấu phẩy, chấm phẩy hoặc xuống dòng)
+            </label>
+            <textarea
+              required
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="nguyenvana@gmail.com, nguyenvanb@gmail.com"
+              rows={3}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            />
+          </div>
+          <Input
+            label="Họ và tên"
+            value={inviteFullName}
+            onChange={(e) => setInviteFullName(e.target.value)}
+            placeholder="Nguyễn Văn A"
+          />
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Phân quyền
+            </label>
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            >
+              <option value="STUDENT">Học sinh (Student)</option>
+              <option value="TEACHER">Giáo viên (Teacher)</option>
+              <option value="ADMIN">Quản trị viên (Admin)</option>
+            </select>
+          </div>
+          
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsInviteModalOpen(false)}
+              disabled={isInviting}
+            >
+              Hủy
+            </Button>
+            <Button type="submit" disabled={isInviting}>
+              {isInviting ? "Đang gửi..." : "Gửi lời mời"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

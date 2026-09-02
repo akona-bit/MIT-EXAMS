@@ -2,58 +2,20 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
-import { useAuth } from "../../stores/authStore";
-import { resolveSBD } from "../../api/auth";
 import { supabase } from "../../lib/supabase";
+import { updateMe } from "../../api/auth";
 
-type LoginMethod = "password" | "otp";
-
-export default function LoginPage() {
-  const [method, setMethod] = useState<LoginMethod>("password");
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
+export default function GuestPage() {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   
   const [otpStep, setOtpStep] = useState(false);
   const [otp, setOtp] = useState("");
-  const [resolvedEmail, setResolvedEmail] = useState("");
   
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login } = useAuth();
   const navigate = useNavigate();
-
-  const handleResolveIdentifier = async (ident: string) => {
-    // If it's a 6-digit number, assume SBD
-    if (/^\d{6}$/.test(ident)) {
-      try {
-        const res = await resolveSBD(ident);
-        return res.email;
-      } catch (e: any) {
-        throw new Error("Số báo danh không tồn tại");
-      }
-    }
-    return ident;
-  };
-
-  const handleSubmitPassword = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    try {
-      const emailToUse = await handleResolveIdentifier(identifier);
-      const user = await login({ username: emailToUse, password });
-      const targetRoute = user.role?.name === "STUDENT" ? "/student" : "/admin";
-      navigate(targetRoute);
-    } catch (err: any) {
-      setError(
-        err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSendOtp = async (e: FormEvent) => {
     e.preventDefault();
@@ -61,11 +23,13 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const emailToUse = await handleResolveIdentifier(identifier);
-      setResolvedEmail(emailToUse);
-      
       const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: emailToUse,
+        email,
+        options: {
+          data: {
+            full_name: fullName,
+          }
+        }
       });
       
       if (otpError) throw otpError;
@@ -86,14 +50,23 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: resolvedEmail,
+        email,
         token: otp,
         type: "email",
       });
       
       if (verifyError) throw verifyError;
-      // Wait for AuthProvider to sync
-      setTimeout(() => navigate("/student"), 1000);
+      
+      // Wait for AuthProvider to sync context and set token
+      // After login, we want to update the full name on our backend
+      setTimeout(async () => {
+        try {
+          await updateMe(fullName);
+        } catch (e) {
+          console.error("Failed to update guest full name", e);
+        }
+        navigate("/student");
+      }, 1500);
     } catch (err: any) {
       setError("Mã OTP không đúng hoặc đã hết hạn.");
       setIsLoading(false);
@@ -125,7 +98,7 @@ export default function LoginPage() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Xác thực OTP</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  Mã xác thực đã được gửi tới email <span className="font-semibold">{resolvedEmail}</span>
+                  Mã xác thực đã được gửi tới email <span className="font-semibold">{email}</span>
                 </p>
               </div>
 
@@ -157,28 +130,10 @@ export default function LoginPage() {
           ) : (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Đăng nhập</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Đăng nhập Nhanh</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  Chọn phương thức đăng nhập
+                  Dành cho thí sinh chưa có tài khoản. Mã OTP sẽ được gửi về email của bạn.
                 </p>
-              </div>
-
-              {/* Toggle Login Method */}
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                <button
-                  type="button"
-                  className={`flex-1 text-sm font-medium py-2 rounded-md transition-colors ${method === 'password' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                  onClick={() => setMethod('password')}
-                >
-                  Mật khẩu
-                </button>
-                <button
-                  type="button"
-                  className={`flex-1 text-sm font-medium py-2 rounded-md transition-colors ${method === 'otp' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                  onClick={() => setMethod('otp')}
-                >
-                  Mã OTP (Email)
-                </button>
               </div>
 
               {error && (
@@ -187,36 +142,27 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <form onSubmit={method === 'password' ? handleSubmitPassword : handleSendOtp} className="space-y-4">
+              <form onSubmit={handleSendOtp} className="space-y-4">
                 <Input
-                  label="Email hoặc Số báo danh"
-                  placeholder="Ví dụ: admin@example.com hoặc 123456"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  label="Họ và Tên"
+                  placeholder="Nguyễn Văn A"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   required
                   autoFocus
                 />
-
-                {method === 'password' && (
-                  <div className="space-y-1">
-                    <Input
-                      label="Mật khẩu"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                    <div className="flex justify-end">
-                      <Link to="/forgot-password" className="text-xs text-primary-500 hover:underline">
-                        Quên mật khẩu?
-                      </Link>
-                    </div>
-                  </div>
-                )}
+                
+                <Input
+                  label="Email"
+                  type="email"
+                  placeholder="email@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
 
                 <Button type="submit" isLoading={isLoading} className="w-full">
-                  {method === 'password' ? 'Đăng nhập' : 'Gửi mã OTP'}
+                  Gửi mã OTP
                 </Button>
               </form>
 
@@ -226,8 +172,8 @@ export default function LoginPage() {
               </div>
 
               <div className="pt-2 text-center">
-                <Link to="/guest" className="inline-block px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 dark:text-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors">
-                  Vào thi dưới tư cách Khách (Guest)
+                <Link to="/login" className="inline-block px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors">
+                  Quay lại trang Đăng nhập
                 </Link>
               </div>
             </div>

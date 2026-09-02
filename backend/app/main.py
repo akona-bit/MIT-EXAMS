@@ -100,10 +100,10 @@ async def lifespan(app: FastAPI):
 
 
 async def keep_alive():
-    """Ping self every 10 minutes to prevent Render free tier from sleeping."""
+    """Ping self every 4 minutes to prevent Render and Neon from sleeping."""
     import httpx
     while True:
-        await asyncio.sleep(600)
+        await asyncio.sleep(240)
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 await client.get("http://127.0.0.1:8000/api/health")
@@ -143,6 +143,7 @@ from app.api.v1 import analytics
 from app.api.v1 import advanced_analytics
 from app.api.v1 import passages
 from app.api.v1 import vector
+from app.api.v1 import system
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -182,6 +183,7 @@ app.include_router(resources.router, prefix="/api/v1/resources", tags=["Resource
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
 app.include_router(advanced_analytics.router, prefix="/api/v1/advanced-analytics", tags=["Advanced Analytics"])
 app.include_router(vector.router, prefix="/api/v1/vector", tags=["Vector / Semantic Search"])
+app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)
@@ -190,9 +192,17 @@ app.mount("/uploads/resources", StaticFiles(directory=resource_upload_dir), name
 @app.api_route("/api/health", methods=["GET", "HEAD"], tags=["Health"])
 async def health_check():
     """
-    Health check endpoint to verify the API is running.
+    Health check endpoint to verify the API is running and keep DB awake.
     """
-    return {"status": "ok"}
+    try:
+        from app.db.database import AsyncSessionLocal
+        from sqlalchemy import text
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        return {"status": "error", "database": "disconnected"}
 
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Set

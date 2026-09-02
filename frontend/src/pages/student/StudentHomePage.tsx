@@ -6,6 +6,8 @@ import type { Exam } from "../../types";
 import { motion } from "framer-motion";
 import { Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import Button from "../../components/ui/Button";
+import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
+import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 
 function formatExamWindow(startTime: string | null, endTime: string | null) {
   if (!startTime && !endTime) return "Thời gian linh hoạt";
@@ -32,8 +34,24 @@ export default function StudentHomePage() {
   const [startingExamId, setStartingExamId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [retryKey, setRetryKey] = useState(0);
+  const [maintenance, setMaintenance] = useState<MaintenanceStatus | null>(null);
 
   useEffect(() => {
+    const checkMaintenance = async () => {
+      try {
+        const status = await getMaintenanceStatus();
+        setMaintenance(status);
+        if (!status.maintenance_mode_all) {
+          loadExams();
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        // Fallback if API fails, just load exams
+        loadExams();
+      }
+    };
+
     const loadExams = async () => {
       try {
         const data = await getExams(0, 50, "PUBLISHED");
@@ -45,7 +63,7 @@ export default function StudentHomePage() {
       }
     };
 
-    loadExams();
+    checkMaintenance();
   }, [retryKey]);
 
   const handleStart = async (exam: Exam) => {
@@ -84,6 +102,10 @@ export default function StudentHomePage() {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } }
   };
+
+  if (maintenance?.maintenance_mode_all) {
+    return <MaintenanceScreen />;
+  }
 
   return (
     <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
