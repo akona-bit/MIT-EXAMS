@@ -10,6 +10,8 @@ class AnswerItem(BaseModel):
     selected_answer_ids: Optional[List[int]] = None
     # TRUE_FALSE / COMPOSITE: truyền { sub_item_id: answer_id }
     selected_subitem_answers: Optional[Dict[int, int]] = None
+    # FILL_IN_BLANK: đáp án dạng text do học sinh nhập
+    text_answer: Optional[str] = None
 
 class AutosaveRequest(BaseModel):
     answers: List[AnswerItem]

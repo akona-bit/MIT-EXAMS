@@ -29,8 +29,7 @@ class MatrixCell:
     group_id: Optional[int] = None
     group_label: Optional[str] = None
     required_passage_id: Optional[int] = None
-    # Advanced mode: target tỷ lệ mức độ {"NB": 0.4, ...} (đã chuẩn hoá tổng = 1.0)
-    level_distribution: Optional[Dict[str, float]] = None
+    required_passage_id: Optional[int] = None
 
 @dataclass
 class CandidateQuestion:
@@ -130,23 +129,8 @@ def _select_for_cell(
 
     # 1 Xác định quota cho từng level
     if cell.level is not None:
-        # Rule nâng cao một phần: cố định level, chỉ tự cân bằng dạng câu
         level_quota = {cell.level: cell.count}
         target_by_level: Dict[str, Dict[str, float]] = {}
-        actual_level_props: Dict[str, float] = {}
-    elif cell.level_distribution:
-        # Advanced mode: dùng đúng tỷ lệ admin đặt (đã chuẩn hoá tổng = 1.0)
-        target_by_level = {}
-        level_quota = _largest_remainder(cell.level_distribution, cell.count)
-        # Kiểm tra strict theo từng level sau khi làm tròn
-        avail_by_level: Dict[str, List[CandidateQuestion]] = defaultdict(list)
-        for q in cands:
-            avail_by_level[q.level].append(q)
-        for lv, quota in level_quota.items():
-            avail = avail_by_level.get(lv, [])
-            if len(avail) < quota:
-                return CellResult(cell=cell, selected_ids=[], shortage=cell.count, muc_do_counts={lv: quota - len(avail)})
-        actual_level_props = cell.level_distribution
     else:
         # Mode mặc định: phân bố thực tế của ngân hàng câu hỏi trong node
         level_counts: Dict[str, int] = Counter(q.level for q in cands)
@@ -353,14 +337,15 @@ async def load_pool_from_db(db: AsyncSession, matrix_rules: List[MatrixRule]) ->
             p2.name as topic,
             COALESCE(v.exposure_count, 0) as exposure_count
         FROM question q
-        JOIN knowledge_node kn ON q.knowledge_node_id = kn.id
+        JOIN question_skill_tag qst ON q.id = qst.question_id
+        JOIN knowledge_node kn ON qst.knowledge_node_id = kn.id
         LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
         LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
         LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
         LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
         LEFT JOIN v_question_exposure v ON v.question_id = q.id
         WHERE q.status = 'APPROVED'
-        AND q.knowledge_node_id IN :kn_ids
+        AND qst.knowledge_node_id IN :kn_ids
     """)
     query = query.bindparams(bindparam("kn_ids", expanding=True))
     result = await db.execute(query, {"kn_ids": tuple(kn_ids)})
@@ -427,17 +412,6 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
         # Rule cũ: đã set sẵn level/dạng câu; Rule mới (đơn giản): None -> engine tự cân bằng
         level_str = LEVEL_MAP.get(r.level) if r.level is not None else None
         question_type = r.question_type.value if hasattr(r.question_type, 'value') else r.question_type
-        # level_distribution (JSONB) - tiền xử lý thành tỷ lệ chuẩn hoá (tổng = 1.0)
-        level_dist = None
-        if r.level_distribution:
-            total = 0.0
-            normalized = {}
-            for key, val in r.level_distribution.items():
-                total += float(val or 0)
-            if total > 0:
-                for key, val in r.level_distribution.items():
-                    normalized[key] = float(val or 0) / total
-            level_dist = normalized or None
         req_passage_id = None
         if r.group_id is not None:
             req_passage_id = group_map.get(r.group_id)
@@ -454,7 +428,6 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
             part=r.part,
             position=r.position,
             group_id=r.group_id,
-            required_passage_id=req_passage_id,
-            level_distribution=level_dist
+            required_passage_id=req_passage_id
         ))
     return cells

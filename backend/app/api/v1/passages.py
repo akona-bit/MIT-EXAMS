@@ -8,7 +8,7 @@ from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.models.passage import Passage
-from app.models.question import Question, Answer
+from app.models.question import Question, Answer, QuestionSkillTag
 from app.schemas.passage import PassageCreate, PassageUpdate, PassageResponse, PassageSearchResponse, QuestionBulkCreateRequest, QuestionBulkUpdateRequest
 
 router = APIRouter()
@@ -128,7 +128,6 @@ async def create_questions_bulk(public_code: str, req: QuestionBulkCreateRequest
             content=q_req.content,
             level=q_req.level,
             type=q_req.type,
-            knowledge_node_id=q_req.knowledge_node_id,
             resource_id=q_req.resource_id,
             passage_id=passage.id,
             source_author=q_req.source_author,
@@ -147,6 +146,13 @@ async def create_questions_bulk(public_code: str, req: QuestionBulkCreateRequest
                 position=ans.position
             )
             db.add(new_a)
+
+        # Add tags
+        primary_tag = QuestionSkillTag(question_id=new_q.id, knowledge_node_id=q_req.primary_knowledge_node_id, is_primary=True)
+        db.add(primary_tag)
+        for sec_id in (q_req.secondary_knowledge_node_ids or []):
+            if sec_id != q_req.primary_knowledge_node_id:
+                db.add(QuestionSkillTag(question_id=new_q.id, knowledge_node_id=sec_id, is_primary=False))
 
         created_codes.append(q_code)
 
@@ -183,10 +189,22 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
             upd_q.content = q_req.content
             upd_q.level = q_req.level
             upd_q.type = q_req.type
-            upd_q.knowledge_node_id = q_req.knowledge_node_id
             upd_q.resource_id = q_req.resource_id
             upd_q.source_author = q_req.source_author
             upd_q.source_title = q_req.source_title
+
+            # Xóa tags cũ
+            tag_stmt = select(QuestionSkillTag).where(QuestionSkillTag.question_id == upd_q.id)
+            tag_res = await db.execute(tag_stmt)
+            for t in tag_res.scalars().all():
+                await db.delete(t)
+
+            # Thêm tags mới
+            primary_tag = QuestionSkillTag(question_id=upd_q.id, knowledge_node_id=q_req.primary_knowledge_node_id, is_primary=True)
+            db.add(primary_tag)
+            for sec_id in (q_req.secondary_knowledge_node_ids or []):
+                if sec_id != q_req.primary_knowledge_node_id:
+                    db.add(QuestionSkillTag(question_id=upd_q.id, knowledge_node_id=sec_id, is_primary=False))
 
             # Xóa answers cũ
             ans_stmt = select(Answer).where(Answer.question_id == upd_q.id)
@@ -216,7 +234,6 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
                 content=q_req.content,
                 level=q_req.level,
                 type=q_req.type,
-                knowledge_node_id=q_req.knowledge_node_id,
                 resource_id=q_req.resource_id,
                 passage_id=passage.id,
                 source_author=q_req.source_author,
@@ -234,6 +251,13 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
                     position=ans.position
                 )
                 db.add(new_a)
+                
+            # Add tags
+            primary_tag = QuestionSkillTag(question_id=new_q.id, knowledge_node_id=q_req.primary_knowledge_node_id, is_primary=True)
+            db.add(primary_tag)
+            for sec_id in (q_req.secondary_knowledge_node_ids or []):
+                if sec_id != q_req.primary_knowledge_node_id:
+                    db.add(QuestionSkillTag(question_id=new_q.id, knowledge_node_id=sec_id, is_primary=False))
 
             created_codes.append(q_code)
 

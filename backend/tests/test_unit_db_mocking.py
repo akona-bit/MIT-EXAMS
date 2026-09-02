@@ -76,10 +76,48 @@ async def test_generate_original_exam_raises_when_not_enough_questions():
 
 
 @pytest.mark.asyncio
-async def test_get_or_assign_exam_form_raises_if_not_participant():
-    mock_db = MockDB(execute_results=[MockScalarResult(items=[])])
+async def test_get_or_assign_exam_form_raises_when_exam_not_found():
+    mock_db = MockDB(execute_results=[MockScalarResult(items=[])])  # participant lookup -> rỗng
 
-    # Call should raise 403 when participant lookup returns None
+    # Exam lookup cũng rỗng (queue cạn -> mặc định rỗng) -> 404
+    with pytest.raises(HTTPException) as excinfo:
+        await exam_session.get_or_assign_exam_form(mock_db, exam_id=1, user_id=2)
+    assert excinfo.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_or_assign_exam_form_self_enrolls_published_exam():
+    """Học sinh chưa được ghi danh vẫn tự tham gia được kỳ thi PUBLISHED."""
+    from app.models.exam import ExamStatus
+
+    form = SimpleNamespace(id=301, exam_id=1, code="101", is_original=False, questions=["q1"])
+    exam = SimpleNamespace(id=1, status=ExamStatus.PUBLISHED)
+
+    mock_db = MockDB(execute_results=[
+        MockScalarResult(items=[]),      # participant lookup -> chưa ghi danh
+        MockScalarResult(items=[exam]),  # exam lookup -> PUBLISHED
+        MockScalarResult(items=[form]),  # danh sách mã đề khả dụng
+        MockScalarResult(items=[form]),  # reload form được gán
+    ])
+
+    returned = await exam_session.get_or_assign_exam_form(mock_db, exam_id=1, user_id=2)
+
+    assert returned is form
+    # Đã tự tạo ExamParticipant
+    assert any(type(o).__name__ == "ExamParticipant" for o in mock_db.added)
+
+
+@pytest.mark.asyncio
+async def test_get_or_assign_exam_form_rejects_draft_exam():
+    """Kỳ thi chưa PUBLISHED -> vẫn chặn 403 như cũ."""
+    from app.models.exam import ExamStatus
+
+    exam = SimpleNamespace(id=1, status=ExamStatus.DRAFT)
+    mock_db = MockDB(execute_results=[
+        MockScalarResult(items=[]),      # participant lookup -> chưa ghi danh
+        MockScalarResult(items=[exam]),  # exam lookup -> DRAFT
+    ])
+
     with pytest.raises(HTTPException) as excinfo:
         await exam_session.get_or_assign_exam_form(mock_db, exam_id=1, user_id=2)
     assert excinfo.value.status_code == 403

@@ -1,6 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Users, BarChart3, Database, Search, ChevronRight, CheckSquare, X, BarChart2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  Users,
+  BarChart3,
+  Database,
+  Search,
+  ChevronRight,
+  X,
+  BarChart2,
+} from "lucide-react";
 import { Card } from "../../../components/ui/Card";
 import { Badge } from "../../../components/ui/Badge";
 import { Skeleton } from "../../../components/ui/Skeleton";
@@ -25,7 +33,7 @@ export default function StudentManagementPage() {
     try {
       const [resSummary, resStudents] = await Promise.all([
         fetch("http://localhost:8000/api/v1/analytics/class-summary"),
-        fetch("http://localhost:8000/api/v1/analytics/students")
+        fetch("http://localhost:8000/api/v1/analytics/students"),
       ]);
       const summary = await resSummary.json();
       const stData = await resStudents.json();
@@ -46,19 +54,20 @@ export default function StudentManagementPage() {
       setFilteredStudents(students);
     } else {
       const lowerQuery = query.toLowerCase();
-      const filtered = students.filter(s => 
-        (s.name && s.name.toLowerCase().includes(lowerQuery)) || 
-        (s.email && s.email.toLowerCase().includes(lowerQuery))
+      const filtered = students.filter(
+        (s) =>
+          (s.name && s.name.toLowerCase().includes(lowerQuery)) ||
+          (s.email && s.email.toLowerCase().includes(lowerQuery)),
       );
       setFilteredStudents(filtered);
     }
   };
 
   const handleSelectStudent = (student: any) => {
-    setSelectedStudents(prev => {
-      const exists = prev.find(s => s.name === student.name);
+    setSelectedStudents((prev) => {
+      const exists = prev.find((s) => s.name === student.name);
       if (exists) {
-        return prev.filter(s => s.name !== student.name);
+        return prev.filter((s) => s.name !== student.name);
       } else {
         if (prev.length >= 4) {
           alert("Chỉ được chọn tối đa 4 thí sinh để so sánh");
@@ -69,76 +78,91 @@ export default function StudentManagementPage() {
     });
   };
 
-  const columns = useMemo(() => [
-    {
-      header: "",
-      key: "select",
-      width: "40px",
-      render: (row: any) => {
-        const isSelected = selectedStudents.some(s => s.name === row.name);
-        return (
-          <input 
-            type="checkbox" 
-            className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
-            checked={isSelected}
-            onChange={() => handleSelectStudent(row)}
-          />
-        );
-      }
-    },
-    {
-      header: "STT",
-      key: "stt",
-      width: "60px",
-      render: (row: any) => <span className="font-medium text-slate-500">{row.stt}</span>
-    },
-    {
-      header: "Họ và tên",
-      key: "name",
-      render: (row: any) => <span className="font-bold text-slate-900 dark:text-white">{row.name}</span>
-    },
-    {
-      header: "Toán (IRT)",
-      key: "irt_toan",
-      render: (row: any) => (
-        <Badge variant={row.irt_toan ? "default" : "secondary"}>
-          {row.irt_toan ? row.irt_toan.toFixed(1) : "N/A"}
-        </Badge>
-      )
-    },
-    {
-      header: "TDKH (IRT)",
-      key: "irt_tdkh",
-      render: (row: any) => (
-        <Badge variant={row.irt_tdkh ? "success" : "secondary"}>
-          {row.irt_tdkh ? row.irt_tdkh.toFixed(1) : "N/A"}
-        </Badge>
-      )
-    },
-    {
-      header: "Tổng điểm",
-      key: "total",
-      render: (row: any) => {
-        const total = (row.irt_toan || 0) + (row.irt_tdkh || 0);
-        return <span className="font-bold text-primary-600 dark:text-primary-400">{total > 0 ? total.toFixed(1) : "N/A"}</span>;
-      }
-    },
-    {
-      header: "Thao tác",
-      key: "actions",
-      width: "120px",
-      render: (row: any) => (
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => navigate(`/admin/students/${encodeURIComponent(row.name)}`)}
-          className="hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-900/20"
-        >
-          Chi tiết <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
-      )
-    }
-  ], [navigate, selectedStudents]);
+  const columns = useMemo(
+    () => [
+      {
+        header: "",
+        key: "select",
+        width: "40px",
+        render: (row: any) => {
+          const isSelected = selectedStudents.some((s) => s.name === row.name);
+          return (
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+              checked={isSelected}
+              onChange={() => handleSelectStudent(row)}
+            />
+          );
+        },
+      },
+      {
+        header: "STT",
+        key: "stt",
+        width: "60px",
+        render: (row: any) => (
+          <span className="font-medium text-slate-500">{row.stt}</span>
+        ),
+      },
+      {
+        header: "Họ và tên",
+        key: "name",
+        render: (row: any) => (
+          <span className="font-bold text-slate-900 dark:text-white">
+            {row.name}
+          </span>
+        ),
+      },
+      {
+        header: "Toán (IRT)",
+        key: "irt_toan",
+        render: (row: any) => (
+          <Badge variant={row.irt_toan ? "default" : "secondary"}>
+            {row.irt_toan ? row.irt_toan.toFixed(1) : "N/A"}
+          </Badge>
+        ),
+      },
+      {
+        header: "TDKH (IRT)",
+        key: "irt_tdkh",
+        render: (row: any) => (
+          <Badge variant={row.irt_tdkh ? "success" : "secondary"}>
+            {row.irt_tdkh ? row.irt_tdkh.toFixed(1) : "N/A"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Tổng điểm",
+        key: "total",
+        render: (row: any) => {
+          const total = (row.irt_toan || 0) + (row.irt_tdkh || 0);
+          return (
+            <span className="font-bold text-primary-600 dark:text-primary-400">
+              {total > 0 ? total.toFixed(1) : "N/A"}
+            </span>
+          );
+        },
+      },
+      {
+        header: "Thao tác",
+        key: "actions",
+        width: "120px",
+        render: (row: any) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              navigate(`/admin/students/${encodeURIComponent(row.name)}`)
+            }
+            className="hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-900/20"
+          >
+            Chi tiết <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        ),
+      },
+    ],
+    [navigate, selectedStudents],
+  );
 
   if (isLoading) {
     return (
@@ -155,7 +179,9 @@ export default function StudentManagementPage() {
 
   const handleCompare = () => {
     if (selectedStudents.length < 2) return;
-    const names = selectedStudents.map(s => encodeURIComponent(s.name)).join(',');
+    const names = selectedStudents
+      .map((s) => encodeURIComponent(s.name))
+      .join(",");
     navigate(`/admin/students/compare?names=${names}`);
   };
 
@@ -163,7 +189,9 @@ export default function StudentManagementPage() {
     <div className="space-y-6 relative pb-20">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient pb-1">Quản lý Thí sinh</h1>
+          <h1 className="text-3xl font-extrabold text-gradient pb-1">
+            Quản lý Thí sinh
+          </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             Tổng quan điểm số lớp học và danh sách kết quả thí sinh
           </p>
@@ -176,8 +204,12 @@ export default function StudentManagementPage() {
             <Users className="h-7 w-7 text-indigo-500" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Tổng số thí sinh</p>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">{classSummary?.total_students || 0}</p>
+            <p className="text-sm font-medium text-slate-500">
+              Tổng số thí sinh
+            </p>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+              {classSummary?.total_students || 0}
+            </p>
           </div>
         </Card>
 
@@ -186,8 +218,12 @@ export default function StudentManagementPage() {
             <BarChart3 className="h-7 w-7 text-primary-500" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Trung bình Toán (IRT)</p>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">{classSummary?.avg_toan || 0}</p>
+            <p className="text-sm font-medium text-slate-500">
+              Trung bình Toán (IRT)
+            </p>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+              {classSummary?.avg_toan || 0}
+            </p>
           </div>
         </Card>
 
@@ -196,8 +232,12 @@ export default function StudentManagementPage() {
             <Database className="h-7 w-7 text-success-500" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Trung bình TDKH (IRT)</p>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">{classSummary?.avg_tdkh || 0}</p>
+            <p className="text-sm font-medium text-slate-500">
+              Trung bình TDKH (IRT)
+            </p>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+              {classSummary?.avg_tdkh || 0}
+            </p>
           </div>
         </Card>
       </div>
@@ -205,23 +245,27 @@ export default function StudentManagementPage() {
       <Card className="p-0 overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
         <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Danh sách Thí sinh</h2>
-            <p className="text-sm font-medium text-slate-500 mt-1">Chọn tối đa 4 thí sinh để so sánh</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              Danh sách Thí sinh
+            </h2>
+            <p className="text-sm font-medium text-slate-500 mt-1">
+              Chọn tối đa 4 thí sinh để so sánh
+            </p>
           </div>
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={searchQuery}
               onChange={handleSearch}
-              placeholder="Tìm kiếm theo Tên..." 
+              placeholder="Tìm kiếm theo Tên..."
               className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
             />
           </div>
         </div>
         <div className="p-6">
-          <DataTable 
-            data={filteredStudents} 
+          <DataTable
+            data={filteredStudents}
             columns={columns}
             keyExtractor={(item: any) => item.name}
             isLoading={isLoading}
@@ -236,7 +280,11 @@ export default function StudentManagementPage() {
           <div className="glass-card shadow-2xl rounded-full border border-primary-500/30 p-2 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl">
             <div className="flex -space-x-2 pl-2">
               {selectedStudents.map((s, i) => (
-                <div key={i} className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/50 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs font-bold text-primary-700 dark:text-primary-400" title={s.name}>
+                <div
+                  key={i}
+                  className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/50 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs font-bold text-primary-700 dark:text-primary-400"
+                  title={s.name}
+                >
                   {s.name.charAt(0)}
                 </div>
               ))}
@@ -246,17 +294,17 @@ export default function StudentManagementPage() {
               Đã chọn {selectedStudents.length} / 4
             </p>
             <div className="flex gap-2">
-              <Button 
-                variant="default" 
+              <Button
+                variant="default"
                 className="rounded-full px-6 shadow-lg shadow-primary-500/30"
                 onClick={handleCompare}
                 disabled={selectedStudents.length < 2}
               >
                 <BarChart2 className="w-4 h-4 mr-2" /> So sánh
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="rounded-full text-slate-500"
                 onClick={() => setSelectedStudents([])}
               >

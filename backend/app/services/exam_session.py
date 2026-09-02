@@ -54,9 +54,25 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
         ExamParticipant.user_id == user_id
     ))
     participant = result.scalars().first()
+
     if not participant:
-        raise HTTPException(status_code=403, detail="Not a participant of this exam")
-        
+        # Self-enrollment: học sinh bấm "Bắt đầu thi" từ trang chủ có thể tự
+        # ghi danh vào kỳ thi đã PUBLISHED mà không cần Admin gán trước.
+        exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
+        exam = exam_result.scalars().first()
+        if not exam:
+            raise HTTPException(status_code=404, detail="Exam not found")
+        if exam.status != ExamStatus.PUBLISHED:
+            raise HTTPException(status_code=403, detail="Not a participant of this exam")
+
+        participant = ExamParticipant(
+            exam_id=exam_id,
+            user_id=user_id,
+            status=ParticipantStatus.NOT_STARTED
+        )
+        db.add(participant)
+        await db.flush()
+
     if participant.exam_form_id:
         result = await db.execute(select(ExamForm).options(
             selectinload(ExamForm.questions)
@@ -108,7 +124,14 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
     participant = result.scalars().first()
     
     if not participant:
-        raise HTTPException(status_code=403, detail="Not a participant")
+        # Self-enrollment: học sinh vào thẳng phòng thi mà chưa được ghi danh —
+        # tạo participant + gán mã đề (chỉ áp dụng cho kỳ thi đã PUBLISHED),
+        # sau đó load lại session info với dữ liệu đầy đủ.
+        await get_or_assign_exam_form(db, exam_id, user_id)
+        result = await db.execute(stmt)
+        participant = result.scalars().first()
+        if not participant:
+            raise HTTPException(status_code=403, detail="Not a participant")
         
     if participant.is_banned:
         raise HTTPException(status_code=403, detail="You are banned from this exam")
@@ -144,6 +167,7 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
                 "selected_answer_id": sa.selected_answer_id,
                 "selected_answer_ids": sa.selected_answer_ids,
                 "selected_subitem_answers": sa.selected_subitem_answers,
+                "text_answer": sa.text_answer,
             })
             
     questions = []

@@ -77,7 +77,6 @@ async def create_matrix(request: Request, matrix_in: MatrixCreate, db: AsyncSess
             level=r.level if r.level is not None else None,
             count=r.count,
             part=r.part,
-            level_distribution=r.level_distribution,
             target_irt_b=r.target_irt_b,
             group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
         )
@@ -144,7 +143,6 @@ async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSessio
             level=r.level if r.level is not None else None,
             count=r.count,
             part=r.part,
-            level_distribution=r.level_distribution,
             target_irt_b=r.target_irt_b,
             group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
         ))
@@ -239,7 +237,6 @@ async def create_matrix_version(request: Request, matrix_id: int, db: AsyncSessi
             knowledge_node_id=rule.knowledge_node_id,
             question_type=rule.question_type,
             level=rule.level,
-            level_distribution=rule.level_distribution,
             count=rule.count,
             part=rule.part,
             target_irt_b=rule.target_irt_b,

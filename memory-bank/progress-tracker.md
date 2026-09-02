@@ -78,9 +78,19 @@
 - [x] Backup định kỳ (Qua API `/api/v1/admin/backup-db`)
 - [x] Rate limiting endpoint nộp bài (`slowapi` 5/min)
 - [x] Audit log/nhật ký hoạt động (Bảng `AuditLog`)
-- [x] Danh sách học sinh bị cấm thi (Cột `is_banned`, báo lỗi 403 ngay lập tức))
+- [x] Danh sách học sinh bị cấm thi (Cột `is_banned`, báo lỗi 403 ngay lập tức)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-02` — **Hoàn thành Phần 0 (Refactor Database & API core)**: Chuyển hoàn toàn `Question` sang mô hình đa-skill (bảng `question_skill_tag`), xoá `knowledge_node_id` trong Question và `parent_id` trong KnowledgeNode. Các service đếm câu hỏi (`knowledge_service.py`), sinh ma trận (`exam_matrix_generator.py`), sinh đề (`generator.py`), search vector (`embedding_service.py`, `vector.py`), nhập import (`obsidian_parser.py`, `passages.py`) đã được map lại để sử dụng query JOIN qua `question_skill_tag`. Migration `c1234567890a` đã upgrade `head` thành công trên DB. Báo cáo lại để xin phép tiến hành Phần 1-7 tiếp theo.
+
+- `2026-09-01` — **Fix lỗi "Not a participant of this exam" khi thí sinh bắt đầu thi**: nguyên nhân — `get_or_assign_exam_form` (services/exam_session.py) trả 403 nếu học sinh chưa có dòng `ExamParticipant`, trong khi UI thí sinh cho phép bấm "Bắt đầu thi" ở mọi kỳ thi PUBLISHED mà Admin chưa gán danh sách. Fix bằng **self-enrollment**: nếu participant chưa tồn tại và exam `status = PUBLISHED` → tự tạo participant (flush) rồi gán mã đề như luồng cũ; exam không tồn tại → 404; chưa PUBLISHED (DRAFT/COMPLETED) → giữ 403. Đồng thời `get_exam_session_info` khi vào thẳng `/exam/:id/session` mà chưa ghi danh cũng tự gọi `get_or_assign_exam_form` rồi load lại session. Cập nhật `test_unit_db_mocking.py` (test cũ 403 → 404 khi exam không tồn tại) + thêm 2 test (self-enroll PUBLISHED thành công, chặn DRAFT). 21/21 test mock-based pass, compileall OK.
+
+- `2026-09-01` — **Trang xem Kết quả cho Thí sinh (`/student/exam/{exam_id}/result`)**:
+  - Backend: service mới `app/services/exam_result.py` + thay thân endpoint `GET /api/v1/exams/{exam_id}/result` (trước đó KHÔNG chặn thí sinh đang thi vì ExamSubmission tồn tại ngay từ IN_PROGRESS qua autosave). Rule: chỉ SUBMITTED/SUSPENDED được xem (IN_PROGRESS/NOT_STARTED → 403); điểm thô CTT theo 4 phần luôn có ngay sau nộp (tự gọi `grade_submission_ctt` idempotent nếu chưa có); điểm thực IRT CHỈ hiện khi IrtTask SUCCESS + N≥200 (đồng bộ `IRT_THRESHOLD` ở `complete_exam`) + ExamResult.score_method=IRT, ngược lại trả state/message ("computing", "not_enough_data", ...); xem lại đáp án theo đúng permission `user.can_view_answers` (module "Quyền xem đáp án" ở Admin), không trả đúng đáp án ra API khi không có quyền.
+  - Frontend: trang mới `StudentExamResultPage.tsx` (theme Thí sinh sáng, framer-motion, không biểu đồ phức tạp), api `studentExamResult.ts`, route `/student/exam/:examId/result`; `StudentExamShell` sau nộp bài (thủ công + auto-submit hết giờ) điều hướng sang trang kết quả, màn "Bạn đã nộp bài" thêm nút "Xem kết quả".
+  - Test: `backend/tests/test_exam_result_service.py` — 11 test (block IN_PROGRESS/NOT_STARTED, SUSPENDED vẫn xem, gate IRT theo N≥200, không lộ IRT khi chưa đủ điều kiện). 19/19 test mock-based pass; `python -m compileall` OK; `npm run build` không có lỗi mới ở file mới (các lỗi TS có sẵn khác ngoài phạm vi).
+  - Ghi chú: hệ thống chưa có module "Phân loại năng lực" được tính sẵn → trang này không bịa số liệu, sẽ hiển thị khi có.
 
 - `2026-09-01` — **Xử lý khẩn cấp secret và Git tracking**: xóa `backend/scripts/create_supabase_users.py` khỏi working tree sau khi xác nhận file đã xuất hiện trong 4 commit lịch sử; xác nhận `backend/app` đang track 56 file; untrack `backend/venv2` thành công, còn 0 file trong Git index. Chưa rotate/revoke Supabase key, rewrite lịch sử Git, commit hoặc push vì cần chủ repo thực hiện Dashboard rotation và xác nhận remote.
 - `2026-09-01` — **Ma trận Đặc tả — Full System Upgrade**:

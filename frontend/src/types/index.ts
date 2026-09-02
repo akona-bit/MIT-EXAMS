@@ -30,6 +30,7 @@ export interface User {
   id: number;
   username: string | null;
   email: string | null;
+  full_name?: string | null;
   is_active: boolean;
   role_id: number;
   role: Role;

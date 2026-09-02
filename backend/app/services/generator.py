@@ -29,8 +29,9 @@ async def generate_original_exam(db: AsyncSession, matrix: Matrix, exam_name: st
     
     for rule in matrix.rules:
         # Fetch matching questions
+        from app.models.question import QuestionSkillTag
         stmt = select(Question).options(selectinload(Question.answers)).where(
-            Question.knowledge_node_id == rule.knowledge_node_id,
+            Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == rule.knowledge_node_id),
             Question.type == rule.question_type,
             Question.level == rule.level,
             Question.status == QuestionStatus.APPROVED

@@ -155,12 +155,15 @@ class ObsidianParser:
             level=q_level,
             type=q_type,
             status=QuestionStatus.PENDING,
-            knowledge_node_id=kn_node.id,
             creator_id=self.creator_id,
             parent_question_id=parent_question_id,
         )
         self.db.add(question)
         await self.db.flush()
+
+        from app.models.question import QuestionSkillTag
+        tag = QuestionSkillTag(question_id=question.id, knowledge_node_id=kn_node.id, is_primary=True)
+        self.db.add(tag)
         
         # Create Answers
         for idx, ans_dict in enumerate(answers, start=1):

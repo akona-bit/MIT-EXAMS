@@ -24,25 +24,11 @@ class MatrixRuleBase(BaseModel):
     # Khi question_type/level null → engine tự cân bằng theo phân bố ngân hàng (proportional sampling).
     question_type: Optional[QuestionType] = None
     level: Optional[int] = None
-    # Advanced mode: target tỷ lệ mức độ {"NB":0.4,...}. Các giá trị ngoài NB/TH/VD/VDC bị bỏ qua.
-    level_distribution: Optional[Dict[str, float]] = None
+    # Advanced mode target ratios are removed because allocator splits into separate rules.
     count: int = 1
     part: int = 1
     target_irt_b: Optional[float] = None
     position: int = 0
-
-    @field_validator("level_distribution")
-    @classmethod
-    def validate_level_distribution(cls, v):
-        if v is None:
-            return v
-        allowed = {"NB", "TH", "VD", "VDC"}
-        cleaned = {k.strip().upper(): float(val) for k, val in v.items() if k.strip().upper() in allowed}
-        total = sum(cleaned.values())
-        if total <= 0:
-            return None
-        # Chuẩn hoá về tổng 1.0
-        return {k: val / total for k, val in cleaned.items()}
 
 class MatrixRuleCreate(MatrixRuleBase):
     group_local_id: Optional[str] = None

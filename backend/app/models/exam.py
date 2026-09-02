@@ -39,8 +39,8 @@ class MatrixRule(Base):
     question_type: Mapped[Optional[QuestionType]] = mapped_column(SQLAlchemyEnum(QuestionType), nullable=True)
     level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Advanced mode: target tỷ lệ mức độ, vd {"NB": 0.4, "TH": 0.3, "VD": 0.2, "VDC": 0.1}
-    # Khi null → engine tự tính từ phân bố thực tế trong ngân hàng
-    level_distribution: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # Đã bị xoá: allocator (Phần 3) sẽ tự động chia ra nhiều dòng MatrixRule con
+    # level_distribution: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     count: Mapped[int] = mapped_column(Integer, default=1)
     # Part indicator: 1 (TV), 2 (TA), 3 (Toan), 4 (TDKH)
     part: Mapped[int] = mapped_column(Integer, default=1)
@@ -166,6 +166,8 @@ class ExamSubmissionAnswer(Base):
     selected_answer_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
     # TRUE_FALSE / COMPOSITE: dict { sub_item_id: selected_answer_id }
     selected_subitem_answers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
+    # FILL_IN_BLANK: đáp án dạng text do thí sinh nhập
+    text_answer: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     # Điểm của riêng câu này (do scorer ghi, vd 0.25 cho 1 ý đúng/sai đúng)
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 

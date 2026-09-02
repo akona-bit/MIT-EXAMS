@@ -6,17 +6,18 @@ from app.models.question import KnowledgeNode, KnowledgeNodeParent, Question
 class KnowledgeService:
     @staticmethod
     async def is_leaf(db: AsyncSession, node_id: int) -> bool:
-        """Check if a node is a leaf (has no children in the DAG)."""
-        stmt = select(func.count()).select_from(KnowledgeNodeParent).where(KnowledgeNodeParent.parent_id == node_id)
+        """Check if a node is a leaf using the is_leaf column."""
+        stmt = select(KnowledgeNode.is_leaf).where(KnowledgeNode.id == node_id)
         result = await db.execute(stmt)
-        return (result.scalar() or 0) == 0
+        val = result.scalar()
+        return val if val is not None else True
 
     @staticmethod
     async def count_approved_questions(db: AsyncSession, node_id: int) -> int:
         """Counts the number of APPROVED questions attached to this node."""
-        from app.models.question import Question, QuestionStatus
+        from app.models.question import Question, QuestionStatus, QuestionSkillTag
         stmt = select(func.count()).select_from(Question).where(
-            and_(Question.knowledge_node_id == node_id, Question.status == QuestionStatus.APPROVED)
+            and_(Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == node_id), Question.status == QuestionStatus.APPROVED)
         )
         result = await db.execute(stmt)
         return result.scalar() or 0

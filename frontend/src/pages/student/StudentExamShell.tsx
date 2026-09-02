@@ -136,7 +136,7 @@ export default function StudentExamShell() {
     try {
       await api.post(`/api/v1/exams/${id}/submit`);
       alert("Hết giờ làm bài. Hệ thống đã tự động thu bài.");
-      navigate("/student");
+      navigate(`/student/exam/${id}/result`);
     } catch (err) {
       console.error(err);
     }
@@ -146,8 +146,7 @@ export default function StudentExamShell() {
     if (!confirm("Bạn có chắc chắn muốn nộp bài? Hành động này không thể hoàn tác.")) return;
     try {
       await api.post(`/api/v1/exams/${id}/submit`);
-      alert("Nộp bài thành công.");
-      navigate("/student");
+      navigate(`/student/exam/${id}/result`);
     } catch (err: any) {
       alert(err.response?.data?.detail || "Lỗi khi nộp bài");
     }
@@ -161,7 +160,20 @@ export default function StudentExamShell() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="bg-white p-8 rounded-lg shadow-lg text-center">
           <h1 className="text-2xl font-bold text-green-600 mb-4">Bạn đã nộp bài</h1>
-          <button onClick={() => navigate("/student")} className="px-4 py-2 bg-primary-600 text-white rounded">Quay lại trang chủ</button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => navigate(`/student/exam/${id}/result`)}
+              className="px-4 py-2 bg-primary-600 text-white rounded"
+            >
+              Xem kết quả
+            </button>
+            <button
+              onClick={() => navigate("/student")}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded"
+            >
+              Quay lại trang chủ
+            </button>
+          </div>
         </div>
       </div>
     );

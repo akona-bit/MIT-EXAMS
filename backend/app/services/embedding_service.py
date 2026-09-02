@@ -151,11 +151,12 @@ async def search_similar_questions(
             q.level,
             q.type::text as question_type,
             q.status::text as status,
-            q.knowledge_node_id,
+            qst.knowledge_node_id,
             q.public_code,
             1 - (qe.embedding <=> :query_embedding::vector) AS similarity
         FROM question_embedding qe
         JOIN question q ON q.id = qe.question_id
+        LEFT JOIN question_skill_tag qst ON qst.question_id = q.id AND qst.is_primary = TRUE
         WHERE qe.embedding IS NOT NULL
             AND 1 - (qe.embedding <=> :query_embedding::vector) > :threshold
             {id_filter}

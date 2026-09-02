@@ -7,7 +7,7 @@ from app.models.exam import ExamFormQuestion
 
 from app.db.database import get_db
 from app.models.user import User
-from app.models.question import Question, Answer, QuestionStatus, QuestionType, KnowledgeNode, KnowledgeNodeType
+from app.models.question import Question, Answer, QuestionStatus, QuestionType, KnowledgeNode, KnowledgeNodeType, QuestionSkillTag
 from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate, QuestionReviewRequest, QuestionSimilarityResponse
 from pydantic import BaseModel
 from app.api.dependencies import RequireRole, get_current_active_user
@@ -30,7 +30,7 @@ async def get_questions(
 ):
     filters = []
     if knowledge_node_id is not None:
-        filters.append(Question.knowledge_node_id == knowledge_node_id)
+        filters.append(Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == knowledge_node_id))
     if status is not None:
         filters.append(Question.status == status)
     if level is not None:
@@ -76,7 +76,7 @@ async def get_questions(
 @router.get("/{question_id}", response_model=QuestionResponse)
 async def get_question(question_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers)).where(Question.id == question_id)
+        select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == question_id)
     )
     question = result.scalars().first()
     if not question:
@@ -104,11 +104,14 @@ async def get_question_similarity(question_id: int, threshold: float = 0.3, limi
     if not target_q:
         raise HTTPException(status_code=404, detail="Question not found")
     
-    # 2. Fetch other questions (limit to same node_type or subject if needed, here we fetch all for simplicity or same knowledge_node)
-    # To avoid performance issues, only compare within the same knowledge node.
+    # 2. Fetch other questions
+    target_skill_ids = [tag.knowledge_node_id for tag in target_q.skill_tags]
+    if not target_skill_ids:
+        return []
+        
     all_q_result = await db.execute(
         select(Question).where(
-            Question.knowledge_node_id == target_q.knowledge_node_id,
+            Question.skill_tags.any(QuestionSkillTag.knowledge_node_id.in_(target_skill_ids)),
             Question.id != target_q.id
         )
     )
@@ -147,7 +150,7 @@ class CheckDuplicateRequest(BaseModel):
 @router.post("/check-duplicate", response_model=List[QuestionSimilarityResponse])
 async def check_duplicate(req: CheckDuplicateRequest, threshold: float = 0.8, db: AsyncSession = Depends(get_db)):
     from difflib import SequenceMatcher
-    result = await db.execute(select(Question).where(Question.knowledge_node_id == req.knowledge_node_id))
+    result = await db.execute(select(Question).where(Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == req.knowledge_node_id)))
     other_qs = result.scalars().all()
     results = []
     for q in other_qs:
@@ -178,17 +181,17 @@ async def create_question(
             raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 1 đáp án đúng.")
 
     # Validate knowledge node type is SKILL and it's a leaf
-    kn_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == q_in.knowledge_node_id))
+    kn_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == q_in.primary_knowledge_node_id))
     kn = kn_result.scalars().first()
     if not kn:
-        raise HTTPException(status_code=400, detail="Knowledge Node không tồn tại.")
+        raise HTTPException(status_code=400, detail="Primary Knowledge Node không tồn tại.")
     if kn.node_type != KnowledgeNodeType.SKILL:
         raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào chủ đề kiến thức dạng Kỹ năng (SKILL).")
-    if not await KnowledgeService.is_leaf(db, q_in.knowledge_node_id):
+    if not await KnowledgeService.is_leaf(db, q_in.primary_knowledge_node_id):
         raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
 
     # Resolve knowledge node path for public_code
-    kn_path = await KnowledgeService.calculate_path_code(db, q_in.knowledge_node_id)
+    kn_path = await KnowledgeService.calculate_path_code(db, q_in.primary_knowledge_node_id)
     # Get next sequence number for this path
     seq_result = await db.execute(
         select(func.count()).select_from(Question).where(
@@ -204,7 +207,6 @@ async def create_question(
         content=q_in.content,
         level=q_in.level,
         type=q_in.type,
-        knowledge_node_id=q_in.knowledge_node_id,
         resource_id=q_in.resource_id,
         source_author=q_in.source_author,
         source_title=q_in.source_title,
@@ -214,6 +216,14 @@ async def create_question(
     db.add(db_question)
     await db.commit()
     await db.refresh(db_question)
+    
+    # Create tags
+    primary_tag = QuestionSkillTag(question_id=db_question.id, knowledge_node_id=q_in.primary_knowledge_node_id, is_primary=True)
+    db.add(primary_tag)
+    for sec_id in q_in.secondary_knowledge_node_ids:
+        if sec_id != q_in.primary_knowledge_node_id:
+            db.add(QuestionSkillTag(question_id=db_question.id, knowledge_node_id=sec_id, is_primary=False))
+    
     
     # Create answers
     for ans in q_in.answers:
@@ -227,9 +237,9 @@ async def create_question(
     
     await db.commit()
     
-    # Reload with answers
+    # Reload with answers and tags
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers)).where(Question.id == db_question.id)
+        select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == db_question.id)
     )
     capture(
         request,
@@ -247,7 +257,7 @@ async def update_question(
 ):
     # Find existing question
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers)).where(Question.id == question_id)
+        select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == question_id)
     )
     existing_q = result.scalars().first()
     
@@ -261,7 +271,6 @@ async def update_question(
             content=q_in.content if q_in.content is not None else existing_q.content,
             level=q_in.level if q_in.level is not None else existing_q.level,
             type=q_in.type if q_in.type is not None else existing_q.type,
-            knowledge_node_id=q_in.knowledge_node_id if q_in.knowledge_node_id is not None else existing_q.knowledge_node_id,
             resource_id=q_in.resource_id if q_in.resource_id is not None else existing_q.resource_id,
             source_author=q_in.source_author if q_in.source_author is not None else existing_q.source_author,
             source_title=q_in.source_title if q_in.source_title is not None else existing_q.source_title,
@@ -272,6 +281,21 @@ async def update_question(
         db.add(new_q)
         await db.commit()
         await db.refresh(new_q)
+        
+        # Add skill tags
+        if q_in.primary_knowledge_node_id is not None:
+            primary_id = q_in.primary_knowledge_node_id
+            secondary_ids = q_in.secondary_knowledge_node_ids or []
+        else:
+            primary_tag = next((t for t in existing_q.skill_tags if t.is_primary), None)
+            primary_id = primary_tag.knowledge_node_id if primary_tag else None
+            secondary_ids = [t.knowledge_node_id for t in existing_q.skill_tags if not t.is_primary]
+            
+        if primary_id:
+            db.add(QuestionSkillTag(question_id=new_q.id, knowledge_node_id=primary_id, is_primary=True))
+            for sec_id in secondary_ids:
+                if sec_id != primary_id:
+                    db.add(QuestionSkillTag(question_id=new_q.id, knowledge_node_id=sec_id, is_primary=False))
         
         # Add new answers
         answers_to_use = q_in.answers if q_in.answers is not None else [
@@ -309,26 +333,36 @@ async def update_question(
         await db.commit()
         
         # Return the new version
-        res = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.id == new_q.id))
+        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == new_q.id))
         return res.scalars().first()
     else:
         # Just update in place for DRAFT or PENDING
         if q_in.content is not None: existing_q.content = q_in.content
         if q_in.level is not None: existing_q.level = q_in.level
         if q_in.type is not None: existing_q.type = q_in.type
-        if q_in.knowledge_node_id is not None: existing_q.knowledge_node_id = q_in.knowledge_node_id
         if q_in.resource_id is not None: existing_q.resource_id = q_in.resource_id
         if q_in.source_author is not None: existing_q.source_author = q_in.source_author
         if q_in.source_title is not None: existing_q.source_title = q_in.source_title
         
-        # Validate node_type is SKILL if changed
-        if q_in.knowledge_node_id is not None and q_in.knowledge_node_id != existing_q.knowledge_node_id:
-            kn_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == q_in.knowledge_node_id))
+        if q_in.primary_knowledge_node_id is not None:
+            kn_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == q_in.primary_knowledge_node_id))
             kn = kn_result.scalars().first()
             if not kn or kn.node_type != KnowledgeNodeType.SKILL:
                 raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào chủ đề kiến thức dạng Kỹ năng (SKILL).")
-            if not await KnowledgeService.is_leaf(db, q_in.knowledge_node_id):
+            if not await KnowledgeService.is_leaf(db, q_in.primary_knowledge_node_id):
                 raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
+                
+            # Delete old tags
+            for tag in existing_q.skill_tags:
+                await db.delete(tag)
+                
+            # Add new tags
+            primary_id = q_in.primary_knowledge_node_id
+            secondary_ids = q_in.secondary_knowledge_node_ids or []
+            db.add(QuestionSkillTag(question_id=existing_q.id, knowledge_node_id=primary_id, is_primary=True))
+            for sec_id in secondary_ids:
+                if sec_id != primary_id:
+                    db.add(QuestionSkillTag(question_id=existing_q.id, knowledge_node_id=sec_id, is_primary=False))
                 
         target_type = existing_q.type
         
@@ -354,7 +388,7 @@ async def update_question(
                 db.add(db_ans)
                 
         await db.commit()
-        res = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.id == existing_q.id))
+        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == existing_q.id))
         return res.scalars().first()
 
 

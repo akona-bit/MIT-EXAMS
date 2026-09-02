@@ -270,41 +270,15 @@ async def suspend(request: Request, exam_id: int, user_id: int = Query(..., desc
 
 
 @router.get("/{exam_id}/result", dependencies=[Depends(RequireRole(["STUDENT"]))])
-async def get_student_exam_result(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Student views their own exam result after submission."""
-    from app.models.exam import ExamSubmission, ExamSubmissionAnswer, ExamParticipant as EP
-    
-    # Find the participant
-    participant_result = await db.execute(
-        select(EP).where(EP.exam_id == exam_id, EP.user_id == current_user.id)
-    )
-    participant = participant_result.scalars().first()
-    if not participant:
-        raise HTTPException(status_code=404, detail="Bạn chưa tham gia kỳ thi này")
-    
-    # Find the submission
-    sub_result = await db.execute(
-        select(ExamSubmission).where(ExamSubmission.exam_participant_id == participant.id)
-    )
-    submission = sub_result.scalars().first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Bài nộp chưa được ghi nhận")
-    
-    # Get answers with scores
-    answers_result = await db.execute(
-        select(ExamSubmissionAnswer).where(ExamSubmissionAnswer.exam_submission_id == submission.id)
-    )
-    answers = answers_result.scalars().all()
-    
-    total_score = sum(a.score or 0 for a in answers)
-    answered_count = sum(1 for a in answers if a.selected_answer_id or a.selected_answer_ids)
-    
-    return {
-        "exam_id": exam_id,
-        "submission_id": submission.id,
-        "submit_time": submission.submit_time,
-        "total_score": round(total_score, 2),
-        "answered_count": answered_count,
-        "total_questions": len(answers),
-        "status": participant.status.value if participant.status else "UNKNOWN",
-    }
+async def get_student_exam_result_route(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Student views their own exam result after submission.
+
+    Business rules enforced in app/services/exam_result.py:
+    - Chặn khi đang thi (IN_PROGRESS) hoặc chưa bắt đầu (NOT_STARTED).
+    - Điểm thô (CTT) luôn có ngay sau khi nộp bài.
+    - Điểm thực (IRT) chỉ hiển thị khi đủ ngưỡng N và đã tính xong.
+    - Xem lại đáp án theo permission "Quyền xem đáp án" (user.can_view_answers).
+    """
+    from app.services.exam_result import get_student_exam_result
+
+    return await get_student_exam_result(db, exam_id, current_user.id, current_user)

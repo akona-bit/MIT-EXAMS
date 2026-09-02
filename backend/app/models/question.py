@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Enum, Float, JSON
+from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Enum, Float, JSON, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -40,13 +40,16 @@ class KnowledgeNode(Base):
     
     node_type: Mapped[KnowledgeNodeType] = mapped_column(Enum(KnowledgeNodeType), default=KnowledgeNodeType.SKILL)
     subject: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_leaf: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_node.id"), nullable=True)
     short_code: Mapped[Optional[str]] = mapped_column(String(50), index=True, nullable=True)
     path_code: Mapped[Optional[str]] = mapped_column(String(255), index=True, nullable=True)
 
-    sub_nodes: Mapped[List["KnowledgeNode"]] = relationship("KnowledgeNode", backref="parent", remote_side=[id])
-    questions: Mapped[List["Question"]] = relationship(back_populates="knowledge_node")
+    questions: Mapped[List["Question"]] = relationship(
+        "Question",
+        secondary="question_skill_tag",
+        back_populates="knowledge_nodes"
+    )
 
 class KnowledgeNodeParent(Base):
     """DAG relation: 1 node can have multiple parents, 1 must be primary"""
@@ -55,8 +58,19 @@ class KnowledgeNodeParent(Base):
     parent_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    child: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[child_id])
-    parent: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[parent_id])
+    child: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[child_id], backref="parents")
+    parent: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[parent_id], backref="children")
+
+class QuestionSkillTag(Base):
+    """Link between a question and its skills (KnowledgeNodes). Replaces single knowledge_node_id."""
+    __tablename__ = "question_skill_tag"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("question.id"), index=True)
+    knowledge_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    question: Mapped["Question"] = relationship("Question", back_populates="skill_tags")
+    knowledge_node: Mapped["KnowledgeNode"] = relationship("KnowledgeNode")
 
 class KnowledgeNodeLink(Base):
     """Manual link between two knowledge nodes (non-hierarchical)"""
@@ -102,7 +116,6 @@ class Question(Base):
     status: Mapped[QuestionStatus] = mapped_column(Enum(QuestionStatus), default=QuestionStatus.DRAFT)
     reject_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    knowledge_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"))
     resource_id: Mapped[Optional[int]] = mapped_column(ForeignKey("resource.id"), nullable=True)
     creator_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
     passage_id: Mapped[Optional[int]] = mapped_column(ForeignKey("passage.id"), nullable=True)
@@ -126,7 +139,17 @@ class Question(Base):
     # Ví dụ: TRUE_FALSE có thể cấu hình "0.1/0.25/0.5/1" tùy số ý đúng
     scoring_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
 
-    knowledge_node: Mapped["KnowledgeNode"] = relationship(back_populates="questions")
+    knowledge_nodes: Mapped[List["KnowledgeNode"]] = relationship(
+        "KnowledgeNode",
+        secondary="question_skill_tag",
+        back_populates="questions",
+        viewonly=True
+    )
+    skill_tags: Mapped[List["QuestionSkillTag"]] = relationship(
+        "QuestionSkillTag",
+        back_populates="question",
+        cascade="all, delete-orphan"
+    )
     passage: Mapped[Optional["Passage"]] = relationship("Passage", back_populates="questions")
     answers: Mapped[List["Answer"]] = relationship(back_populates="question", cascade="all, delete-orphan")
     sub_items: Mapped[List["QuestionSubItem"]] = relationship(
@@ -174,3 +197,30 @@ class Answer(Base):
     )
     # Vẫn giữ relationship "question" mặc định trỏ về Question gốc
     question: Mapped["Question"] = relationship(back_populates="answers", foreign_keys=[question_id])
+
+# SQLAlchemy event listeners to automatically update is_leaf
+from sqlalchemy import event
+
+@event.listens_for(KnowledgeNodeParent, 'after_insert')
+def after_knowledge_node_parent_insert(mapper, connection, target):
+    # Whenever a new child is added to a parent, the parent is no longer a leaf
+    connection.execute(
+        text("UPDATE knowledge_node SET is_leaf = false WHERE id = :parent_id"),
+        {"parent_id": target.parent_id}
+    )
+
+@event.listens_for(KnowledgeNodeParent, 'after_delete')
+def after_knowledge_node_parent_delete(mapper, connection, target):
+    # Whenever a child is removed from a parent, check if the parent still has children
+    # If not, it becomes a leaf again
+    result = connection.execute(
+        text("SELECT COUNT(*) FROM knowledge_node_parent WHERE parent_id = :parent_id"),
+        {"parent_id": target.parent_id}
+    ).scalar()
+    
+    if result == 0:
+        connection.execute(
+            text("UPDATE knowledge_node SET is_leaf = true WHERE id = :parent_id"),
+            {"parent_id": target.parent_id}
+        )
+

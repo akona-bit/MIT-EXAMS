@@ -78,7 +78,8 @@ async def _load_knowledge_state(db: AsyncSession):
         p_id = primary_parents.get(node.id)
         children_by_primary_parent.setdefault(p_id, []).append(node)
 
-    question_result = await db.execute(select(Question.id, Question.knowledge_node_id))
+    from app.models.question import QuestionSkillTag
+    question_result = await db.execute(select(QuestionSkillTag.question_id, QuestionSkillTag.knowledge_node_id))
     question_rows = question_result.all()
     question_count_by_node: Dict[int, int] = {}
     for _, knowledge_node_id in question_rows:

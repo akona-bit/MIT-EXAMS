@@ -24,6 +24,7 @@ import ExamDetailPage from "./pages/admin/ExamDetailPage";
 import ExamFormPage from "./pages/admin/ExamFormPage";
 import StudentHomePage from "./pages/student/StudentHomePage";
 import StudentExamShell from "./pages/student/StudentExamShell";
+import StudentExamResultPage from "./pages/student/StudentExamResultPage";
 
 import ObsidianPage from "./pages/admin/ObsidianPage";
 import ResourcesPage from "./pages/admin/ResourcesPage";
@@ -130,6 +131,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute allowedRoles={["STUDENT"]} />}>
         <Route path="/student" element={<StudentHomePage />} />
         <Route path="/exam/:id/session" element={<StudentExamShell />} />
+        <Route path="/student/exam/:examId/result" element={<StudentExamResultPage />} />
       </Route>
 
       {/* Fallback */}
