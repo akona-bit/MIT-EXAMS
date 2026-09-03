@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ForceGraph2D } from "react-force-graph-2d";
+import ForceGraph2D from "react-force-graph-2d";
 import { getKnowledgeGraph } from "../../api/knowledge";
 import type { KnowledgeGraph } from "../../types";
 import { Loader2, Maximize2, ZoomIn, ZoomOut, Filter } from "lucide-react";
