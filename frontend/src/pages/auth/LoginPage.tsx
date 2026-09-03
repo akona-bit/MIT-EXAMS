@@ -39,9 +39,11 @@ export default function LoginPage() {
       const targetRoute = user.role?.name === "STUDENT" ? "/student" : "/admin";
       navigate(targetRoute);
     } catch (err: any) {
-      setError(
-        err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.",
-      );
+      let errorMessage = err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
+      if (errorMessage.includes("Invalid login credentials") || errorMessage.includes("Invalid credentials")) {
+        errorMessage = "Sai email hoặc Mật khẩu (hoặc tài khoản không tồn tại).";
+      }
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
