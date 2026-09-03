@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { adminFeedbacksApi, type AdminFeedback } from '../../api/adminFeedbacks';
 import { Button } from '../../components/ui/Button';
-import { format } from 'date-fns';
 import { MessageSquare, ExternalLink, CheckCircle, Clock, XCircle } from 'lucide-react';
 
 export default function AdminFeedbacksPage() {
@@ -140,7 +139,7 @@ export default function AdminFeedbacksPage() {
                     </td>
                     <td className="px-4 py-4">{getStatusBadge(fb.status)}</td>
                     <td className="px-4 py-4 whitespace-nowrap text-xs">
-                      {format(new Date(fb.created_at), 'dd/MM/yyyy HH:mm')}
+                      {new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(fb.created_at))}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       {fb.status === 'PENDING' && (

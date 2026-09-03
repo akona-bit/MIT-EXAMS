@@ -79,10 +79,15 @@
 - [x] Rate limiting endpoint nộp bài (`slowapi` 5/min)
 - [x] Audit log/nhật ký hoạt động (Bảng `AuditLog`)
 - [x] Danh sách học sinh bị cấm thi (Cột `is_banned`, báo lỗi 403 ngay lập tức)
+- [x] Hệ thống Feedback (Góp ý/Báo lỗi)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
-- `2026-09-03` — **Chuyển đổi Quên Mật Khẩu sang OTP & Nâng cấp UI Email**: Đã thay thế luồng quên mật khẩu cũ (dùng URL link) bằng luồng OTP trực tiếp trên giao diện trang `ForgotPasswordPage.tsx` (gồm 3 bước: nhập email, nhập mã + mật khẩu, thành công). Viết lại hoàn toàn giao diện email HTML/CSS (Xác thực đăng nhập và Đổi mật khẩu) trong `email.py` thành chuẩn Premium với các khối đổ bóng, màu nền mới và Typography hiện đại. Cập nhật backend API `/send-reset-password` để gửi OTP thay vì URL.
+- `2026-09-03` — **Chuyển đổi Quên Mật Khẩu sang OTP & Hệ thống Feedback**: 
+  - [x] Chuyển đổi tính năng quên mật khẩu từ dạng link thành mã OTP (3 bước: gửi OTP, xác thực, đổi mật khẩu).
+  - [x] Thêm cooldown 60s giữa các lần gửi OTP.
+  - [x] Cải thiện giao diện email thông báo để thân thiện và chuyên nghiệp hơn (Premium UI cho email.py), tích hợp nhắc nhớ hỗ trợ Discord.
+  - [x] Xây dựng hệ thống Góp ý/Báo lỗi (Feedback System): Model `Feedback`, API, Component `StudentFeedbackModal` (tích hợp `StudentHomePage` & `StudentExamShell`), và trang quản lý cho Admin.
 
 - `2026-09-02` — **Hoàn thiện Tính năng Đăng nhập & Xác thực**: Tích hợp luồng Supabase OTP cho chức năng Guest Login và Forgot Password. Bổ sung `registration_number` (Số báo danh SBD - 6 số tự động) vào `User` model, cập nhật `dependencies.py` để auto-generate SBD khi người dùng được tạo. Thay thế toàn bộ `LoginPage.tsx` hỗ trợ đăng nhập qua SBD hoặc Email và lựa chọn Mật khẩu hoặc OTP. Cập nhật `AccessControlPage.tsx` và `admin.py` hỗ trợ tính năng mời hàng loạt (multi-select/invite qua mảng emails). Đã verify frontend build thành công.
 
