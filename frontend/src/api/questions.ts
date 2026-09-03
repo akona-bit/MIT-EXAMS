@@ -76,3 +76,13 @@ export async function getQuestionHistory(id: number): Promise<Question[]> {
   const response = await client.get<Question[]>(`/api/v1/questions/${id}/history`);
   return response.data;
 }
+
+export async function analyzeQuestion(id: number): Promise<import('../types').AiAnalysisResponse> {
+  const response = await client.post<import('../types').AiAnalysisResponse>(`/api/v1/questions/${id}/analyze`);
+  return response.data;
+}
+
+export async function reviewAiAnalysis(id: number, payload: import('../types').AiReviewRequest): Promise<import('../types').AiAnalysisResponse> {
+  const response = await client.post<import('../types').AiAnalysisResponse>(`/api/v1/questions/${id}/ai-analysis/review`, payload);
+  return response.data;
+}

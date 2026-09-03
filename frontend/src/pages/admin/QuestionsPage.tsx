@@ -21,7 +21,9 @@ import {
   Copy,
   AlertCircle,
   History,
+  Sparkles,
 } from "lucide-react";
+import AiReviewModal from "../../components/admin/question/AiReviewModal";
 
 export default function QuestionsPage() {
   const navigate = useNavigate();
@@ -42,6 +44,8 @@ export default function QuestionsPage() {
   const [historyItem, setHistoryItem] = useState<Question | null>(null);
   const [historyList, setHistoryList] = useState<Question[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
+  const [aiReviewItem, setAiReviewItem] = useState<Question | null>(null);
 
   const [activeTab, setActiveTab] = useState<"ALL" | "PENDING">("ALL");
   const [filterLevel, setFilterLevel] = useState<string>("");
@@ -261,6 +265,15 @@ export default function QuestionsPage() {
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8 text-indigo-500 hover:bg-indigo-50 hover:text-indigo-600"
+            title="Phân tích AI"
+            onClick={() => setAiReviewItem(row)}
+          >
+            <Sparkles className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-8 w-8 text-primary-500 hover:bg-primary-50 hover:text-primary-600"
             title="Duyệt / Từ chối"
             onClick={() => setReviewItem(row)}
@@ -419,6 +432,15 @@ export default function QuestionsPage() {
         keyExtractor={(item) => item.id}
         isLoading={isLoading}
         emptyMessage="Chưa có câu hỏi nào trong ngân hàng."
+      />
+
+      <AiReviewModal
+        isOpen={!!aiReviewItem}
+        onClose={() => {
+          setAiReviewItem(null);
+          fetchQuestions(); // Refresh in case AI review added tags
+        }}
+        questionId={aiReviewItem?.id || null}
       />
 
       <ConfirmDialog

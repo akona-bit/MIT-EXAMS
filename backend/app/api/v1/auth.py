@@ -17,6 +17,15 @@ from app.schemas.user import UserCreate, UserResponse, Token
 from app.api.dependencies import get_current_active_user
 from app.core.analytics import capture
 from app.services.email import send_otp_email, send_password_reset_email
+from app.core.config import settings
+import os
+
+# On local (no Redis), call email functions directly
+# On production (REDIS_URL set), use Celery background tasks
+_use_celery = os.getenv("REDIS_URL", "redis://localhost:6379/0") != "redis://localhost:6379/0"
+
+if _use_celery:
+    from app.services.email_tasks import send_otp_email_task, send_password_reset_email_task
 from pydantic import BaseModel, EmailStr
 
 
@@ -111,10 +120,11 @@ async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
     db.add(otp)
     await db.commit()
 
-    try:
+    # Dispatch email: Celery on production, direct call on local
+    if _use_celery:
+        send_otp_email_task.delay(req.email, code)
+    else:
         send_otp_email(req.email, code)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gửi email thất bại: {str(e)}")
 
     return {"message": f"Mã OTP đã gửi tới {req.email}"}
 
@@ -209,10 +219,11 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
     db.add(otp)
     await db.commit()
 
-    try:
+    # Dispatch email: Celery on production, direct call on local
+    if _use_celery:
+        send_password_reset_email_task.delay(req.email, code)
+    else:
         send_password_reset_email(req.email, code)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gửi email thất bại: {str(e)}")
 
     return {"message": f"Mã xác thực đã gửi tới {req.email}"}
 

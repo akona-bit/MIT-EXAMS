@@ -29,7 +29,7 @@ class MatrixCell:
     group_id: Optional[int] = None
     group_label: Optional[str] = None
     required_passage_id: Optional[int] = None
-    required_passage_id: Optional[int] = None
+    group_mode: str = "ATOMIC"
 
 @dataclass
 class CandidateQuestion:
@@ -174,54 +174,69 @@ def _score(q: CandidateQuestion, target_irt_b: Optional[float]) -> tuple:
     return (exposure_penalty, irt_penalty, random.random())
 
 def _try_satisfy_group(cells: List[MatrixCell], pool: List[CandidateQuestion], used_ids: Set[int]) -> Optional[List[CellResult]]:
-    # Try to satisfy a group of cells. All cells in the group must share the same passage_id if grouped.
     if not cells:
         return []
 
     first_cell = cells[0]
     is_grouped = first_cell.group_id is not None
     req_passage_id = first_cell.required_passage_id if is_grouped else None
+    group_mode = first_cell.group_mode
 
     if not is_grouped:
-        # Normal single cell selection (rule cũ strict-mode hoặc rule đơn giản proportional)
-        cell = cells[0]
-        return [_select_for_cell(cell, pool, used_ids)]
+        return [_select_for_cell(cells[0], pool, used_ids)]
 
-    # It's a group
     if req_passage_id is not None:
         possible_passages = [req_passage_id]
     else:
-        # Find all passages that have questions for at least one cell in the group
         possible_passages_set = set()
         for cell in cells:
-            cands = _candidates_for_cell(cell, pool, used_ids)
-            for c in cands:
+            for c in _candidates_for_cell(cell, pool, used_ids):
                 if c.passage_id is not None:
                     possible_passages_set.add(c.passage_id)
         possible_passages = list(possible_passages_set)
 
+    best_results = []
+    best_selected_count = -1
+
     for p_id in possible_passages:
         group_results = []
         temp_used = set(used_ids)
+        current_selected = 0
         success = True
+        
         for cell in cells:
             result = _select_for_cell(cell, pool, temp_used, passage_id=p_id)
-            if result.shortage > 0 or len(result.selected_ids) != cell.count:
-                success = False
-                break
+            if group_mode == "ATOMIC":
+                if result.shortage > 0 or len(result.selected_ids) != cell.count:
+                    success = False
+                    break
+            
             group_results.append(result)
             temp_used.update(result.selected_ids)
+            current_selected += len(result.selected_ids)
 
-        if success:
+        if group_mode == "ATOMIC" and success:
             return group_results
+            
+        if group_mode in ["FLEXIBLE", "OPTIONAL"]:
+            if current_selected > best_selected_count:
+                best_selected_count = current_selected
+                best_results = group_results
 
-    # If we get here, no passage could satisfy the group completely.
-    # Strict fail: if 1 group fails, all fail - no questions selected from this group.
-    group_results = []
+    if group_mode in ["FLEXIBLE", "OPTIONAL"] and best_results:
+        # Nếu OPTIONAL, set shortage = 0 để không trigger MATRIX_UNSATISFIABLE
+        if group_mode == "OPTIONAL":
+            for r in best_results:
+                r.shortage = 0
+        return best_results
+
+    # Nếu ATOMIC fail toàn bộ các passages hoặc không có passages
+    fail_results = []
     for cell in cells:
-        group_results.append(CellResult(cell=cell, selected_ids=[], shortage=cell.count))
+        shortage = 0 if group_mode == "OPTIONAL" else cell.count
+        fail_results.append(CellResult(cell=cell, selected_ids=[], shortage=shortage))
 
-    return group_results
+    return fail_results
 
 def generate_exam(matrix: List[MatrixCell], pool: List[CandidateQuestion], exclude_ids: Optional[Set[int]] = None, max_retries: int = 3) -> GenerationReport:
     exclude_ids = set(exclude_ids or [])
@@ -358,11 +373,14 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
     group_ids = set(r.group_id for r in rules if r.group_id is not None)
     group_map = {}
     if group_ids:
-        group_query = text("SELECT id, required_passage_id FROM matrix_rule_group WHERE id IN :gids")
+        group_query = text("SELECT id, required_passage_id, group_mode FROM matrix_rule_group WHERE id IN :gids")
         group_query = group_query.bindparams(bindparam("gids", expanding=True))
         group_res = await db.execute(group_query, {"gids": tuple(group_ids)})
         for row in group_res.fetchall():
-            group_map[row.id] = row.required_passage_id
+            group_map[row.id] = {
+                "required_passage_id": row.required_passage_id,
+                "group_mode": row.group_mode or "ATOMIC"
+            }
 
     for r in rules:
         # Load knowledge node hierarchy to get topic, concept, skill names via SQL
@@ -392,8 +410,11 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
         level_str = LEVEL_MAP.get(r.level) if r.level is not None else None
         question_type = r.question_type.value if hasattr(r.question_type, 'value') else r.question_type
         req_passage_id = None
+        group_mode = "ATOMIC"
         if r.group_id is not None:
-            req_passage_id = group_map.get(r.group_id)
+            g_info = group_map.get(r.group_id, {})
+            req_passage_id = g_info.get("required_passage_id")
+            group_mode = g_info.get("group_mode", "ATOMIC")
 
         cells.append(MatrixCell(
             topic=topic_name,
@@ -407,6 +428,7 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
             part=r.part,
             position=r.position,
             group_id=r.group_id,
-            required_passage_id=req_passage_id
+            required_passage_id=req_passage_id,
+            group_mode=group_mode
         ))
     return cells

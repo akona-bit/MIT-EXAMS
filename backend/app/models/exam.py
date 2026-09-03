@@ -25,6 +25,7 @@ class MatrixRuleGroup(Base):
     matrix_id: Mapped[int] = mapped_column(ForeignKey("matrix.id"))
     label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     required_passage_id: Mapped[Optional[int]] = mapped_column(ForeignKey("passage.id"), nullable=True)
+    group_mode: Mapped[str] = mapped_column(String(20), default="ATOMIC", server_default="ATOMIC")
 
     matrix: Mapped["Matrix"] = relationship(back_populates="groups")
     rules: Mapped[List["MatrixRule"]] = relationship(back_populates="group")

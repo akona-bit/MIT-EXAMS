@@ -146,25 +146,38 @@ async def get_question_similarity(question_id: int, threshold: float = 0.3, limi
 class CheckDuplicateRequest(BaseModel):
     content: str
     knowledge_node_id: int
+from app.services.embedding_service import generate_embedding, search_similar_questions
 
 @router.post("/check-duplicate", response_model=List[QuestionSimilarityResponse])
-async def check_duplicate(req: CheckDuplicateRequest, threshold: float = 0.8, db: AsyncSession = Depends(get_db)):
-    from difflib import SequenceMatcher
-    result = await db.execute(select(Question).where(Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == req.knowledge_node_id)))
-    other_qs = result.scalars().all()
-    results = []
-    for q in other_qs:
-        ratio = SequenceMatcher(None, req.content, q.content).ratio()
-        if ratio >= threshold:
-            results.append({
-                "question_id": q.id,
-                "similarity_score": round(ratio, 4),
-                "content": q.content,
-                "status": q.status.value
-            })
-    results.sort(key=lambda x: x["similarity_score"], reverse=True)
-    return results[:10]
-
+async def check_duplicate(req: CheckDuplicateRequest, threshold: float = 0.3, db: AsyncSession = Depends(get_db)):
+    # Generate embedding for the new question content
+    try:
+        emb = await generate_embedding(req.content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate embedding: {str(e)}")
+        
+    # Search for similar questions in the DB
+    results = await search_similar_questions(
+        db=db,
+        query_embedding=emb,
+        limit=10,
+        similarity_threshold=threshold
+    )
+    
+    # Optional: Filter by knowledge_node_id if needed, but semantic search is usually global.
+    # We can keep it global or pass a list of IDs to search_similar_questions.
+    
+    # Format to match QuestionSimilarityResponse
+    formatted_results = []
+    for r in results:
+        formatted_results.append({
+            "question_id": r["question_id"],
+            "similarity_score": r["similarity"],
+            "content": r["content"],
+            "status": r["status"]
+        })
+        
+    return formatted_results
 
 @router.post("/", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def create_question(
@@ -237,6 +250,14 @@ async def create_question(
     
     await db.commit()
     
+    # Generate and save embedding in background or immediately
+    try:
+        from app.services.embedding_service import upsert_embedding
+        emb = await generate_embedding(db_question.content)
+        await upsert_embedding(db, db_question.id, db_question.content, emb)
+    except Exception as e:
+        print(f"Warning: Failed to generate embedding for question {db_question.id}: {e}")
+
     # Reload with answers and tags
     result = await db.execute(
         select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == db_question.id)
@@ -332,6 +353,14 @@ async def update_question(
             
         await db.commit()
         
+        # Generate and save embedding in background or immediately
+        try:
+            from app.services.embedding_service import upsert_embedding
+            emb = await generate_embedding(new_q.content)
+            await upsert_embedding(db, new_q.id, new_q.content, emb)
+        except Exception as e:
+            print(f"Warning: Failed to generate embedding for question {new_q.id}: {e}")
+        
         # Return the new version
         res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == new_q.id))
         return res.scalars().first()
@@ -388,19 +417,194 @@ async def update_question(
                 db.add(db_ans)
                 
         await db.commit()
+        
+        # Generate and save embedding in background or immediately
+        try:
+            from app.services.embedding_service import upsert_embedding
+            emb = await generate_embedding(existing_q.content)
+            await upsert_embedding(db, existing_q.id, existing_q.content, emb)
+        except Exception as e:
+            print(f"Warning: Failed to generate embedding for question {existing_q.id}: {e}")
+            
         res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == existing_q.id))
         return res.scalars().first()
 
 
 @router.delete("/{question_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def delete_question(question_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_question(question_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     result = await db.execute(select(Question).where(Question.id == question_id))
     question = result.scalars().first()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
+    if question.creator_id != current_user.id and not current_user.role_id in [1, 2, 3]: # ADMIN, TEACHER, MODERATOR
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     await db.delete(question)
     await db.commit()
-    return None
+    return {"status": "success"}
+
+from app.schemas.ai import AiAnalysisResponse
+from app.services.ai_analysis import (
+    get_fully_loaded_question,
+    compute_question_hash,
+    get_cached_analysis,
+    analyze_question_with_gemini,
+    log_ai_request
+)
+from app.models.ai import AiAnalysisCache, AiReviewStatus
+
+@router.post("/{question_id}/analyze", response_model=AiAnalysisResponse)
+async def analyze_question(
+    question_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Trigger AI analysis for a specific question.
+    Only Teachers and Admins can perform this action.
+    """
+    if current_user.role_id not in [1, 2]: # Assuming 1: Admin, 2: Teacher
+        raise HTTPException(status_code=403, detail="Only teachers and admins can analyze questions")
+        
+    question = await get_fully_loaded_question(db, question_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+        
+    # Calculate hash
+    content_hash = compute_question_hash(question)
+    
+    # Check cache first
+    cached_result = await get_cached_analysis(db, content_hash)
+    if cached_result:
+        return cached_result
+        
+    # Not in cache or usable cache, call AI
+    # Pass a simplified text version to AI (you can adjust this later)
+    q_text = question.content
+    for sub in getattr(question, 'sub_items', []):
+        q_text += f"\n- {getattr(sub, 'label', '')}: {getattr(sub, 'prompt', '')}"
+    for ans in getattr(question, 'answers', []):
+        q_text += f"\n[ ] {ans.content}"
+        
+    ai_response = await analyze_question_with_gemini(question, q_text)
+    
+    # Estimate cost (very rough estimate for Gemini 1.5 Pro)
+    cost = (ai_response["token_count"] / 1000) * 0.0035 
+    
+    # Save to Cache
+    new_cache = AiAnalysisCache(
+        content_hash=content_hash,
+        source_question_id=question.id,
+        analysis_result=ai_response["result"],
+        confidence=0.9, # default or parse from AI if requested
+        ai_model_used="gemini-1.5-pro",
+        review_status=AiReviewStatus.AI_SUGGESTED,
+        reviewed_by=None
+    )
+    db.add(new_cache)
+    await db.commit()
+    await db.refresh(new_cache)
+    
+    # Log request
+    await log_ai_request(
+        db=db,
+        endpoint=f"/questions/{question_id}/analyze",
+        question_id=question.id,
+        token_count=ai_response["token_count"],
+        cost_estimate=cost
+    )
+    
+    return new_cache
+    
+from app.schemas.ai import AiReviewRequest
+from app.models.ai import AiReviewStatus
+from sqlalchemy import func
+
+@router.post("/{question_id}/ai-analysis/review", response_model=AiAnalysisResponse)
+async def review_ai_analysis(
+    question_id: int,
+    request: AiReviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Accept, edit, or reject the AI analysis result.
+    If confirmed/edited, the concepts and skills are saved as non-primary QuestionSkillTags.
+    """
+    if current_user.role_id not in [1, 2]:
+        raise HTTPException(status_code=403, detail="Only teachers and admins can review AI analysis")
+        
+    question = await get_fully_loaded_question(db, question_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+        
+    content_hash = compute_question_hash(question)
+    
+    # Find the latest cache
+    stmt = select(AiAnalysisCache).where(AiAnalysisCache.content_hash == content_hash)
+    result = await db.execute(stmt)
+    cache = result.scalars().first()
+    
+    if not cache:
+        raise HTTPException(status_code=404, detail="No AI analysis found for this question version")
+        
+    # Update cache
+    cache.review_status = request.review_status
+    cache.reviewed_by = current_user.id
+    cache.reviewed_at = func.now()
+    
+    if request.updated_analysis_result:
+        cache.analysis_result = request.updated_analysis_result
+        
+    # If accepted or edited, process skills and concepts
+    if request.review_status in [AiReviewStatus.HUMAN_CONFIRMED, AiReviewStatus.HUMAN_EDITED]:
+        final_result = cache.analysis_result or {}
+        ai_concepts = final_result.get("concepts", [])
+        ai_skills = final_result.get("skills", [])
+        
+        # Determine existing tags to avoid duplicates
+        existing_tags_stmt = select(QuestionSkillTag.knowledge_node_id).where(QuestionSkillTag.question_id == question_id)
+        existing_tags = (await db.execute(existing_tags_stmt)).scalars().all()
+        existing_tags_set = set(existing_tags)
+        
+        async def _get_or_create_node(name: str, node_type: KnowledgeNodeType) -> int:
+            if not name: return None
+            # case-insensitive search
+            s = select(KnowledgeNode).where(
+                func.lower(KnowledgeNode.name) == name.lower(),
+                KnowledgeNode.node_type == node_type
+            )
+            node = (await db.execute(s)).scalars().first()
+            if not node:
+                node = KnowledgeNode(name=name, node_type=node_type, is_leaf=True)
+                db.add(node)
+                await db.flush() # get ID
+            return node.id
+            
+        nodes_to_add = []
+        for c in ai_concepts:
+            nid = await _get_or_create_node(c, KnowledgeNodeType.CONCEPT)
+            if nid and nid not in existing_tags_set:
+                nodes_to_add.append(nid)
+                existing_tags_set.add(nid)
+                
+        for s in ai_skills:
+            nid = await _get_or_create_node(s, KnowledgeNodeType.SKILL)
+            if nid and nid not in existing_tags_set:
+                nodes_to_add.append(nid)
+                existing_tags_set.add(nid)
+                
+        for nid in nodes_to_add:
+            new_tag = QuestionSkillTag(
+                question_id=question_id,
+                knowledge_node_id=nid,
+                is_primary=False
+            )
+            db.add(new_tag)
+            
+    await db.commit()
+    await db.refresh(cache)
+    return cache
 
 @router.post("/{question_id}/review", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "MODERATOR", "TEACHER"]))])
 async def review_question(

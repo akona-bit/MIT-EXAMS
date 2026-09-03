@@ -1,4 +1,5 @@
 services:
+  # 1. API Web Service
   - type: web
     name: mit-exams-backend
     runtime: docker
@@ -7,6 +8,8 @@ services:
     plan: free
     envVars:
       - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
         sync: false
       - key: SECRET_KEY
         sync: false
@@ -30,3 +33,38 @@ services:
         sync: false
       - key: DEBUG
         value: "false"
+
+  # 2. Celery Worker Service
+  - type: worker
+    name: mit-exams-celery-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: "celery -A app.worker.celery_app worker --loglevel=info"
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: mit-exams-backend
+          envVarKey: DATABASE_URL
+      - key: REDIS_URL
+        fromService:
+          type: web
+          name: mit-exams-backend
+          envVarKey: REDIS_URL
+      - key: BREVO_API_KEY
+        fromService:
+          type: web
+          name: mit-exams-backend
+          envVarKey: BREVO_API_KEY
+      - key: BREVO_FROM_EMAIL
+        fromService:
+          type: web
+          name: mit-exams-backend
+          envVarKey: BREVO_FROM_EMAIL
+      - key: GEMINI_API_KEY
+        fromService:
+          type: web
+          name: mit-exams-backend
+          envVarKey: GEMINI_API_KEY

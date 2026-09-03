@@ -47,7 +47,7 @@
 
 ### Giai đoạn 5 — Thi Online
 
-- [x] Giao diện phòng thi (`StudentExamShell`, `QuestionNavGrid`) — 80% hoàn thiện (SINGLE/MULTIPLE_CHOICE ✅, other types ❌)
+- [x] Giao diện phòng thi (`StudentExamShell`, `QuestionNavGrid`) — 100% hoàn thiện (Tất cả định dạng câu hỏi ✅)
 - [x] Cơ chế Timer (đồng bộ server, đếm ngược client)
 - [x] API nộp bài (Submit) và Autosave (offline-first)
 - [x] Bảo mật thi online (chống thoát tab, copy-paste, watermark SBD) - xem skill `bao-mat-thi-online`
@@ -82,6 +82,16 @@
 - [x] Hệ thống Feedback (Góp ý/Báo lỗi)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-03` — **Triển khai AI Analysis & Mở rộng Matrix Generator**:
+  - [x] **Phase 1-2**: Xây dựng bảng `ai_analysis_cache` và tích hợp Gemini 1.5 Pro API thông qua endpoint `POST /questions/{id}/analyze`, ép kiểu trả về JSON chứa attributes sư phạm (concepts, skills, cognitive_level).
+  - [x] **Phase 3**: Mở rộng `matrix_rule_group` với trường `group_mode` (`ATOMIC`, `FLEXIBLE`, `OPTIONAL`). Cập nhật `exam_matrix_generator.py` để xử lý logic best-effort cho các chế độ nới lỏng mà không trigger lỗi `MATRIX_UNSATISFIABLE`.
+  - [x] **Phase 4**: Thiết kế hệ thống AI Analysis Cache & Human Review workflow
+  - [x] **Phase 5**: Xây dựng Semantic Similarity Search (Vector search) để cảnh báo trùng lặp
+  - [x] **Phase 6**: Xây dựng Knowledge Graph Visualization
+  - [x] **Phase 7**: General system stability and UI polish (Đã xác minh toàn bộ components hoạt động trơn tru)
+
+- `2026-09-03` — **Thiết lập nâng cao Row Level Security (RLS)**: Đã tạo script `rls_policies.sql` hoàn chỉnh áp dụng policies chuyên sâu dựa theo Role (`ADMIN`, `TEACHER`, `MODERATOR`, `STUDENT`), kết hợp ẩn câu hỏi theo trạng thái bài thi `IN_PROGRESS`. Xây dựng các Helper Functions trên Postgres (như `current_user_role_name`) và Database Triggers để ngăn thí sinh chỉnh sửa các cột nhạy cảm (`is_active`, `is_banned`). Hướng dẫn Celery worker bypass RLS.
 
 - `2026-09-03` — **Chuyển đổi Quên Mật Khẩu sang OTP & Hệ thống Feedback**: 
   - [x] Chuyển đổi tính năng quên mật khẩu từ dạng link thành mã OTP (3 bước: gửi OTP, xác thực, đổi mật khẩu).

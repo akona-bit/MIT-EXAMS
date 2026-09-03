@@ -6,7 +6,7 @@ from sqlalchemy.sql import func
 
 from app.db.database import get_db
 from app.models.question import KnowledgeNode, KnowledgeNodeLink, Question, KnowledgeNodeParent
-from app.schemas.question import KnowledgeNodeCreate, KnowledgeNodeResponse, KnowledgeNodeUpdate
+from app.schemas.question import KnowledgeNodeCreate, KnowledgeNodeResponse, KnowledgeNodeUpdate, GraphResponse, GraphNode, GraphEdge
 from app.api.dependencies import RequireRole
 from app.core.analytics import capture
 from app.services.knowledge_service import KnowledgeService
@@ -334,3 +334,84 @@ async def delete_manual_link(link_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Link không tồn tại")
     await db.delete(link)
     await db.commit()
+
+@router.get("/graph", response_model=GraphResponse)
+async def get_knowledge_graph(subject: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """
+    Returns the knowledge graph data structure suitable for visualization (nodes and edges).
+    Includes hierarchical edges (KnowledgeNodeParent) and cross-links (KnowledgeNodeLink).
+    """
+    # 1. Load nodes and hierarchical edges
+    nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents = await _load_knowledge_state(db)
+    
+    # Optional filtering by subject (only keep nodes in that subject tree)
+    if subject:
+        # Re-filter nodes to only include those in the subject's tree
+        subject_nodes = set()
+        for node in nodes:
+            if node.subject == subject:
+                subject_nodes.add(node.id)
+                # Include all its descendants too
+                queue = [node.id]
+                while queue:
+                    curr = queue.pop(0)
+                    children = [c.id for c in children_by_primary_parent.get(curr, [])]
+                    subject_nodes.update(children)
+                    queue.extend(children)
+        
+        # Also, include ancestors so the tree is complete up to the roots
+        ancestors = set()
+        for nid in subject_nodes:
+            curr = nid
+            while curr:
+                ancestors.add(curr)
+                curr = primary_parents.get(curr)
+        
+        valid_ids = subject_nodes.union(ancestors)
+        filtered_nodes = [n for n in nodes if n.id in valid_ids]
+    else:
+        filtered_nodes = nodes
+        valid_ids = {n.id for n in nodes}
+
+    graph_nodes = []
+    graph_edges = []
+    
+    # Add nodes
+    for node in filtered_nodes:
+        node_type_str = node.node_type.value.lower() if node.node_type else "skill"
+        graph_nodes.append(GraphNode(
+            id=str(node.id),
+            label=node.name,
+            type=node_type_str,
+            question_count=question_count_by_node.get(node.id, 0)
+        ))
+        
+    # 2. Add hierarchical edges (from all_parents, not just primary to show full DAG if any)
+    for child_id, parent_ids in all_parents.items():
+        if child_id not in valid_ids:
+            continue
+        for parent_id in parent_ids:
+            if parent_id in valid_ids:
+                is_primary = primary_parents.get(child_id) == parent_id
+                graph_edges.append(GraphEdge(
+                    id=f"hier_{parent_id}_{child_id}",
+                    source=str(parent_id),
+                    target=str(child_id),
+                    type="hierarchical",
+                    label="primary" if is_primary else "secondary"
+                ))
+                
+    # 3. Add manual/cross links
+    link_result = await db.execute(select(KnowledgeNodeLink))
+    links = link_result.scalars().all()
+    for link in links:
+        if link.source_id in valid_ids and link.target_id in valid_ids:
+            graph_edges.append(GraphEdge(
+                id=f"link_{link.id}",
+                source=str(link.source_id),
+                target=str(link.target_id),
+                type="related",
+                label=link.label or "related"
+            ))
+            
+    return GraphResponse(nodes=graph_nodes, edges=graph_edges)

@@ -31,6 +31,7 @@ import StudentExamShell from "./pages/student/StudentExamShell";
 import StudentExamResultPage from "./pages/student/StudentExamResultPage";
 
 import ObsidianPage from "./pages/admin/ObsidianPage";
+import KnowledgeGraphPage from "./pages/admin/KnowledgeGraphPage";
 import ResourcesPage from "./pages/admin/ResourcesPage";
 import AccessControlPage from "./pages/admin/AccessControlPage";
 
@@ -129,6 +130,7 @@ function AppRoutes() {
           <Route path="exams/compare" element={<ExamComparePage />} />
           <Route path="exams/:id" element={<ExamDetailPage />} />
           <Route path="obsidian" element={<ObsidianPage />} />
+          <Route path="graph" element={<KnowledgeGraphPage />} />
           <Route path="resources" element={<ResourcesPage />} />
           <Route path="access" element={<AccessControlPage />} />
           <Route path="students" element={<StudentManagementPage />} />

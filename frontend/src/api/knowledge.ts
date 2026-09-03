@@ -30,8 +30,10 @@ export async function getKnowledgeNodeContext(id: number): Promise<any> {
   return response.data;
 }
 
-export async function getKnowledgeGraph(): Promise<KnowledgeGraph> {
-  const response = await client.get<KnowledgeGraph>("/api/v1/knowledge/graph");
+export async function getKnowledgeGraph(subject?: string): Promise<KnowledgeGraph> {
+  const params = new URLSearchParams();
+  if (subject) params.append("subject", subject);
+  const response = await client.get<KnowledgeGraph>(`/api/v1/knowledge/graph${subject ? `?${params.toString()}` : ''}`);
   return response.data;
 }
 

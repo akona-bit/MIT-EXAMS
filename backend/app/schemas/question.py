@@ -25,6 +25,23 @@ class KnowledgeNodeResponse(KnowledgeNodeBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+class GraphNode(BaseModel):
+    id: str
+    label: str
+    type: str
+    question_count: int = 0
+
+class GraphEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    type: str
+    label: Optional[str] = None
+
+class GraphResponse(BaseModel):
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+
 # --- Resource Schemas ---
 class ResourceBase(BaseModel):
     type: ResourceType

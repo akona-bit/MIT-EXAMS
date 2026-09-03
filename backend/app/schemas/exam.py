@@ -8,6 +8,7 @@ from app.models.exam import ExamStatus, ParticipantStatus
 class MatrixRuleGroupBase(BaseModel):
     label: Optional[str] = None
     required_passage_id: Optional[int] = None
+    group_mode: str = "ATOMIC"
 
 class MatrixRuleGroupCreate(MatrixRuleGroupBase):
     local_id: str
