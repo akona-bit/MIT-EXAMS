@@ -2,18 +2,16 @@ import httpx
 from app.core.config import settings
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
-BREVO_API_KEY = settings.BREVO_API_KEY
-FROM_EMAIL = settings.BREVO_FROM_EMAIL
 
 
 def _send(to_email: str, subject: str, html: str) -> dict:
     """Send email via Brevo API."""
     headers = {
-        "api-key": BREVO_API_KEY,
+        "api-key": settings.BREVO_API_KEY,
         "Content-Type": "application/json",
     }
     payload = {
-        "sender": {"email": FROM_EMAIL, "name": "MIT EXAMS"},
+        "sender": {"email": settings.BREVO_FROM_EMAIL, "name": "MIT EXAMS"},
         "to": [{"email": to_email}],
         "subject": subject,
         "htmlContent": html,
