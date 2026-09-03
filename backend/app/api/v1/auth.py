@@ -182,8 +182,7 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalars().first()
     if not user:
-        # Don't reveal if email exists
-        return {"message": f"Nếu email {req.email} tồn tại, mã xác thực đã được gửi"}
+        raise HTTPException(status_code=404, detail="Email này chưa được đăng ký tài khoản")
 
     # Check cooldown (60 seconds)
     latest_otp_result = await db.execute(
