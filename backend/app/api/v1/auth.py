@@ -86,6 +86,17 @@ async def update_current_user(
 @router.post("/send-otp")
 async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
     """Send OTP code to email for guest login."""
+    # Check cooldown (60 seconds)
+    latest_otp_result = await db.execute(
+        select(OTPToken)
+        .where(OTPToken.email == req.email, OTPToken.purpose == "login")
+        .order_by(OTPToken.id.desc())
+        .limit(1)
+    )
+    latest_otp = latest_otp_result.scalars().first()
+    if latest_otp and (datetime.utcnow() - latest_otp.created_at).total_seconds() < 60:
+        raise HTTPException(status_code=429, detail="Vui lòng đợi 1 phút trước khi yêu cầu mã mới")
+
     code = _generate_otp_code()
     now = datetime.utcnow()
 
@@ -173,6 +184,17 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
     if not user:
         # Don't reveal if email exists
         return {"message": f"Nếu email {req.email} tồn tại, mã xác thực đã được gửi"}
+
+    # Check cooldown (60 seconds)
+    latest_otp_result = await db.execute(
+        select(OTPToken)
+        .where(OTPToken.email == req.email, OTPToken.purpose == "reset_password")
+        .order_by(OTPToken.id.desc())
+        .limit(1)
+    )
+    latest_otp = latest_otp_result.scalars().first()
+    if latest_otp and (datetime.utcnow() - latest_otp.created_at).total_seconds() < 60:
+        raise HTTPException(status_code=429, detail="Vui lòng đợi 1 phút trước khi yêu cầu mã mới")
 
     code = _generate_otp_code()
     now = datetime.utcnow()
