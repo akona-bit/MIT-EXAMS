@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
@@ -11,12 +11,21 @@ export default function GuestPage() {
   
   const [otpStep, setOtpStep] = useState(false);
   const [otp, setOtp] = useState("");
+  const [cooldown, setCooldown] = useState(0);
   
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
   const navigate = useNavigate();
   const { loginWithToken } = useAuth();
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (cooldown > 0) {
+      timer = setTimeout(() => setCooldown(c => c - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   const handleSendOtp = async (e: FormEvent) => {
     e.preventDefault();
@@ -26,6 +35,23 @@ export default function GuestPage() {
     try {
       await sendOtp(email);
       setOtpStep(true);
+      setCooldown(60);
+    } catch (err: any) {
+      setError(
+        err.response?.data?.detail || err.message || "Không thể gửi OTP. Vui lòng kiểm tra lại thông tin.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (cooldown > 0) return;
+    setError("");
+    setIsLoading(true);
+    try {
+      await sendOtp(email);
+      setCooldown(60);
     } catch (err: any) {
       setError(
         err.response?.data?.detail || err.message || "Không thể gửi OTP. Vui lòng kiểm tra lại thông tin.",
@@ -105,9 +131,25 @@ export default function GuestPage() {
               <Button type="submit" isLoading={isLoading} className="w-full">
                 Xác nhận
               </Button>
-              <div className="text-center">
-                <button type="button" onClick={() => setOtpStep(false)} className="text-sm text-primary-500 hover:underline">
+              <div className="flex items-center justify-between mt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setOtpStep(false)} 
+                  className="text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                >
                   Quay lại
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleResendOtp}
+                  disabled={cooldown > 0 || isLoading}
+                  className={`text-sm font-medium ${
+                    cooldown > 0 
+                      ? "text-slate-400 cursor-not-allowed" 
+                      : "text-primary-600 hover:text-primary-700 hover:underline"
+                  }`}
+                >
+                  {cooldown > 0 ? `Gửi lại sau ${cooldown}s` : "Gửi lại OTP"}
                 </button>
               </div>
             </form>
