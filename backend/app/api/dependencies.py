@@ -24,13 +24,23 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        # First, try to decode as our custom OTP JWT
+        try:
+            custom_payload = jwt.decode(token, key=settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            user_id_str = custom_payload.get("sub")
+            if user_id_str and user_id_str.isdigit():
+                user_id = int(user_id_str)
+                result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user_id))
+                user = result.scalars().first()
+                if user:
+                    return user
+        except JWTError:
+            pass # Fall back to Supabase token logic
+
         import base64
         import logging
         try:
             unverified_header = jwt.get_unverified_header(token)
-            logging.error(f"Token unverified header: {unverified_header}")
-        except Exception as header_e:
-            logging.error(f"Could not get header: {header_e}")
 
         try:
             # Supabase JWT secrets are usually base64 encoded
