@@ -122,7 +122,12 @@ async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
 
     # Dispatch email: Celery on production, direct call on local
     if _use_celery:
-        send_otp_email_task.delay(req.email, code)
+        try:
+            send_otp_email_task.delay(req.email, code)
+        except Exception as e:
+            # Fallback if Redis is down on production
+            print(f"Celery dispatch failed: {e}. Falling back to sync email.")
+            send_otp_email(req.email, code)
     else:
         send_otp_email(req.email, code)
 
@@ -221,7 +226,11 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
 
     # Dispatch email: Celery on production, direct call on local
     if _use_celery:
-        send_password_reset_email_task.delay(req.email, code)
+        try:
+            send_password_reset_email_task.delay(req.email, code)
+        except Exception as e:
+            print(f"Celery dispatch failed: {e}. Falling back to sync email.")
+            send_password_reset_email(req.email, code)
     else:
         send_password_reset_email(req.email, code)
 
