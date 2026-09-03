@@ -5,6 +5,7 @@ from typing import List, Optional
 import os
 import shutil
 from datetime import datetime
+from pydantic import BaseModel
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
