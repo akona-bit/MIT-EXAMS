@@ -29,8 +29,9 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
 
-    # Resend email
-    RESEND_API_KEY: str = ""
+    # Brevo email
+    BREVO_API_KEY: str = ""
+    BREVO_FROM_EMAIL: str = "noreply@mitexams.com"
 
     # Frontend URL for password reset redirect
     FRONTEND_URL: str = "http://localhost:5173"

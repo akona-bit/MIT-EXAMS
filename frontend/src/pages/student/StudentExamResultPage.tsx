@@ -437,6 +437,19 @@ function ReviewList({
 function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
   const style = STATUS_STYLES[question.status];
   const selectedIds = new Set(question.selected_answer_ids);
+  const subAnswers = question.selected_subitem_answers || {};
+
+  const isSubItemQuestion =
+    (question.question_type === "TRUE_FALSE" ||
+      question.question_type === "COMPOSITE") &&
+    question.options.some((opt) => opt.sub_item_id != null);
+
+  // Lựa chọn của thí sinh cho 1 ý con (key JSON là string, value là int hoặc array)
+  const getSubSelection = (subItemId: number): number[] => {
+    const v = subAnswers[String(subItemId)] ?? (subAnswers as any)[subItemId];
+    if (v == null) return [];
+    return Array.isArray(v) ? v.map(Number) : [Number(v)];
+  };
 
   return (
     <div
@@ -464,6 +477,98 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
         <p className="mt-2 line-clamp-2 text-sm leading-relaxed">{question.content}</p>
       )}
 
+      {/* ─── Câu có ý con: TRUE_FALSE / COMPOSITE ─── */}
+      {isSubItemQuestion && (
+        <div className="mt-3 space-y-2.5">
+          {Array.from(
+            new Map(
+              question.options
+                .filter((opt) => opt.sub_item_id != null)
+                .map((opt) => [opt.sub_item_id, opt])
+            ).values()
+          ).map((head) => {
+            const subItemId = head.sub_item_id as number;
+            const subOptions = question.options.filter(
+              (opt) => opt.sub_item_id === subItemId
+            );
+            const subSelection = new Set(getSubSelection(subItemId));
+            const anySelected = subSelection.size > 0;
+            return (
+              <div
+                key={subItemId}
+                className="rounded-xl border border-slate-200/70 px-3 py-2.5 dark:border-white/10"
+              >
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {head.sub_item_label && (
+                    <span className="mr-1.5 font-bold">{head.sub_item_label})</span>
+                  )}
+                  {head.sub_item_prompt || "..."}
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {subOptions.map((opt) => {
+                    const isSelected = subSelection.has(opt.answer_id);
+                    return (
+                      <span
+                        key={opt.answer_id}
+                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                          opt.is_correct
+                            ? "bg-success-500/10 text-success-700 dark:text-success-400"
+                            : isSelected
+                              ? "bg-danger-500/10 text-danger-700 dark:text-danger-400"
+                              : "text-slate-500 dark:text-slate-400"
+                        }`}
+                      >
+                        {opt.content}
+                        {opt.is_correct && " · đúng"}
+                        {!opt.is_correct && isSelected && " · bạn chọn"}
+                      </span>
+                    );
+                  })}
+                </div>
+                {!anySelected && (
+                  <p className="mt-1 text-xs italic text-slate-400">Bỏ trống</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── FILL_IN_BLANK: đáp án text của thí sinh + đáp án đúng ─── */}
+      {!isSubItemQuestion && question.question_type === "FILL_IN_BLANK" && (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-sm">
+            <span className="font-semibold text-slate-500 dark:text-slate-400">
+              Câu trả lời của bạn:{" "}
+            </span>
+            <span
+              className={
+                question.status === "correct"
+                  ? "font-bold text-success-700 dark:text-success-400"
+                  : "font-bold text-danger-700 dark:text-danger-400"
+              }
+            >
+              {question.text_answer || "(bỏ trống)"}
+            </span>
+          </p>
+          {question.status !== "correct" && (
+            <p className="text-sm">
+              <span className="font-semibold text-slate-500 dark:text-slate-400">
+                Đáp án đúng:{" "}
+              </span>
+              <span className="font-bold text-success-700 dark:text-success-400">
+                {question.options
+                  .filter((opt) => opt.is_correct)
+                  .map((opt) => opt.content)
+                  .join(" / ") || "—"}
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ─── Trắc nghiệm thường ─── */}
+      {!isSubItemQuestion && question.question_type !== "FILL_IN_BLANK" && (
       <div className="mt-3 grid gap-1.5">
         {question.options.map((opt) => {
           const isSelected = selectedIds.has(opt.answer_id);
@@ -490,6 +595,7 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ from app.models.exam import (
     ExamParticipant, ParticipantStatus,
     ExamSubmission, ExamSubmissionAnswer,
 )
+from app.db.bulk import bulk_insert
 from app.models.grading import ExamResult
 from app.models.omr import OmrJob, OmrSheet
 from app.models.obsidian import ObsidianSyncRun, ObsidianFile
@@ -189,9 +190,8 @@ async def seed_questions(teacher_id: int, knowledge_nodes: dict):
     """Create 120 questions (30 per part) with 4 answers each."""
     print("Tạo 120 câu hỏi...")
     async with SessionLocal() as db:
-        questions = {}  # (part, idx) -> question_id
-        answers_map = {}  # (part, idx) -> list of (answer_id, is_correct)
-
+        questions_to_add = []
+        q_meta = [] # store correct_pos and part, idx
         for part in range(1, NUM_PARTS + 1):
             skill_ids = [knowledge_nodes[(part, i)] for i in range(10)]
             for idx in range(QUESTIONS_PER_PART):
@@ -210,23 +210,31 @@ async def seed_questions(teacher_id: int, knowledge_nodes: dict):
                     b_param=round(random.uniform(-2.0, 2.0), 2),
                     c_param=round(random.uniform(0.0, 0.3), 2),
                 )
-                db.add(q)
-                await db.flush()
-
-                q_answers = []
-                for pos in range(4):
-                    ans = Answer(
-                        question_id=q.id,
-                        content=f"Đáp án {'ABCD'[pos]}",
-                        is_correct=(pos == correct_pos),
-                        position=pos,
-                    )
-                    db.add(ans)
-                    await db.flush()
-                    q_answers.append((ans.id, pos == correct_pos))
-
-                questions[(part, idx)] = q.id
-                answers_map[(part, idx)] = q_answers
+                questions_to_add.append(q)
+                q_meta.append((part, idx, correct_pos))
+                
+        db.add_all(questions_to_add)
+        await db.flush()
+        
+        answers_batch = []
+        for q, (part, idx, correct_pos) in zip(questions_to_add, q_meta):
+            q_answers = []
+            for pos in range(4):
+                ans = Answer(
+                    question_id=q.id,
+                    content=f"Đáp án {'ABCD'[pos]}",
+                    is_correct=(pos == correct_pos),
+                    position=pos,
+                )
+                db.add(ans)
+                q_answers.append(ans)
+            answers_map[(part, idx)] = q_answers
+            questions[(part, idx)] = q.id
+        await db.flush()
+        
+        # update answers_map to store id and is_correct for return
+        for k, v in answers_map.items():
+            answers_map[k] = [(ans.id, ans.is_correct) for ans in v]
 
         await db.commit()
         print(f"  ✓ {len(questions)} câu hỏi, {len(questions)*4} đáp án")
@@ -247,20 +255,20 @@ async def create_matrix_and_exam(admin_id: int, knowledge_nodes: dict, questions
         await db.flush()
 
         # Rules: 30 per part
+        rules_batch = []
         for part in range(1, NUM_PARTS + 1):
             skill_ids = [knowledge_nodes[(part, i)] for i in range(10)]
             for i, skill_id in enumerate(skill_ids):
-                rule = MatrixRule(
-                    matrix_id=matrix.id,
-                    knowledge_node_id=skill_id,
-                    question_type=QuestionType.SINGLE_CHOICE,
-                    level=None,
-                    count=3,
-                    part=part,
-                    position=i,
-                )
-                db.add(rule)
-        await db.flush()
+                rules_batch.append({
+                    "matrix_id": matrix.id,
+                    "knowledge_node_id": skill_id,
+                    "question_type": QuestionType.SINGLE_CHOICE,
+                    "level": None,
+                    "count": 3,
+                    "part": part,
+                    "position": i,
+                })
+        await bulk_insert(db, MatrixRule, rules_batch)
 
         # Exam
         now = datetime.now(timezone.utc)
@@ -289,6 +297,8 @@ async def create_matrix_and_exam(admin_id: int, knowledge_nodes: dict, questions
 
         position = 1
         form_questions = {}  # (part, idx) -> ExamFormQuestion
+        efqs_to_add = []
+        efq_meta = []
         for part in range(1, NUM_PARTS + 1):
             indices = list(range(QUESTIONS_PER_PART))
             random.shuffle(indices)
@@ -300,31 +310,35 @@ async def create_matrix_and_exam(admin_id: int, knowledge_nodes: dict, questions
                     position=position,
                     part=part,
                 )
-                db.add(efq)
-                await db.flush()
-
-                # Shuffle answer order
-                original_answers = [(ans_id, is_correct) for ans_id, is_correct in [
-                    (a.id, a.is_correct) for a in (await db.execute(
-                        select(Answer.id, Answer.is_correct).where(Answer.question_id == q_id).order_by(Answer.position)
-                    )).all()
-                ]]
-                # Re-fetch properly
-                ans_rows = (await db.execute(
-                    select(Answer).where(Answer.question_id == q_id).order_by(Answer.position)
-                )).scalars().all()
-                shuffled = list(range(len(ans_rows)))
-                random.shuffle(shuffled)
-                for new_pos, old_pos in enumerate(shuffled):
-                    efa = ExamFormAnswer(
-                        exam_form_question_id=efq.id,
-                        answer_id=ans_rows[old_pos].id,
-                        new_position=new_pos + 1,
-                    )
-                    db.add(efa)
-
-                form_questions[(part, idx)] = efq
+                efqs_to_add.append(efq)
+                efq_meta.append((part, idx, q_id))
                 position += 1
+                
+        db.add_all(efqs_to_add)
+        await db.flush()
+        
+        # We need all answers in one go for fast lookup
+        all_q_ids = [q_id for _, _, q_id in efq_meta]
+        ans_rows_all = (await db.execute(
+            select(Answer).where(Answer.question_id.in_(all_q_ids))
+        )).scalars().all()
+        ans_by_q = {}
+        for a in ans_rows_all:
+            ans_by_q.setdefault(a.question_id, []).append(a)
+        
+        efa_batch = []
+        for efq, (part, idx, q_id) in zip(efqs_to_add, efq_meta):
+            form_questions[(part, idx)] = efq
+            ans_rows = sorted(ans_by_q.get(q_id, []), key=lambda x: x.position)
+            shuffled = list(range(len(ans_rows)))
+            random.shuffle(shuffled)
+            for new_pos, old_pos in enumerate(shuffled):
+                efa_batch.append({
+                    "exam_form_question_id": efq.id,
+                    "answer_id": ans_rows[old_pos].id,
+                    "new_position": new_pos + 1,
+                })
+        await bulk_insert(db, ExamFormAnswer, efa_batch)
 
         await db.commit()
         print(f"  ✓ Exam id={exam.id}, Form id={form.id}, {TOTAL_QUESTIONS} câu")
@@ -392,12 +406,11 @@ async def simulate_exam(exam, form, form_questions, students):
                 q_correct[efq.question_id] = ans_rows[0].id
 
         now = datetime.now(timezone.utc)
-        batch = []
-        results_batch = []
-
+        
+        # 1. Bulk insert Participants
+        participants = []
         for sbd, student in students:
-            # Create participant
-            participant = ExamParticipant(
+            p = ExamParticipant(
                 exam_id=exam.id,
                 user_id=student.id,
                 sbd=sbd,
@@ -406,17 +419,36 @@ async def simulate_exam(exam, form, form_questions, students):
                 start_time=now - timedelta(minutes=random.randint(10, 120)),
                 submit_time=now - timedelta(minutes=random.randint(1, 9)),
             )
-            db.add(participant)
-            await db.flush()
-
-            # Create submission
-            submission = ExamSubmission(
-                exam_participant_id=participant.id,
-                submit_time=participant.submit_time,
+            participants.append(p)
+        db.add_all(participants)
+        await db.flush()
+        
+        # 2. Bulk insert Submissions
+        submissions = []
+        for p in participants:
+            sub = ExamSubmission(
+                exam_participant_id=p.id,
+                submit_time=p.submit_time,
             )
-            db.add(submission)
-            await db.flush()
+            submissions.append(sub)
+        db.add_all(submissions)
+        await db.flush()
+        
+        # Pre-load question levels
+        all_q_ids = [efq.question_id for efq in all_efq]
+        q_levels_rows = (await db.execute(select(Question.id, Question.level).where(Question.id.in_(all_q_ids)))).all()
+        q_levels = {row.id: row.level for row in q_levels_rows}
+        
+        # Pre-load efa options
+        all_efa_rows = (await db.execute(select(ExamFormAnswer).where(ExamFormAnswer.exam_form_question_id.in_([efq.id for efq in all_efq])))).scalars().all()
+        efa_by_efq = {}
+        for efa in all_efa_rows:
+            efa_by_efq.setdefault(efa.exam_form_question_id, []).append(efa)
 
+        esa_batch = []
+        results = []
+        
+        for sub in submissions:
             # Answer all 120 questions
             correct_count = 0
             total_score = 0
@@ -424,18 +456,13 @@ async def simulate_exam(exam, form, form_questions, students):
             correct_answers_dict = {}
             selected_answers_dict = {}
             item_points_dict = {}
+            
+            part_scores = {p: 0.0 for p in range(1, 5)}
 
             for efq in all_efq:
-                # Decide if student answers correctly (70% chance for easy, 40% for hard)
-                q_level = 1  # default
-                q_ref = (await db.execute(
-                    select(Question.level).where(Question.id == efq.question_id)
-                )).scalar() or 1
+                q_level = q_levels.get(efq.question_id, 1)
                 correct_prob = {1: 0.75, 2: 0.60, 3: 0.40}.get(q_level, 0.60)
-
-                efa_options = (await db.execute(
-                    select(ExamFormAnswer).where(ExamFormAnswer.exam_form_question_id == efq.id)
-                )).scalars().all()
+                efa_options = efa_by_efq.get(efq.id, [])
 
                 if random.random() < correct_prob and efq.id in correct_map:
                     selected_efa = correct_map[efq.id]
@@ -446,40 +473,30 @@ async def simulate_exam(exam, form, form_questions, students):
                     selected_efa = selected_esa
                     is_correct = False
 
-                esa = ExamSubmissionAnswer(
-                    exam_submission_id=submission.id,
-                    exam_form_question_id=efq.id,
-                    selected_answer_id=selected_efa.answer_id,
-                    score=1.0 if is_correct else 0.0,
-                )
-                db.add(esa)
+                score = 1.0 if is_correct else 0.0
+                esa_batch.append({
+                    "exam_submission_id": sub.id,
+                    "exam_form_question_id": efq.id,
+                    "selected_answer_id": selected_efa.answer_id,
+                    "score": score,
+                })
 
                 if is_correct:
                     correct_count += 1
                     total_score += 1.0
+                    part_scores[efq.part] = part_scores.get(efq.part, 0) + 1.0
 
-                item_scores[str(efq.id)] = 1.0 if is_correct else 0.0
+                item_scores[str(efq.id)] = score
                 correct_answers_dict[str(efq.id)] = q_correct.get(efq.question_id)
                 selected_answers_dict[str(efq.id)] = selected_efa.answer_id
-                item_points_dict[str(efq.id)] = 1.0 if is_correct else 0.0
-
-            # Compute part scores (30 each)
-            part_scores = {p: 0.0 for p in range(1, 5)}
-            for esa_answer in db.execute(
-                select(ExamSubmissionAnswer).where(ExamSubmissionAnswer.exam_submission_id == submission.id)
-            ).scalars().all():
-                efq_row = (await db.execute(
-                    select(ExamFormQuestion).where(ExamFormQuestion.id == esa_answer.exam_form_question_id)
-                )).scalar()
-                if efq_row and esa_answer.score:
-                    part_scores[efq_row.part] = part_scores.get(efq_row.part, 0) + esa_answer.score
-
+                item_points_dict[str(efq.id)] = score
+                
             # Scale to 0-300 per part
             irt_scores = {p: round((part_scores[p] / 30.0) * 300, 1) for p in range(1, 5)}
             total_irt = sum(irt_scores.values())
 
             result = ExamResult(
-                exam_submission_id=submission.id,
+                exam_submission_id=sub.id,
                 ctt_score_part1=part_scores[1],
                 ctt_score_part2=part_scores[2],
                 ctt_score_part3=part_scores[3],
@@ -496,8 +513,10 @@ async def simulate_exam(exam, form, form_questions, students):
                 item_points=item_points_dict,
                 score_method="CTT",
             )
-            db.add(result)
+            results.append(result)
 
+        await bulk_insert(db, ExamSubmissionAnswer, esa_batch, batch_size=5000)
+        db.add_all(results)
         await db.commit()
         print(f"  ✓ {NUM_STUDENTS} submissions + results created")
 

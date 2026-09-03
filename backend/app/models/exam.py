@@ -147,6 +147,8 @@ class ExamFormAnswer(Base):
     new_position: Mapped[int] = mapped_column(Integer) # 1 (A), 2 (B), 3 (C), 4 (D)
 
     exam_form_question: Mapped["ExamFormQuestion"] = relationship(back_populates="answers")
+    # Tham chiếu tới Answer gốc (để lấy content/sub_item_id khi dựng đề thi cho thí sinh)
+    answer_ref: Mapped[Optional["Answer"]] = relationship("Answer", viewonly=True)
 
 class ExamSubmission(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

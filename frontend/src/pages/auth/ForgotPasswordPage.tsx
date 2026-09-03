@@ -1,35 +1,30 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import { sendResetPassword, resetPassword } from "../../api/auth";
 
+type Step = 1 | 2 | 3;
+
 export default function ForgotPasswordPage() {
-  const [searchParams] = useSearchParams();
-  const emailParam = searchParams.get("email") || "";
-  const codeParam = searchParams.get("code") || "";
+  const [step, setStep] = useState<Step>(1);
   
-  const isResetMode = !!(emailParam && codeParam);
-  
-  const [email, setEmail] = useState(emailParam);
-  const [code] = useState(codeParam);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isResetDone, setIsResetDone] = useState(false);
   
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSendEmail = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
 
     try {
       await sendResetPassword(email);
-      setIsSubmitted(true);
+      setStep(2); // Chuyển sang bước nhập OTP
     } catch (err: any) {
       setError(
         err.response?.data?.detail || "Không thể gửi yêu cầu đặt lại mật khẩu.",
@@ -53,20 +48,25 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    if (code.length !== 6) {
+      setError("Mã OTP phải bao gồm 6 chữ số");
+      return;
+    }
+
     setIsLoading(true);
     try {
       await resetPassword(email, code, newPassword);
-      setIsResetDone(true);
+      setStep(3); // Thành công
     } catch (err: any) {
       setError(
-        err.response?.data?.detail || "Đặt lại mật khẩu thất bại.",
+        err.response?.data?.detail || "Đặt lại mật khẩu thất bại. Vui lòng kiểm tra lại mã OTP.",
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isResetDone) {
+  if (step === 3) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         <div className="relative w-full max-w-5xl mx-auto px-4 py-12 flex flex-col items-center">
@@ -78,73 +78,13 @@ export default function ForgotPasswordPage() {
                 </svg>
               </div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Đặt lại mật khẩu thành công</h2>
+              <p className="text-sm text-slate-500">Bạn đã có thể đăng nhập bằng mật khẩu mới.</p>
               <div className="pt-4">
                 <Link to="/login" className="inline-block px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors">
                   Đăng nhập ngay
                 </Link>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isResetMode) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <div className="relative w-full max-w-5xl mx-auto px-4 py-12 flex flex-col items-center">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-500 rounded-2xl shadow-lg mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Đặt lại Mật khẩu</h1>
-          </div>
-
-          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-3xl p-8 w-full max-w-md">
-            <form onSubmit={handleResetPassword} className="space-y-5">
-              <p className="text-sm text-slate-500">
-                Nhập mật khẩu mới cho tài khoản <span className="font-semibold">{email}</span>
-              </p>
-
-              {error && (
-                <div className="p-3 rounded-lg bg-danger-500/10 border border-danger-500/20 text-danger-500 text-sm">
-                  {error}
-                </div>
-              )}
-
-              <Input
-                label="Mật khẩu mới"
-                type="password"
-                placeholder="Ít nhất 6 ký tự"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                autoFocus
-              />
-
-              <Input
-                label="Xác nhận mật khẩu"
-                type="password"
-                placeholder="Nhập lại mật khẩu"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-
-              <Button type="submit" isLoading={isLoading} className="w-full">
-                Đặt lại mật khẩu
-              </Button>
-
-              <div className="pt-2 text-center">
-                <Link to="/login" className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors">
-                  Quay lại trang Đăng nhập
-                </Link>
-              </div>
-            </form>
           </div>
         </div>
       </div>
@@ -172,28 +112,64 @@ export default function ForgotPasswordPage() {
 
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-white/60 dark:border-white/10 p-8 animate-in slide-in-from-bottom-4 duration-500 w-full max-w-md mb-12">
           
-          {isSubmitted ? (
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 mx-auto bg-green-100 text-green-500 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
+          {step === 2 ? (
+            <form onSubmit={handleResetPassword} className="space-y-5">
+              <div className="bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 p-4 rounded-xl text-sm border border-primary-100 dark:border-primary-800/30">
+                Mã OTP (6 số) đã được gửi tới <strong>{email}</strong>. Vui lòng kiểm tra email của bạn (kể cả thư mục Spam).
               </div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Kiểm tra Email</h2>
-              <p className="text-sm text-slate-500">
-                Chúng tôi đã gửi một đường link đặt lại mật khẩu tới <span className="font-semibold">{email}</span>. Vui lòng kiểm tra hộp thư đến của bạn.
-              </p>
-              <div className="pt-4">
-                <Link to="/login" className="inline-block px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors">
-                  Quay lại Đăng nhập
-                </Link>
+
+              {error && (
+                <div className="p-3 rounded-lg bg-danger-500/10 border border-danger-500/20 text-danger-500 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <Input
+                label="Mã OTP"
+                type="text"
+                placeholder="Nhập mã 6 chữ số"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+                autoFocus
+              />
+
+              <Input
+                label="Mật khẩu mới"
+                type="password"
+                placeholder="Ít nhất 6 ký tự"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+
+              <Input
+                label="Xác nhận mật khẩu"
+                type="password"
+                placeholder="Nhập lại mật khẩu"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+
+              <Button type="submit" isLoading={isLoading} className="w-full">
+                Xác nhận đổi mật khẩu
+              </Button>
+
+              <div className="pt-2 flex justify-between items-center text-sm">
+                <button type="button" onClick={() => setStep(1)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                  Đổi email khác
+                </button>
+                <button type="button" onClick={handleSendEmail} disabled={isLoading} className="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">
+                  Gửi lại OTP
+                </button>
               </div>
-            </div>
+            </form>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSendEmail} className="space-y-5">
               <div>
                 <p className="text-sm text-slate-500">
-                  Nhập email được liên kết với tài khoản của bạn, chúng tôi sẽ gửi một liên kết để đặt lại mật khẩu.
+                  Nhập email được liên kết với tài khoản của bạn, chúng tôi sẽ gửi một mã xác thực (OTP) để đặt lại mật khẩu.
                 </p>
               </div>
 
@@ -214,7 +190,7 @@ export default function ForgotPasswordPage() {
               />
 
               <Button type="submit" isLoading={isLoading} className="w-full">
-                Gửi liên kết
+                Gửi mã xác thực
               </Button>
 
               <div className="pt-2 text-center">

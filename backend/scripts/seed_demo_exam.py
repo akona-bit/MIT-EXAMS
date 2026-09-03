@@ -98,6 +98,8 @@ async def seed_demo():
         
         # 2. Add Participants & Submissions
         participants_count = 0
+        participants = []
+        rows_to_process = []
         for idx, row in data_rows.iterrows():
             stt = str(row[0])
             name = str(row[1]).strip()
@@ -113,16 +115,25 @@ async def seed_demo():
                 start_time=datetime.now(timezone.utc),
                 submit_time=datetime.now(timezone.utc)
             )
-            db.add(participant)
-            await db.flush()
+            participants.append(participant)
+            rows_to_process.append((stt, row))
             
+        db.add_all(participants)
+        await db.flush()
+        
+        submissions = []
+        for p in participants:
             submission = ExamSubmission(
-                exam_participant_id=participant.id,
-                submit_time=participant.submit_time
+                exam_participant_id=p.id,
+                submit_time=p.submit_time
             )
-            db.add(submission)
-            await db.flush()
+            submissions.append(submission)
             
+        db.add_all(submissions)
+        await db.flush()
+        
+        results = []
+        for sub, (stt, row) in zip(submissions, rows_to_process):
             # Add ExamResult (CTT scores)
             tho_toan = safe_float(row[2]) or 0
             tho_tdkh = safe_float(row[3]) or 0
@@ -142,19 +153,18 @@ async def seed_demo():
                     item_scores[str(i)] = -1
                     
             exam_result = ExamResult(
-                exam_submission_id=submission.id,
+                exam_submission_id=sub.id,
                 ctt_score_part1=tho_toan,
                 ctt_score_part2=tho_tdkh,
                 raw_total_score=tho_toan + tho_tdkh,
                 item_scores=item_scores,
                 score_method="CTT"
             )
-            db.add(exam_result)
+            results.append(exam_result)
             participants_count += 1
             
-            if participants_count % 50 == 0:
-                print(f"Inserted {participants_count} participants...")
-                
+        db.add_all(results)
+        await db.flush()
         # 3. Mark exam as COMPLETED to trigger IRT
         exam.status = ExamStatus.COMPLETED
         await db.commit()

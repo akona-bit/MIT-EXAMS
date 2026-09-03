@@ -64,16 +64,22 @@ async def get_current_user(
                 await db.refresh(user)
             else:
                 # User doesn't exist in our DB at all, auto-create them.
-                # Find the default role (e.g. STUDENT). If no role exists, we create one.
-                role_result = await db.execute(select(Role).where(Role.name == "STUDENT"))
-                student_role = role_result.scalars().first()
-                if not student_role:
-                    student_role = Role(name="STUDENT", description="Student")
-                    db.add(student_role)
+                # Check user_metadata from JWT for role hint (e.g. admin created via Supabase Admin API)
+                user_metadata = payload.get("user_metadata", {})
+                role_hint = (user_metadata.get("role") or "STUDENT").upper()
+                if role_hint not in ("ADMIN", "TEACHER", "STUDENT"):
+                    role_hint = "STUDENT"
+
+                role_result = await db.execute(select(Role).where(Role.name == role_hint))
+                target_role = role_result.scalars().first()
+                if not target_role:
+                    target_role = Role(name=role_hint, description=role_hint.capitalize())
+                    db.add(target_role)
                     await db.commit()
-                    await db.refresh(student_role)
+                    await db.refresh(target_role)
 
                 # Generate unique username
+                full_name = user_metadata.get("full_name")
                 base_username = email.split("@")[0]
                 username = base_username
                 counter = 1
@@ -96,8 +102,9 @@ async def get_current_user(
                     email=email,
                     supabase_id=supabase_id,
                     username=username,
+                    full_name=full_name or username,
                     registration_number=reg_num,
-                    role_id=student_role.id,
+                    role_id=target_role.id,
                     is_active=True
                 )
                 db.add(user)

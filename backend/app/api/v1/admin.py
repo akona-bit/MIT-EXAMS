@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from typing import List
+from typing import List, Optional
 import os
 import shutil
 from datetime import datetime
@@ -10,7 +10,8 @@ from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User, Role
 from app.core.security import get_password_hash
-from app.models.exam import ExamParticipant
+from app.models.exam import ExamParticipant, ExamSubmission
+from app.models.grading import ExamResult
 from app.models.audit import AuditAction
 from app.services.audit import log_audit
 
@@ -73,29 +74,92 @@ async def backup_database(db: AsyncSession = Depends(get_db), current_user: User
     
     return {"message": "Database backed up successfully", "file": backup_filename}
 
-from pydantic import BaseModel
-
 class UserAccessUpdate(BaseModel):
     can_view_answers: bool
 
-@router.get("/users", dependencies=[Depends(RequireRole(["ADMIN"]))])
-async def get_users(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).order_by(User.id.desc()))
-    users = result.scalars().all()
-    return [{"id": u.id, "email": u.email, "username": u.username, "can_view_answers": u.can_view_answers} for u in users]
 
-@router.put("/users/{user_id}/access", dependencies=[Depends(RequireRole(["ADMIN"]))])
-async def update_user_access(user_id: int, req: UserAccessUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
+@router.get("/students", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_students(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    avg_score_subq = (
+        select(
+            ExamParticipant.user_id,
+            func.avg(ExamResult.total_score).label("avg_score"),
+            func.count(ExamResult.id).label("exam_count"),
+        )
+        .join(ExamSubmission, ExamSubmission.exam_participant_id == ExamParticipant.id)
+        .join(ExamResult, ExamResult.exam_submission_id == ExamSubmission.id)
+        .group_by(ExamParticipant.user_id)
+        .subquery()
+    )
+
+    query = (
+        select(
+            User.id,
+            User.email,
+            User.username,
+            User.full_name,
+            User.registration_number,
+            User.is_active,
+            User.can_view_answers,
+            func.round(avg_score_subq.c.avg_score, 1).label("avg_score"),
+            avg_score_subq.c.exam_count,
+        )
+        .join(Role, Role.id == User.role_id)
+        .outerjoin(avg_score_subq, avg_score_subq.c.user_id == User.id)
+        .where(Role.name == "STUDENT")
+    )
+
+    if search:
+        sp = f"%{search}%"
+        query = query.where(
+            (User.email.ilike(sp))
+            | (User.username.ilike(sp))
+            | (User.full_name.ilike(sp))
+            | (User.registration_number.ilike(sp))
+        )
+
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+
+    result = await db.execute(query.order_by(User.id.desc()).offset(skip).limit(limit))
+    rows = result.all()
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": r.id,
+                "email": r.email,
+                "username": r.username,
+                "full_name": r.full_name,
+                "sbd": r.registration_number,
+                "is_active": r.is_active,
+                "can_view_answers": r.can_view_answers,
+                "avg_score": float(r.avg_score) if r.avg_score is not None else None,
+                "exam_count": r.exam_count or 0,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.put("/students/{user_id}/access", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def update_student_access(
+    user_id: int,
+    req: UserAccessUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    user = (await db.execute(select(User).where(User.id == user_id))).scalars().first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
+        raise HTTPException(status_code=404, detail="Student not found")
     user.can_view_answers = req.can_view_answers
     await db.commit()
     return {"id": user.id, "can_view_answers": user.can_view_answers}
-
-from typing import Optional
 
 class StaffCreate(BaseModel):
     username: str
@@ -110,10 +174,31 @@ class StaffUpdate(BaseModel):
     full_name: Optional[str] = None
 
 @router.get("/staff", dependencies=[Depends(RequireRole(["ADMIN"]))])
-async def get_staff_members(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).join(Role).where(Role.name.in_(["ADMIN", "TEACHER"])).order_by(User.id.desc()))
+async def get_staff_members(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(User).join(Role).where(Role.name.in_(["ADMIN", "TEACHER"]))
+    if search:
+        sp = f"%{search}%"
+        query = query.where(
+            (User.email.ilike(sp))
+            | (User.username.ilike(sp))
+            | (User.full_name.ilike(sp))
+        )
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    result = await db.execute(query.order_by(User.id.desc()).offset(skip).limit(limit))
     users = result.scalars().all()
-    return [{"id": u.id, "email": u.email, "username": u.username, "full_name": u.full_name, "is_active": u.is_active, "role": u.role.name} for u in users]
+    return {
+        "total": total,
+        "items": [
+            {"id": u.id, "email": u.email, "username": u.username, "full_name": u.full_name, "is_active": u.is_active, "role": u.role.name}
+            for u in users
+        ],
+    }
 
 @router.post("/staff", dependencies=[Depends(RequireRole(["ADMIN"]))])
 async def create_staff(req: StaffCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):

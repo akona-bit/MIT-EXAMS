@@ -175,6 +175,17 @@ async def _build_review(
     item_scores: dict[str, Any] = (exam_result.item_scores if exam_result else None) or {}
     item_points: dict[str, Any] = (exam_result.item_points if exam_result else None) or {}
 
+    # Load ý con của các câu trong form (để gắn label/prompt vào từng option)
+    question_ids = list({fq.question_id for fq in form_questions})
+    subitem_by_id: dict[int, Any] = {}
+    if question_ids:
+        from app.models.question import QuestionSubItem
+
+        subitems_result = await db.execute(
+            select(QuestionSubItem).where(QuestionSubItem.question_id.in_(question_ids))
+        )
+        subitem_by_id = {si.id: si for si in subitems_result.scalars().all()}
+
     # Lấy toàn bộ Answer liên quan để biết nội dung + is_correct
     all_answer_ids: set[int] = set()
     for fq in form_questions:
@@ -204,12 +215,16 @@ async def _build_review(
         options = []
         for fa in sorted(fq.answers, key=lambda x: x.new_position):
             ans = answer_lookup.get(fa.answer_id)
+            sub = subitem_by_id.get(ans.sub_item_id) if ans and ans.sub_item_id else None
             options.append(
                 {
                     "answer_id": fa.answer_id,
                     "label": _answer_label(fa.new_position),
                     "content": ans.content if ans else None,
                     "is_correct": bool(ans.is_correct) if ans else False,
+                    "sub_item_id": ans.sub_item_id if ans else None,
+                    "sub_item_label": sub.label if sub else None,
+                    "sub_item_prompt": sub.prompt if sub else None,
                 }
             )
 
@@ -241,8 +256,8 @@ async def _build_review(
                 "question_id": fq.question_id,
                 "content": question.content if question else None,
                 "question_type": (
-                    question.question_type.value
-                    if question and getattr(question.question_type, "value", None)
+                    question.type.value
+                    if question and getattr(question.type, "value", None)
                     else None
                 ),
                 "options": options,

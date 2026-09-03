@@ -189,8 +189,7 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
     await db.commit()
 
     try:
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?email={req.email}&code={code}"
-        send_password_reset_email(req.email, reset_url)
+        send_password_reset_email(req.email, code)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gửi email thất bại: {str(e)}")
 

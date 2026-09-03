@@ -82,6 +82,8 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-03` — **Chuyển đổi Quên Mật Khẩu sang OTP & Nâng cấp UI Email**: Đã thay thế luồng quên mật khẩu cũ (dùng URL link) bằng luồng OTP trực tiếp trên giao diện trang `ForgotPasswordPage.tsx` (gồm 3 bước: nhập email, nhập mã + mật khẩu, thành công). Viết lại hoàn toàn giao diện email HTML/CSS (Xác thực đăng nhập và Đổi mật khẩu) trong `email.py` thành chuẩn Premium với các khối đổ bóng, màu nền mới và Typography hiện đại. Cập nhật backend API `/send-reset-password` để gửi OTP thay vì URL.
+
 - `2026-09-02` — **Hoàn thiện Tính năng Đăng nhập & Xác thực**: Tích hợp luồng Supabase OTP cho chức năng Guest Login và Forgot Password. Bổ sung `registration_number` (Số báo danh SBD - 6 số tự động) vào `User` model, cập nhật `dependencies.py` để auto-generate SBD khi người dùng được tạo. Thay thế toàn bộ `LoginPage.tsx` hỗ trợ đăng nhập qua SBD hoặc Email và lựa chọn Mật khẩu hoặc OTP. Cập nhật `AccessControlPage.tsx` và `admin.py` hỗ trợ tính năng mời hàng loạt (multi-select/invite qua mảng emails). Đã verify frontend build thành công.
 
 - `2026-09-02` — **Hoàn thiện tính năng Mời người dùng & Chế độ Bảo trì**: Cập nhật `AccessControlPage` để Admin có thể mời người dùng mới bằng Gmail thông qua hệ thống `invite_user_by_email` của Supabase Auth (bao gồm chọn phân quyền: Học sinh, Giáo viên, Admin). Xây dựng `SystemSettingsPage` cho phép Admin bật/tắt **Chế độ bảo trì** theo các mức độ (toàn bộ, phòng thi, kết quả). Chế độ bảo trì tự động chặn truy cập của học sinh và hiển thị màn hình `MaintenanceScreen`, nhưng hoàn toàn không ảnh hưởng đến Giáo viên và Admin để đảm bảo vận hành.

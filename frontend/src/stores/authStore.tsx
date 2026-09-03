@@ -16,7 +16,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (data: LoginRequest) => Promise<User>;
   loginWithToken: (token: string) => Promise<User>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -48,16 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (data: LoginRequest) => {
     setIsLoading(true);
     try {
-      // Use Supabase signInWithPassword for password-based login
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error("Supabase not configured");
-      }
-
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { supabase } = await import('../lib/supabase');
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.username,
         password: data.password,
@@ -71,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const u = await getMe();
       setUser(u);
+      setIsLoading(false);
       return u;
     } catch (e) {
       setIsLoading(false);
@@ -86,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const u = await getMe();
       setUser(u);
+      setIsLoading(false);
       return u;
     } catch (e) {
       localStorage.removeItem('access_token');
@@ -96,7 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      const { supabase } = await import('../lib/supabase');
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
     localStorage.removeItem('access_token');
     setToken(null);
     setUser(null);

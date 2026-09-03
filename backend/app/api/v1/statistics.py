@@ -16,6 +16,7 @@ from app.api.dependencies import RequireRole
 from app.models.grading import ExamResult
 from app.models.exam import ExamSubmission, ExamParticipant, Exam, ExamForm, ExamFormQuestion
 from app.models.question import Question
+from app.models.user import User, Role
 
 router = APIRouter()
 
@@ -26,7 +27,14 @@ async def get_dashboard_overview(
 ):
     question_count = await db.scalar(select(func.count(Question.id))) or 0
     exam_count = await db.scalar(select(func.count(Exam.id))) or 0
-    participant_count = await db.scalar(select(func.count(ExamParticipant.id))) or 0
+
+    participant_count = await db.scalar(
+        select(func.count(ExamParticipant.id))
+        .join(User, User.id == ExamParticipant.user_id)
+        .join(Role, Role.id == User.role_id)
+        .where(Role.name == "STUDENT")
+    ) or 0
+
     submission_count = await db.scalar(select(func.count(ExamSubmission.id))) or 0
 
     recent_result = await db.execute(

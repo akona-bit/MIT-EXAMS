@@ -127,13 +127,15 @@ async def test_grade_submission_ctt_happy_path_scores_correctly():
     submission = SimpleNamespace(id=1001, participant=participant, answers=[sa1, sa2])
 
     # Form questions: two form questions mapping to question ids and parts
-    fq1 = SimpleNamespace(id=401, question_id=1001, position=1, part=1)
-    fq2 = SimpleNamespace(id=402, question_id=1002, position=2, part=1)
+    # (scorer mới cần question_ref.type/.sub_items và fq.answers[].answer_id)
+    q_ref = SimpleNamespace(type="SINGLE_CHOICE", sub_items=[], scoring_config=None)
+    fq1 = SimpleNamespace(id=401, question_id=1001, position=1, part=1, question_ref=q_ref, answers=[SimpleNamespace(answer_id=501)])
+    fq2 = SimpleNamespace(id=402, question_id=1002, position=2, part=1, question_ref=q_ref, answers=[SimpleNamespace(answer_id=502)])
 
     # No original form id (return None)
-    # Answers lookup: selected ids 501 and 502; create Answer objects with is_correct True/False
-    ans1 = SimpleNamespace(id=501, is_correct=True)
-    ans2 = SimpleNamespace(id=502, is_correct=False)
+    # Answer rows cho toàn bộ đáp án trong form (is_correct True/False)
+    ans1 = SimpleNamespace(id=501, is_correct=True, sub_item_id=None, content="A")
+    ans2 = SimpleNamespace(id=502, is_correct=False, sub_item_id=None, content="B")
 
     # execute queue order inside grade_submission_ctt:
     # 1. select(ExamSubmission) -> submission

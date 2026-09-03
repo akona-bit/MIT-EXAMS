@@ -16,6 +16,12 @@ services:
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        value: "minhducle629@gmail.com"
+      - key: FRONTEND_URL
+        sync: false
       - key: POSTHOG_PROJECT_TOKEN
         sync: false
       - key: POSTHOG_HOST

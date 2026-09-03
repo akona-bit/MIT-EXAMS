@@ -31,6 +31,10 @@ export interface ReviewOption {
   label: string;
   content: string | null;
   is_correct: boolean;
+  // Thông tin ý con (chỉ có với TRUE_FALSE / COMPOSITE)
+  sub_item_id: number | null;
+  sub_item_label: string | null;
+  sub_item_prompt: string | null;
 }
 
 export interface ReviewQuestion {

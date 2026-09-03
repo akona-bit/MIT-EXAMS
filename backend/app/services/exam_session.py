@@ -103,6 +103,7 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
     return result.scalars().first()
 
 from app.models.exam import ExamSubmission, ExamSubmissionAnswer, ExamTrackingLog
+from app.models.question import Question
 from app.schemas.exam_session import AutosaveRequest, TrackingEventRequest
 
 async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
@@ -111,7 +112,8 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
         selectinload(ExamParticipant.submission).selectinload(ExamSubmission.answers),
         selectinload(ExamParticipant.exam_form)
         .selectinload(ExamForm.questions)
-        .selectinload(ExamFormQuestion.question_ref),
+        .selectinload(ExamFormQuestion.question_ref)
+        .selectinload(Question.sub_items),
         selectinload(ExamParticipant.exam_form)
         .selectinload(ExamForm.questions)
         .selectinload(ExamFormQuestion.answers)
@@ -176,12 +178,27 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
     if participant.exam_form:
         for fq in participant.exam_form.questions:
             q = fq.question_ref
-            options = []
-            for fa in fq.answers:
+            # Tách đáp án gốc (không thuộc ý con) và đáp án theo ý con,
+            # giữ đúng vị trí đã xáo (new_position). KHÔNG gửi is_correct.
+            direct_options = []
+            subitem_options: dict[int, list] = {}
+            for fa in sorted(fq.answers, key=lambda x: x.new_position):
                 ans = fa.answer_ref
-                options.append({
-                    "id": ans.id,
-                    "content": ans.content
+                if ans is None:
+                    continue
+                opt = {"id": ans.id, "content": ans.content, "position": fa.new_position}
+                if ans.sub_item_id:
+                    subitem_options.setdefault(ans.sub_item_id, []).append(opt)
+                else:
+                    direct_options.append(opt)
+            sub_items = []
+            for si in sorted(q.sub_items, key=lambda x: x.position):
+                sub_items.append({
+                    "id": si.id,
+                    "label": si.label,
+                    "prompt": si.prompt,
+                    "kind": si.kind or "tf",
+                    "options": subitem_options.get(si.id, []),
                 })
             questions.append({
                 "exam_form_question_id": fq.id,
@@ -192,7 +209,8 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
                 "part": fq.part,
                 "position": fq.position,
                 "passage_id": q.passage_id,
-                "options": options
+                "options": direct_options,
+                "sub_items": sub_items
             })
             
     # Sort questions by position
@@ -246,11 +264,17 @@ async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: Au
         existing_ans = result.scalars().first()
         if existing_ans:
             existing_ans.selected_answer_id = ans.selected_answer_id
+            existing_ans.selected_answer_ids = ans.selected_answer_ids
+            existing_ans.selected_subitem_answers = ans.selected_subitem_answers
+            existing_ans.text_answer = ans.text_answer
         else:
             new_ans = ExamSubmissionAnswer(
                 exam_submission_id=submission.id,
                 exam_form_question_id=ans.exam_form_question_id,
-                selected_answer_id=ans.selected_answer_id
+                selected_answer_id=ans.selected_answer_id,
+                selected_answer_ids=ans.selected_answer_ids,
+                selected_subitem_answers=ans.selected_subitem_answers,
+                text_answer=ans.text_answer
             )
             db.add(new_ans)
         saved_count += 1

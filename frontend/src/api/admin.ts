@@ -1,21 +1,41 @@
 import client from "./client";
 
-export interface UserAccess {
+export interface StudentItem {
   id: number;
   email: string;
   username: string;
+  full_name: string | null;
+  sbd: string | null;
+  is_active: boolean;
   can_view_answers: boolean;
+  avg_score: number | null;
+  exam_count: number;
 }
 
-export const getUsers = async (): Promise<UserAccess[]> => {
-  const response = await client.get<UserAccess[]>("/api/v1/admin/users");
+export interface PaginatedResponse<T> {
+  total: number;
+  items: T[];
+}
+
+export const getStudents = async (
+  params: { skip?: number; limit?: number; search?: string } = {}
+): Promise<PaginatedResponse<StudentItem>> => {
+  const { skip = 0, limit = 50, search } = params;
+  const response = await client.get<PaginatedResponse<StudentItem>>(
+    "/api/v1/admin/students",
+    { params: { skip, limit, ...(search ? { search } : {}) } }
+  );
   return response.data;
 };
 
-export const updateUserAccess = async (userId: number, can_view_answers: boolean): Promise<{id: number, can_view_answers: boolean}> => {
-  const response = await client.put<{id: number, can_view_answers: boolean}>(`/api/v1/admin/users/${userId}/access`, {
-    can_view_answers
-  });
+export const updateStudentAccess = async (
+  userId: number,
+  can_view_answers: boolean
+): Promise<{ id: number; can_view_answers: boolean }> => {
+  const response = await client.put<{ id: number; can_view_answers: boolean }>(
+    `/api/v1/admin/students/${userId}/access`,
+    { can_view_answers }
+  );
   return response.data;
 };
 
@@ -28,8 +48,14 @@ export interface StaffMember {
   role: string;
 }
 
-export const getStaffMembers = async (): Promise<StaffMember[]> => {
-  const response = await client.get<StaffMember[]>("/api/v1/admin/staff");
+export const getStaffMembers = async (
+  params: { skip?: number; limit?: number; search?: string } = {}
+): Promise<PaginatedResponse<StaffMember>> => {
+  const { skip = 0, limit = 50, search } = params;
+  const response = await client.get<PaginatedResponse<StaffMember>>(
+    "/api/v1/admin/staff",
+    { params: { skip, limit, ...(search ? { search } : {}) } }
+  );
   return response.data;
 };
 
