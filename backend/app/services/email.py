@@ -55,6 +55,7 @@ def _base_wrapper(body_content: str) -> str:
                   <td style="padding-top:24px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center;line-height:1.6;">
                     <p style="margin:0 0 6px;">© 2026 MIT EXAMS. All rights reserved.</p>
                     <p style="margin:0;">Đây là email gửi tự động, vui lòng không phản hồi lại địa chỉ này.</p>
+                    <p style="margin:6px 0 0 0;">Nếu cần được hỗ trợ, hãy nhắn với developer thông qua Discord: <strong>akona_e</strong> (hoặc qua <a href="https://discordapp.com/users/734403880208564235" style="color:#2563eb;text-decoration:underline;">link này</a>).</p>
                   </td>
                 </tr>
               </table>
