@@ -41,6 +41,9 @@ async def get_current_user(
         import logging
         try:
             unverified_header = jwt.get_unverified_header(token)
+            logging.error(f"Token unverified header: {unverified_header}")
+        except Exception as header_e:
+            logging.error(f"Could not get header: {header_e}")
 
         try:
             # Supabase JWT secrets are usually base64 encoded
