@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import client from './client';
 
 export interface FeedbackUser {
   id: number;
@@ -24,15 +24,15 @@ export interface AdminFeedbacksResponse {
 
 export const adminFeedbacksApi = {
   getAll: async (skip = 0, limit = 50, status?: string): Promise<AdminFeedbacksResponse> => {
-    let url = `/admin/feedbacks?skip=${skip}&limit=${limit}`;
+    let url = `/api/v1/admin/feedbacks?skip=${skip}&limit=${limit}`;
     if (status) {
       url += `&status=${status}`;
     }
-    const response = await apiClient.get<AdminFeedbacksResponse>(url);
+    const response = await client.get<AdminFeedbacksResponse>(url);
     return response.data;
   },
 
   updateStatus: async (id: number, status: string): Promise<void> => {
-    await apiClient.put(`/admin/feedbacks/${id}/status`, { status });
+    await client.put(`/api/v1/admin/feedbacks/${id}/status`, { status });
   },
 };

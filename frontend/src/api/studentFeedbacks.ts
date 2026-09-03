@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import client from './client';
 
 export interface FeedbackCreate {
   category: 'BUG' | 'EXAM_CONTENT' | 'OTHER';
@@ -19,7 +19,7 @@ export interface FeedbackResponse {
 
 export const studentFeedbacksApi = {
   create: async (data: FeedbackCreate): Promise<FeedbackResponse> => {
-    const response = await apiClient.post<FeedbackResponse>('/feedbacks/', data);
+    const response = await client.post<FeedbackResponse>('/api/v1/feedbacks/', data);
     return response.data;
   },
 };
