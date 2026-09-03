@@ -27,6 +27,7 @@ from app.models.audit import AuditLog
 from app.models.obsidian import ObsidianSyncRun, ObsidianFile
 from app.models.passage import Passage
 from app.models.system import SystemSetting
+from app.models.feedback import Feedback
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:

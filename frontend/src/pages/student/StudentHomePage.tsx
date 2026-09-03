@@ -4,10 +4,11 @@ import { getExams } from "../../api/exams";
 import client from "../../api/client";
 import type { Exam } from "../../types";
 import { motion } from "framer-motion";
-import { Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Clock, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
+import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
 
 function formatExamWindow(startTime: string | null, endTime: string | null) {
   if (!startTime && !endTime) return "Thời gian linh hoạt";
@@ -35,6 +36,7 @@ export default function StudentHomePage() {
   const [notice, setNotice] = useState("");
   const [retryKey, setRetryKey] = useState(0);
   const [maintenance, setMaintenance] = useState<MaintenanceStatus | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   useEffect(() => {
     const checkMaintenance = async () => {
@@ -121,6 +123,13 @@ export default function StudentHomePage() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsFeedbackOpen(true)}
+              className="hidden sm:flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Góp ý
+            </button>
             <div className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200/60 bg-white/60 dark:bg-slate-900/60 dark:border-slate-800/60 px-4 py-1.5 shadow-sm backdrop-blur-md">
               <div className="h-6 w-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xs font-bold text-primary-600 dark:text-primary-400">
                 {user?.username?.[0]?.toUpperCase() || "S"}
@@ -280,6 +289,11 @@ export default function StudentHomePage() {
           </motion.div>
         </section>
       </main>
+
+      <StudentFeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+      />
     </div>
   );
 }

@@ -400,3 +400,50 @@ async def get_audit_logs(
             for log in logs
         ]
     }
+
+from app.models.feedback import Feedback
+from app.schemas.feedback import FeedbackStatusUpdate
+
+@router.get("/feedbacks", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_all_feedbacks(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(Feedback).options(selectinload(Feedback.user)).order_by(Feedback.id.desc())
+    
+    if status:
+        query = query.where(Feedback.status == status)
+        
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    feedbacks = result.scalars().all()
+    
+    return {
+        "total": total,
+        "items": feedbacks
+    }
+
+@router.put("/feedbacks/{feedback_id}/status", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def update_feedback_status(
+    feedback_id: int,
+    req: FeedbackStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Feedback).where(Feedback.id == feedback_id))
+    feedback = result.scalars().first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+        
+    feedback.status = req.status
+    await db.commit()
+    
+    await log_audit(db, current_user.id, AuditAction.OTHER, "Feedback", feedback.id, f"Updated feedback status to {req.status}")
+    
+    return {"message": "Feedback status updated", "status": req.status}

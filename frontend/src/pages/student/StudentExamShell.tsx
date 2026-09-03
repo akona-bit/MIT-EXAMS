@@ -6,6 +6,9 @@ import QuestionRenderer from "../../components/student/QuestionRenderer";
 import QuestionNavStrip from "../../components/student/QuestionNavGrid";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
+import { MessageSquare } from "lucide-react";
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -96,6 +99,10 @@ export default function StudentExamShell() {
       .catch(console.error)
       .finally(() => setLoadingPassage(false));
   }, [currentQuestion?.passage_id]);
+
+  const [networkLatency, setNetworkLatency] = useState<number | null>(null);
+  const [networkError, setNetworkError] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   // ═══════════════════════════════════════════
   //  ANTI-CHEAT — Comprehensive Protection
@@ -498,6 +505,15 @@ export default function StudentExamShell() {
               {formatTime(timeLeft)}
             </div>
 
+            {/* Feedback Button */}
+            <button
+              onClick={() => setIsFeedbackOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs bg-white/10 text-blue-100 hover:bg-white/20 transition-colors"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Góp ý
+            </button>
+
             {/* Connection indicator */}
             <div className="hidden lg:flex items-center gap-1.5 text-xs text-blue-200">
               <span className="relative flex h-2 w-2">
@@ -695,6 +711,12 @@ export default function StudentExamShell() {
           />
         </div>
       </footer>
+
+      <StudentFeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        examSessionId={id}
+      />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   Search,
   Settings,
   X,
+  MessageSquare,
 } from "lucide-react";
 
 interface AdminShellProps {
@@ -81,6 +82,7 @@ const navSections: NavSection[] = [
     icon: <BarChart3 className="h-4 w-4" />,
     items: [
       { label: "Phân tích DS", path: "/admin/analytics/ds", icon: <BarChart3 className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Quản lý Góp ý", path: "/admin/feedbacks", icon: <MessageSquare className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Cài đặt chung", path: "/admin/settings", icon: <Settings className="h-5 w-5" strokeWidth={1.8} /> },
     ],
   },

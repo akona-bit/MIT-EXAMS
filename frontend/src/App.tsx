@@ -41,6 +41,7 @@ import AdvancedAnalyticsPage from "./pages/admin/analytics/AdvancedAnalyticsPage
 import FraudDetectionPage from "./pages/admin/analytics/FraudDetectionPage";
 import ExamComparePage from "./pages/admin/ExamComparePage";
 import SystemSettingsPage from "./pages/admin/settings/SystemSettingsPage";
+import AdminFeedbacksPage from "./pages/admin/AdminFeedbacksPage";
 
 // --- Route Guards ---
 
@@ -135,6 +136,7 @@ function AppRoutes() {
           <Route path="students/:id" element={<StudentDetailPage />} />
           <Route path="analytics/ds" element={<AdvancedAnalyticsPage />} />
           <Route path="analytics/fraud" element={<FraudDetectionPage />} />
+          <Route path="feedbacks" element={<AdminFeedbacksPage />} />
           <Route path="settings" element={<SystemSettingsPage />} />
         </Route>
       </Route>

@@ -200,7 +200,12 @@ export default function ForgotPasswordPage() {
               </div>
             </form>
           )}
-
+          
+          <div className="mt-8 text-center text-xs text-slate-500 dark:text-slate-400">
+            Nếu cần được hỗ trợ, hãy nhắn với developer thông qua Discord:{' '}
+            <strong className="font-semibold text-slate-700 dark:text-slate-300">akona_e</strong>{' '}
+            (hoặc qua <a href="https://discord.com/users/734403880208564235" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">link này</a>).
+          </div>
         </div>
       </div>
     </div>
