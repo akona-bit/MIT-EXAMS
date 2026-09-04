@@ -20,6 +20,7 @@ from app.models.exam import (
     ParticipantStatus,
 )
 from app.models.question import Answer
+from app.models.user import User
 from app.services.omr.hybrid_omr import HybridOMREngine, HybridOMRResult
 from app.services.omr.layout_config import SheetLayout
 
@@ -193,11 +194,7 @@ async def _confirm_sheet_async(
         all_participants = participant_result.scalars().all()
 
         for p in all_participants:
-            user_res = await db.execute(
-                select("User").where("User.id" == p.user_id)  # FIXME: proper import
-            )
-            user = user_res.scalars().first()
-            if user and str(user.id) == sheet.student_id_raw:
+            if p.sbd == sheet.student_id_raw:
                 participant = p
                 break
 

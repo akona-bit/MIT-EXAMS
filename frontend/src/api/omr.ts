@@ -40,6 +40,6 @@ export async function getOmrJob(jobId: number): Promise<OmrJobDetail> {
 }
 
 export async function confirmOmrSheet(sheetId: number): Promise<{ message: string; submission_id: number }> {
-    const response = await client.post(`/api/v1/omr/sheets/${sheetId}/confirm`);
+    const response = await client.post(`/api/v1/omr/sheets/${sheetId}/review`);
     return response.data;
 }
