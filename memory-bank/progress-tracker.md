@@ -286,6 +286,12 @@
   - Push code + force push sau git filter-repo (xóa `create_supabase_users.py` khỏi lịch sử).
   - Push code + force push sau git filter-repo (xóa `create_supabase_users.py` khỏi lịch sử).
 
+- `2026-09-05` — **Fix OMR module 9 bugs → deploy thành công:**
+  - Batch 1 (3 bugs blocker): `select("User")` string → model import, SBD matching sai, frontend URL `/confirm` → `/review`
+  - Batch 2 (6 bugs): `ParticipantStatus.COMPLETED` → `SUBMITTED`, `process_file()` → `process_url()` (cv2.imread không đọc URL), `needs_review` dead attribute → `needs_review_count=120`, `time.time()` → `datetime.now(timezone.utc)`, frontend unwrap `{data:...}` envelope, API review endpoint chỉ nhận `NEEDS_REVIEW`
+  - Xoá `pipeline.py` dead code
+  - Deploy Render thành công.
+
 ## Vấn đề đang mở / cần quyết định
 
 - Bảng tên tiếng Anh chính thức cho các entity ERD gốc tiếng Việt đã đề xuất trong `architecture.md` (phụ lục) — cần người dùng xác nhận trước khi dùng làm chuẩn cứng.
