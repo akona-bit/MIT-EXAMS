@@ -100,6 +100,16 @@ export interface Passage {
   questions?: Question[];
 }
 
+export interface QuestionSubItem {
+  id: number;
+  label: string;
+  prompt?: string;
+  position: number;
+  point_weight: number;
+  kind: string;
+  answers: Answer[];
+}
+
 export interface Question {
   id: number;
   public_code: string;
@@ -117,6 +127,7 @@ export interface Question {
   primary_knowledge_node?: KnowledgeNode;
   passage?: Passage;
   answers: Answer[];
+  sub_items?: QuestionSubItem[];
   usage_count?: number;
   created_at: string;
   updated_at?: string;
@@ -129,6 +140,15 @@ export interface QuestionSimilarityResponse {
   status: string;
 }
 
+export interface QuestionSubItemCreate {
+  label: string;
+  prompt?: string;
+  position: number;
+  point_weight: number;
+  kind: string;
+  answers: { content: string; is_correct: boolean; position: number }[];
+}
+
 export interface QuestionCreate {
   content: string;
   level: number;
@@ -139,6 +159,7 @@ export interface QuestionCreate {
   source_author?: string | null;
   source_title?: string | null;
   answers: { content: string; is_correct: boolean; position: number }[];
+  sub_items?: QuestionSubItemCreate[];
 }
 
 // --- AI Analysis ---

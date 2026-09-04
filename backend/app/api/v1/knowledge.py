@@ -46,6 +46,10 @@ def _build_tree_node(
         for child in sorted(children_by_primary_parent.get(node.id, []), key=lambda item: item.name.lower())
         if valid_ids is None or child.id in valid_ids
     ]
+    inclusive_count = question_count_by_node.get(node.id, 0)
+    for child in children:
+        inclusive_count += child.get("question_count", 0)
+
     return {
         "id": node.id,
         "name": node.name,
@@ -56,7 +60,7 @@ def _build_tree_node(
         "parent_id": primary_parents.get(node.id),
         "level": _level_name(depth),
         "path": _build_path(node.id, nodes_by_id, primary_parents),
-        "question_count": question_count_by_node.get(node.id, 0),
+        "question_count": inclusive_count,
         "is_leaf": node.is_leaf if node.is_leaf is not None else True,
         "children": children,
     }

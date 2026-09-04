@@ -45,6 +45,14 @@ export default function QuestionFormPage() {
     { content: "", is_correct: false, position: 3 },
     { content: "", is_correct: false, position: 4 },
   ]);
+
+  // SubItems for TRUE_FALSE / COMPOSITE
+  const [subItems, setSubItems] = useState([
+    { label: "a", prompt: "", position: 1, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+    { label: "b", prompt: "", position: 2, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+    { label: "c", prompt: "", position: 3, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+    { label: "d", prompt: "", position: 4, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+  ]);
   
   // FILL_IN_BLANK state
   const [fibAnswer, setFibAnswer] = useState("");
@@ -103,13 +111,23 @@ export default function QuestionFormPage() {
         
         if (question.type === "FILL_IN_BLANK") {
           setFibAnswer(question.answers[0]?.content || "");
+        } else if (question.type === "TRUE_FALSE") {
+          if (question.sub_items && question.sub_items.length > 0) {
+            setSubItems(question.sub_items.map((si: any) => ({
+              ...si,
+              answers: si.answers && si.answers.length > 0 ? si.answers : [
+                { content: "Đúng", is_correct: true, position: 1 },
+                { content: "Sai", is_correct: false, position: 2 }
+              ]
+            })));
+          }
         } else {
           setAnswers(
             question.answers.length > 0
               ? question.answers.slice().sort((a: any, b: any) => a.position - b.position)
               : [
-                  { content: "Đúng", is_correct: true, position: 1 },
-                  { content: "Sai", is_correct: false, position: 2 }
+                  { content: "", is_correct: true, position: 1 },
+                  { content: "", is_correct: false, position: 2 }
                 ]
           );
         }
@@ -165,10 +183,7 @@ export default function QuestionFormPage() {
   const applyTypeChange = (newType: string) => {
     setType(newType);
     if (newType === "TRUE_FALSE") {
-      setAnswers([
-        { content: "Đúng", is_correct: true, position: 1 },
-        { content: "Sai", is_correct: false, position: 2 }
-      ]);
+      // SubItems logic is handled by subItems state already. No need to set answers.
     } else if (newType === "SINGLE_CHOICE" || newType === "MULTIPLE_CHOICE") {
       setAnswers([
         { content: "", is_correct: true, position: 1 },
@@ -215,8 +230,6 @@ export default function QuestionFormPage() {
   const getNormalizedAnswers = () => {
     if (type === "FILL_IN_BLANK") {
       return [{ content: fibAnswer.trim(), is_correct: true, position: 1 }];
-    } else if (type === "TRUE_FALSE") {
-      return answers.map((a, idx) => ({ ...a, position: idx + 1 }));
     } else {
       return answers
         .map((a, idx) => ({ ...a, content: a.content.trim(), position: idx + 1 }))
@@ -238,6 +251,11 @@ export default function QuestionFormPage() {
       if (normalizedAnswers.filter(a => a.is_correct).length < 1) return "Vui lòng chọn ÍT NHẤT 1 đáp án đúng";
     } else if (type === "FILL_IN_BLANK") {
       if (!fibAnswer.trim()) return "Vui lòng nhập đáp án điền khuyết";
+    } else if (type === "TRUE_FALSE") {
+      if (subItems.length === 0) return "Cần ít nhất 1 ý phụ";
+      for (let i = 0; i < subItems.length; i++) {
+        if (!subItems[i].prompt?.trim()) return `Vui lòng nhập nội dung cho ý ${subItems[i].label}`;
+      }
     }
     
     return null;
@@ -255,7 +273,8 @@ export default function QuestionFormPage() {
         passage_id: selectedPassageId,
         source_author: sourceAuthor || undefined,
         source_title: sourceTitle || undefined,
-        answers: getNormalizedAnswers(),
+        answers: type === "TRUE_FALSE" ? [] : getNormalizedAnswers(),
+        sub_items: type === "TRUE_FALSE" ? subItems.map(s => ({...s, prompt: s.prompt?.trim()})) : undefined,
       };
 
       if (isEditMode && id) {
@@ -354,116 +373,42 @@ export default function QuestionFormPage() {
           <div className="glass-card space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">1. Phân loại & Ma trận</h2>
             
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Môn học (Dùng để lọc cây kiến thức)
-              </label>
-              <select
-                className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              >
-                <option value="Toán">Toán</option>
-                <option value="Vật lí">Vật lí</option>
-                <option value="Hóa học">Hóa học</option>
-                <option value="Sinh học">Sinh học</option>
-                <option value="Lịch sử">Lịch sử</option>
-                <option value="Địa lí">Địa lí</option>
-                <option value="Tiếng Anh">Tiếng Anh</option>
-                <option value="Ngữ văn">Ngữ văn</option>
-              </select>
-            </div>
-            
-            <KnowledgeNodeSelector 
-              primaryValue={primaryNodeId} 
-              onPrimaryChange={setPrimaryNodeId}
-              secondaryValues={secondaryNodeIds}
-              onSecondaryChange={setSecondaryNodeIds}
-              subject={subject} 
-            />
-
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Phân tích AI
-              </label>
-              <button
-                type="button"
-                onClick={analyzeWithAi}
-                disabled={isSuggesting}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-100 rounded-lg hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:hover:bg-violet-900/50 transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                {isSuggesting ? "Đang phân tích..." : "🪄 Phân tích nội dung"}
-              </button>
-            </div>
-
-            {/* AI Suggested Tags */}
-            {aiSuggestions && (
-              <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-violet-700 dark:text-violet-300">
-                  <Sparkles className="w-4 h-4" />
-                  Gợi ý từ AI
+            {/* Môn học và Kỹ năng */}
+            <div className="space-y-6 bg-slate-50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/50">
+              <div className="flex flex-col sm:flex-row gap-6">
+                <div className="w-full sm:w-1/3 space-y-2">
+                  <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Môn học
+                  </label>
+                  <select
+                    className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 shadow-sm"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  >
+                    <option value="Toán">Toán</option>
+                    <option value="Vật lí">Vật lí</option>
+                    <option value="Hóa học">Hóa học</option>
+                    <option value="Sinh học">Sinh học</option>
+                    <option value="Lịch sử">Lịch sử</option>
+                    <option value="Địa lí">Địa lí</option>
+                    <option value="Tiếng Anh">Tiếng Anh</option>
+                    <option value="Ngữ văn">Ngữ văn</option>
+                  </select>
                 </div>
                 
-                {aiSuggestions && (
-                  <div className="space-y-2">
-                    {/* Primary suggestion */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-slate-500 w-16">Chính:</span>
-                      <button
-                        type="button"
-                        onClick={() => acceptAiSuggestion(aiSuggestions.primary_suggestion, true)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                          acceptedSuggestions.primary
-                            ? "bg-green-100 text-green-700 border border-green-300"
-                            : "bg-white dark:bg-slate-800 border border-violet-300 dark:border-violet-600 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30"
-                        }`}
-                      >
-                        {acceptedSuggestions.primary && <Check className="w-3.5 h-3.5" />}
-                        {aiSuggestions.primary_suggestion.name}
-                        <span className="text-xs opacity-60">
-                          ({(aiSuggestions.primary_suggestion.confidence * 100).toFixed(0)}%)
-                        </span>
-                      </button>
-                    </div>
-                    
-                    {/* Secondary suggestions */}
-                    {aiSuggestions.secondary_suggestions.length > 0 && (
-                      <div className="flex items-start gap-2">
-                        <span className="text-xs font-medium text-slate-500 w-16 pt-1">Liên quan:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {aiSuggestions.secondary_suggestions.map((node, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => acceptAiSuggestion(node, false)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                                acceptedSuggestions.secondary.includes(idx)
-                                  ? "bg-green-100 text-green-700 border border-green-300"
-                                  : "bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
-                              }`}
-                            >
-                              {acceptedSuggestions.secondary.includes(idx) && <Check className="w-3 h-3" />}
-                              {node.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Cognitive level */}
-                    {aiSuggestions.cognitive_level && (
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <span>Mức nhận thức:</span>
-                        <span className="font-medium text-violet-600 dark:text-violet-400">
-                          {["", "Nhận biết", "Thông hiểu", "Vận dụng", "Vận dụng cao"][aiSuggestions.cognitive_level]}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="w-full sm:w-2/3">
+                  <KnowledgeNodeSelector 
+                    primaryValue={primaryNodeId} 
+                    onPrimaryChange={setPrimaryNodeId}
+                    secondaryValues={secondaryNodeIds}
+                    onSecondaryChange={setSecondaryNodeIds}
+                    subject={subject} 
+                  />
+                </div>
               </div>
-            )}
+            </div>
+
+
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -608,32 +553,60 @@ export default function QuestionFormPage() {
             {type === "TRUE_FALSE" && (
                <div className="space-y-4">
                  <p className="text-sm text-slate-500 mb-4">Lưu ý: Bạn có thể nhập 4 mệnh đề nhỏ nếu đây là câu Đúng/Sai dạng chùm.</p>
-                 {answers.map((ans, idx) => (
+                 {subItems.map((sub, idx) => (
                   <div key={idx} className="flex items-start gap-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                     <div className="flex-1">
                       <Input
-                        label={`Mệnh đề ${String.fromCharCode(65 + idx)}`}
+                        label={`Mệnh đề ${sub.label}`}
                         placeholder="Nhập nội dung mệnh đề..."
-                        value={ans.content}
-                        onChange={(e) => updateAnswer(idx, e.target.value)}
+                        value={sub.prompt || ""}
+                        onChange={(e) => {
+                          const newSubItems = [...subItems];
+                          newSubItems[idx].prompt = e.target.value;
+                          setSubItems(newSubItems);
+                        }}
                       />
                     </div>
                     <div className="pt-7 flex gap-4">
                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="radio" checked={ans.is_correct} onChange={() => setCorrectAnswer(idx, true)} className="text-green-500" />
+                          <input type="radio" checked={sub.answers.find((a:any) => a.content==="Đúng")?.is_correct} onChange={() => {
+                             const newSubItems = [...subItems];
+                             newSubItems[idx].answers = [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }];
+                             setSubItems(newSubItems);
+                          }} className="text-green-500" />
                           <span className="text-sm font-medium text-green-700">Đúng</span>
                        </label>
                        <label className="flex items-center gap-1 cursor-pointer">
-                          <input type="radio" checked={!ans.is_correct} onChange={() => {
-                             const newAnswers = [...answers];
-                             newAnswers[idx].is_correct = false;
-                             setAnswers(newAnswers);
+                          <input type="radio" checked={sub.answers.find((a:any) => a.content==="Sai")?.is_correct} onChange={() => {
+                             const newSubItems = [...subItems];
+                             newSubItems[idx].answers = [{ content: "Đúng", is_correct: false, position: 1 }, { content: "Sai", is_correct: true, position: 2 }];
+                             setSubItems(newSubItems);
                           }} className="text-red-500" />
                           <span className="text-sm font-medium text-red-700">Sai</span>
                        </label>
                     </div>
+                    {subItems.length > 2 && (
+                      <div className="pt-7">
+                        <button type="button" onClick={() => {
+                          const newSubItems = subItems.filter((_, i) => i !== idx);
+                          // Re-assign labels (a, b, c, d, ...)
+                          newSubItems.forEach((s, i) => { s.label = String.fromCharCode(97 + i); s.position = i + 1; });
+                          setSubItems(newSubItems);
+                        }} className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-slate-100 hover:bg-red-50 rounded-lg">
+                           <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
+                <div className="pt-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => {
+                     const nextLabel = String.fromCharCode(97 + subItems.length); // a, b, c, d, e...
+                     setSubItems([...subItems, { label: nextLabel, prompt: "", position: subItems.length + 1, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] }]);
+                  }} className="w-full border-dashed border-2">
+                     <Plus className="w-4 h-4 mr-2" /> Thêm mệnh đề
+                  </Button>
+                </div>
                </div>
             )}
 

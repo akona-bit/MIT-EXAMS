@@ -27,10 +27,15 @@ export default function QuestionBlock({ question, index, onChange, onRemove }: Q
   const handleTypeChange = (newType: string) => {
     let newAnswers = [...question.answers];
     if (newType === "TRUE_FALSE") {
-      newAnswers = [
-        { content: "Đúng", is_correct: true, position: 1 },
-        { content: "Sai", is_correct: false, position: 2 }
+      newAnswers = [];
+      const newSubItems = [
+        { label: "a", prompt: "", position: 1, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+        { label: "b", prompt: "", position: 2, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+        { label: "c", prompt: "", position: 3, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] },
+        { label: "d", prompt: "", position: 4, point_weight: 0.25, kind: "tf", answers: [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }] }
       ];
+      onChange(index, { ...question, type: newType, answers: newAnswers, sub_items: newSubItems });
+      return;
     } else if (newType === "SINGLE_CHOICE") {
       newAnswers = [
         { content: "", is_correct: true, position: 1 },
@@ -44,7 +49,7 @@ export default function QuestionBlock({ question, index, onChange, onRemove }: Q
       alert("Dạng câu hỏi chùm (COMPOSITE) đang phát triển.");
       return;
     }
-    onChange(index, { ...question, type: newType, answers: newAnswers });
+    onChange(index, { ...question, type: newType, answers: newAnswers, sub_items: undefined });
   };
 
   return (
@@ -142,16 +147,40 @@ export default function QuestionBlock({ question, index, onChange, onRemove }: Q
               );
             })}
 
-            {question.type === "TRUE_FALSE" && question.answers.map((ans, aIdx) => (
-              <div key={aIdx} className="flex items-center gap-4">
-                 <input
-                    type="radio"
-                    name={`correct_ans_${index}`}
-                    checked={ans.is_correct}
-                    onChange={() => handleAnswerChange(aIdx, 'is_correct', true)}
-                    className="w-5 h-5 text-blue-600 border-slate-300 rounded-full cursor-pointer"
-                  />
-                  <span className="font-medium">{ans.content}</span>
+            {question.type === "TRUE_FALSE" && (question.sub_items || []).map((sub, sIdx) => (
+              <div key={sIdx} className="flex flex-col gap-2 p-3 border border-slate-200 rounded-md">
+                 <div className="flex items-center gap-2">
+                    <span className="font-bold">{sub.label}.</span>
+                    <input
+                      type="text"
+                      className="flex-1 border border-slate-300 rounded-md px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500"
+                      placeholder={`Mệnh đề ${sub.label}...`}
+                      value={sub.prompt || ""}
+                      onChange={(e) => {
+                        const newSub = [...(question.sub_items || [])];
+                        newSub[sIdx] = { ...newSub[sIdx], prompt: e.target.value };
+                        onChange(index, { ...question, sub_items: newSub });
+                      }}
+                    />
+                 </div>
+                 <div className="flex gap-4 ml-6">
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" checked={sub.answers.find((a:any) => a.content==="Đúng")?.is_correct} onChange={() => {
+                        const newSub = [...(question.sub_items || [])];
+                        newSub[sIdx].answers = [{ content: "Đúng", is_correct: true, position: 1 }, { content: "Sai", is_correct: false, position: 2 }];
+                        onChange(index, { ...question, sub_items: newSub });
+                      }} className="text-green-500" />
+                      <span className="text-sm font-medium text-green-700">Đúng</span>
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" checked={sub.answers.find((a:any) => a.content==="Sai")?.is_correct} onChange={() => {
+                        const newSub = [...(question.sub_items || [])];
+                        newSub[sIdx].answers = [{ content: "Đúng", is_correct: false, position: 1 }, { content: "Sai", is_correct: true, position: 2 }];
+                        onChange(index, { ...question, sub_items: newSub });
+                      }} className="text-red-500" />
+                      <span className="text-sm font-medium text-red-700">Sai</span>
+                    </label>
+                 </div>
               </div>
             ))}
 

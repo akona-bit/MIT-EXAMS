@@ -30,8 +30,14 @@ async def generate_original_exam(db: AsyncSession, matrix: Matrix, exam_name: st
     for rule in matrix.rules:
         # Fetch matching questions
         from app.models.question import QuestionSkillTag
+        from app.services.knowledge_service import KnowledgeService
+        
+        # Get all descendant leaves of the matrix rule's node (including the node itself)
+        descendants = await KnowledgeService.get_all_descendant_leaves(db, [rule.knowledge_node_id])
+        target_nodes = set([rule.knowledge_node_id] + descendants)
+        
         stmt = select(Question).options(selectinload(Question.answers)).where(
-            Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == rule.knowledge_node_id),
+            Question.skill_tags.any(QuestionSkillTag.knowledge_node_id.in_(target_nodes)),
             Question.type == rule.question_type,
             Question.level == rule.level,
             Question.status == QuestionStatus.APPROVED

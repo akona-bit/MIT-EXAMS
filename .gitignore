@@ -18,3 +18,14 @@ backups/
 .vercel
 .env*
 frontend/dist/
+
+# Ignore sensitive survey and student data
+data/KẾT QUẢ KHẢO SÁT - Điểm tổng.csv
+data/KẾT QUẢ KHẢO SÁT - Trọng số thưởng_phạt.csv
+data/KẾT QUẢ KHẢO SÁT (1).xlsx
+data/KẾT QUẢ KHẢO SÁT.xlsx
+data/processed_703_results.csv
+data/new_keys.csv
+data/new_submissions.csv
+data/raw_student_responses.csv
+data/raw_students.csv

@@ -92,45 +92,57 @@ export default function KnowledgeNodeSelector({
   const selectedPrimaryNode = allNodes.find(n => n.id === primaryValue);
   
   const filteredPrimaryNodes = useMemo(() => {
-    if (!primarySearch.trim()) return leafNodes.slice(0, 50); // limit initial render
+    if (!primarySearch.trim()) return allNodes.slice(0, 50); // limit initial render
     const lower = primarySearch.toLowerCase();
-    return leafNodes.filter(n => (n.path || '').toLowerCase().includes(lower) || n.name.toLowerCase().includes(lower)).slice(0, 50);
-  }, [leafNodes, primarySearch]);
+    return allNodes.filter(n => (n.path || '').toLowerCase().includes(lower) || n.name.toLowerCase().includes(lower)).slice(0, 50);
+  }, [allNodes, primarySearch]);
 
   const filteredSecondaryNodes = useMemo(() => {
     const lower = secondarySearch.toLowerCase();
     // Exclude primary and already selected secondary
-    const availableLeaves = leafNodes.filter(n => n.id !== primaryValue && !secondaryValues.includes(n.id));
-    if (!secondarySearch.trim()) return availableLeaves.slice(0, 50);
-    return availableLeaves.filter(n => (n.path || '').toLowerCase().includes(lower) || n.name.toLowerCase().includes(lower)).slice(0, 50);
-  }, [leafNodes, secondarySearch, primaryValue, secondaryValues]);
+    const availableNodes = allNodes.filter(n => n.id !== primaryValue && !secondaryValues.includes(n.id));
+    if (!secondarySearch.trim()) return availableNodes.slice(0, 50);
+    return availableNodes.filter(n => (n.path || '').toLowerCase().includes(lower) || n.name.toLowerCase().includes(lower)).slice(0, 50);
+  }, [allNodes, secondarySearch, primaryValue, secondaryValues]);
 
   return (
     <div className="space-y-4">
       {/* Primary Skill Selection */}
       <div className="relative" ref={primaryDropdownRef}>
-        <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
-          Kỹ năng (Skill) chính <span className="text-red-500">*</span>
+        <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">
+          Phân loại chính <span className="text-red-500">*</span>
         </label>
         
         <div 
-          className={`w-full rounded-xl border flex items-center bg-white px-3 py-2 cursor-text ${
-            error ? 'border-red-500' : 'border-slate-300 dark:border-slate-600 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500'
-          } dark:bg-slate-800`}
+          className={`w-full rounded-xl border flex items-center bg-white px-3 py-2 cursor-pointer ${
+            error ? 'border-red-500' : 'border-slate-300 dark:border-slate-600 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/20'
+          } dark:bg-slate-900 shadow-sm transition-all`}
           onClick={() => setIsPrimaryDropdownOpen(true)}
         >
-          <Search className="w-4 h-4 text-slate-400 mr-2" />
-          <input
-            type="text"
-            className="flex-1 bg-transparent border-none focus:outline-none text-sm dark:text-white"
-            placeholder={selectedPrimaryNode ? selectedPrimaryNode.path || selectedPrimaryNode.name : "-- Tìm kiếm và chọn kỹ năng chính --"}
-            value={primarySearch}
-            onChange={(e) => {
-              setPrimarySearch(e.target.value);
-              setIsPrimaryDropdownOpen(true);
-            }}
-            disabled={loading}
-          />
+          <Search className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+          {selectedPrimaryNode && !isPrimaryDropdownOpen ? (
+            <div className="flex-1 flex flex-col justify-center min-w-0">
+              <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                {selectedPrimaryNode.name}
+              </span>
+              <span className="text-[10px] text-slate-500 truncate">
+                {selectedPrimaryNode.path}
+              </span>
+            </div>
+          ) : (
+            <input
+              type="text"
+              className="flex-1 bg-transparent border-none focus:outline-none text-sm dark:text-white h-8"
+              placeholder="-- Nhập từ khóa để tìm chủ đề / khái niệm / kỹ năng --"
+              value={primarySearch}
+              onChange={(e) => {
+                setPrimarySearch(e.target.value);
+                setIsPrimaryDropdownOpen(true);
+              }}
+              disabled={loading}
+              autoFocus={isPrimaryDropdownOpen}
+            />
+          )}
           {selectedPrimaryNode && (
             <button 
               type="button"
@@ -147,23 +159,28 @@ export default function KnowledgeNodeSelector({
         {isPrimaryDropdownOpen && (
           <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-auto">
             {filteredPrimaryNodes.length === 0 ? (
-              <div className="p-3 text-sm text-slate-500 text-center">Không tìm thấy kỹ năng phù hợp</div>
+              <div className="p-3 text-sm text-slate-500 text-center">Không tìm thấy phân loại phù hợp</div>
             ) : (
               <ul className="py-1">
-                {filteredPrimaryNodes.map(node => (
-                  <li 
-                    key={node.id} 
-                    className="px-3 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer"
-                    onClick={() => {
-                      onPrimaryChange(node.id);
-                      setPrimarySearch('');
-                      setIsPrimaryDropdownOpen(false);
-                    }}
-                  >
-                    <div className="font-medium text-slate-900 dark:text-slate-100">{node.name}</div>
-                    <div className="text-xs text-slate-500">{node.path}</div>
-                  </li>
-                ))}
+                {filteredPrimaryNodes.map(node => {
+                  const paths = (node.path || "").split("/");
+                  const parents = paths.slice(0, -1).join(" > ");
+                  return (
+                    <li 
+                      key={node.id} 
+                      className="px-4 py-3 border-b last:border-b-0 border-slate-100 dark:border-slate-700/50 hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPrimaryChange(node.id);
+                        setPrimarySearch('');
+                        setIsPrimaryDropdownOpen(false);
+                      }}
+                    >
+                      <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">{node.name}</div>
+                      {parents && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{parents}</div>}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
@@ -219,9 +236,9 @@ export default function KnowledgeNodeSelector({
       )}
 
       {/* Secondary Skills */}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Kỹ năng phụ (tuỳ chọn)
+      <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+        <label className="block text-sm font-semibold text-slate-900 dark:text-slate-300">
+          Phân loại phụ <span className="text-xs font-normal text-slate-500">(tuỳ chọn)</span>
         </label>
         
         <div className="flex flex-wrap gap-2">
@@ -246,11 +263,9 @@ export default function KnowledgeNodeSelector({
               <button
                 type="button"
                 onClick={() => setAddingSecondary(true)}
-                className="flex items-center gap-1 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-primary-600 dark:text-primary-400 border border-dashed border-primary-300 dark:border-primary-700 px-3 py-1.5 rounded-full transition-colors"
-                disabled={!primaryValue}
-                title={!primaryValue ? "Vui lòng chọn kỹ năng chính trước" : ""}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors"
               >
-                <Plus className="w-4 h-4" /> Thêm kỹ năng liên quan
+                <Plus className="w-4 h-4" /> Thêm phân loại liên quan
               </button>
             ) : (
               <div className="flex items-center gap-2">

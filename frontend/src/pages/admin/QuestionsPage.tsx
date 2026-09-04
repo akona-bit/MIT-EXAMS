@@ -541,7 +541,7 @@ export default function QuestionsPage() {
                 Từ chối
               </Button>
               <Button
-                className="bg-success-600 hover:bg-success-700 text-white"
+                variant="success"
                 onClick={() => handleReview(true)}
                 disabled={isSubmittingReview}
               >

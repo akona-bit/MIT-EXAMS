@@ -148,6 +148,20 @@ class Question(Base):
         viewonly=True,
         overlaps="skill_tags"
     )
+
+    @property
+    def primary_knowledge_node_id(self) -> int:
+        for tag in self.skill_tags:
+            if tag.is_primary:
+                return tag.knowledge_node_id
+        if self.skill_tags:
+            return self.skill_tags[0].knowledge_node_id
+        return 0
+
+    @property
+    def secondary_knowledge_node_ids(self) -> List[int]:
+        return [tag.knowledge_node_id for tag in self.skill_tags if not tag.is_primary]
+
     skill_tags: Mapped[List["QuestionSkillTag"]] = relationship(
         "QuestionSkillTag",
         back_populates="question",

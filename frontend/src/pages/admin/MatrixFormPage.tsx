@@ -20,6 +20,7 @@ import MatrixVisualization from "../../components/matrix/MatrixVisualization";
 import { Layers, Link2, AlertTriangle, Activity, Sparkles, Wand2, Plus, Trash2, Settings, BarChart2, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "../../components/ui/Toast";
+import MatrixNodeSelector from "../../components/admin/matrix/MatrixNodeSelector";
 
 export default function MatrixFormPage() {
   const { id } = useParams();
@@ -453,12 +454,7 @@ export default function MatrixFormPage() {
                             <Link2 className="w-4 h-4 mr-1.5" /> Gộp {selectedRuleIndices.size} ô
                           </Button>
                         )}
-                        <Button type="button" onClick={() => setIsSmartWizardOpen(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 font-bold">
-                           <Wand2 className="w-4 h-4 mr-1.5" /> Smart Builder
-                        </Button>
-                        <Button type="button" onClick={() => setIsAiModalOpen(true)} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/20 font-bold">
-                           <Sparkles className="w-4 h-4 mr-1.5" /> AI
-                        </Button>
+
                         <Button type="button" onClick={addRule} size="sm" className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white shadow-md font-bold">
                            <Plus className="w-4 h-4 mr-1" /> Thêm Rule
                         </Button>
@@ -472,7 +468,7 @@ export default function MatrixFormPage() {
                         </div>
                         <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">Chưa có cấu trúc</h3>
                         <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                          Bạn có thể thêm rule thủ công, dùng AI, hoặc sử dụng Smart Builder để phân bổ nhanh.
+                          Bạn có thể thêm rule thủ công để bắt đầu phân bổ câu hỏi.
                         </p>
                      </div>
                    ) : (
@@ -514,15 +510,10 @@ export default function MatrixFormPage() {
 
                                  <div className="col-span-2 space-y-1.5">
                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chủ đề kiến thức</label>
-                                   <select
-                                     required
-                                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-primary-500"
-                                     value={rule.knowledge_node_id || ""}
-                                     onChange={(e) => updateRule(idx, "knowledge_node_id", Number(e.target.value))}
-                                   >
-                                     <option value="" disabled>-- Chọn chủ đề --</option>
-                                     {renderNodeOptions(nodes)}
-                                   </select>
+                                   <MatrixNodeSelector
+                                     value={rule.knowledge_node_id || null}
+                                     onChange={(nodeId) => updateRule(idx, "knowledge_node_id", nodeId || 0)}
+                                   />
                                  </div>
 
                                  <div className="space-y-1.5">

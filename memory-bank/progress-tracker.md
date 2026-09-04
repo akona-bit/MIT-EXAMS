@@ -92,6 +92,16 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-04` — **Đồng bộ Logic Ma trận & Cây Tri thức**: 
+  - [x] Sửa đổi `KnowledgeService`: Tính tổng số câu hỏi gộp (inclusive) từ các node con, cháu để hiển thị chính xác tổng lượng câu hỏi cho Topic/Concept.
+  - [x] Nâng cấp `generator.py`: Thuật toán sinh đề giờ đây sẽ lấy đệ quy toàn bộ câu hỏi từ tất cả các Kỹ năng con (descendant leaves) nếu Ma trận chỉ định một Chủ đề (Topic/Concept). Khắc phục lỗi sinh đề không tìm thấy câu hỏi do tag Kỹ năng vi mô.
+  - [x] Frontend `MatrixFormPage.tsx`: Thay thế dropdown phẳng bằng `MatrixNodeSelector` - kế thừa giao diện tìm kiếm dạng cây cha-con từ trang tạo Câu hỏi, giúp giao diện tạo Ma trận trở nên đồng nhất và trực quan.
+
+- `2026-09-04` — **Fix Bug & UI Phân loại câu hỏi**: 
+  - [x] Thêm API endpoint `POST /ai-suggest-tags` để kết nối AI lấy gợi ý Kỹ năng/Môn học.
+  - [x] Cập nhật mapping `QuestionResponse` cho endpoint GET `get_questions` để fix lỗi mất `@property primary_knowledge_node_id` dẫn đến hiển thị `Node #undefined` ở UI.
+  - [x] Thiết kế lại `KnowledgeNodeSelector` & `QuestionFormPage`: gộp Subject và Selector thành một block, chuyển đổi thanh search thành combobox thanh lịch, và di dời nút Phân tích AI sang một khối nổi bật hơn với hiệu ứng gradient.
+
 - `2026-09-04` — **Cải thiện UI/UX Toàn diện (Extreme Premium Upgrade)**:
   - [x] Tích hợp `framer-motion` cho toàn bộ UI component cốt lõi.
   - [x] Tạo `PageTransition` component bọc ngoài các trang Admin/Student để có hiệu ứng fade-in mượt mà thay vì nhảy trang giật cục.

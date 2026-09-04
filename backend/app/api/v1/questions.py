@@ -8,7 +8,7 @@ from app.models.exam import ExamFormQuestion
 from app.db.database import get_db
 from app.models.user import User
 from app.models.question import Question, Answer, QuestionStatus, QuestionType, KnowledgeNode, KnowledgeNodeType, QuestionSkillTag
-from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate, QuestionReviewRequest, QuestionSimilarityResponse
+from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate, QuestionReviewRequest, QuestionSimilarityResponse, AiSuggestTagsRequest, AiSuggestTagsResponse
 from pydantic import BaseModel
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
@@ -50,7 +50,11 @@ async def get_questions(
 
     result = await db.execute(
         select(Question)
-        .options(selectinload(Question.answers))
+        .options(
+            selectinload(Question.answers),
+            selectinload(Question.sub_items),
+            selectinload(Question.skill_tags)
+        )
         .where(*filters)
         .order_by(Question.created_at.desc())
         .offset(skip)
@@ -69,8 +73,10 @@ async def get_questions(
         usage_counts = dict(usage_result.all())
         for q in items:
             q.usage_count = usage_counts.get(q.id, 0)
+            
+    mapped_items = [QuestionResponse.model_validate(q) for q in items]
 
-    return {"items": items, "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
+    return {"items": mapped_items, "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
 
 
 @router.get("/ai-review-queue")
@@ -124,10 +130,38 @@ async def get_ai_review_queue(
     return {"items": items, "total": total}
 
 
+
+
+
+@router.post("/ai-suggest-tags", response_model=AiSuggestTagsResponse)
+async def ai_suggest_tags_endpoint(
+    request: AiSuggestTagsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    from app.services.ai_analysis import suggest_question_tags
+    
+    # Get existing topics and concepts to provide context to AI
+    nodes_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.node_type.in_([KnowledgeNodeType.TOPIC, KnowledgeNodeType.CONCEPT])))
+    existing_nodes = [{"id": n.id, "name": n.name, "type": n.node_type.value} for n in nodes_result.scalars().all()]
+    
+    result = await suggest_question_tags(
+        content=request.content,
+        answers=request.answers,
+        sub_items=request.sub_items,
+        existing_nodes=existing_nodes
+    )
+    return result
+
+
 @router.get("/{question_id}", response_model=QuestionResponse)
 async def get_question(question_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == question_id)
+        select(Question).options(
+            selectinload(Question.answers),
+            selectinload(Question.sub_items),
+            selectinload(Question.skill_tags)
+        ).where(Question.id == question_id)
     )
     question = result.scalars().first()
     if not question:
@@ -315,7 +349,7 @@ async def create_question(
 
     # Reload with answers and tags
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == db_question.id)
+        select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == db_question.id)
     )
     capture(
         request,
@@ -333,7 +367,7 @@ async def update_question(
 ):
     # Find existing question
     result = await db.execute(
-        select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == question_id)
+        select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == question_id)
     )
     existing_q = result.scalars().first()
     
@@ -423,7 +457,7 @@ async def update_question(
             print(f"Warning: Failed to generate embedding for question {new_q.id}: {e}")
         
         # Return the new version
-        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == new_q.id))
+        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == new_q.id))
         return res.scalars().first()
     else:
         # Just update in place for DRAFT or PENDING
@@ -491,7 +525,7 @@ async def update_question(
         except Exception as e:
             print(f"Warning: Failed to generate embedding for question {existing_q.id}: {e}")
             
-        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.skill_tags)).where(Question.id == existing_q.id))
+        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == existing_q.id))
         return res.scalars().first()
 
 
@@ -679,7 +713,7 @@ async def review_question(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    result = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.id == question_id))
+    result = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == question_id))
     question = result.scalars().first()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
@@ -706,7 +740,7 @@ async def approve_question(request: Request, question_id: int, db: AsyncSession 
 
 @router.get("/{question_id}/history", response_model=List[QuestionResponse])
 async def get_question_history(question_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.id == question_id))
+    result = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == question_id))
     q = result.scalars().first()
     if not q:
         raise HTTPException(status_code=404, detail="Question not found")
@@ -716,7 +750,7 @@ async def get_question_history(question_id: int, db: AsyncSession = Depends(get_
     # Trace backwards (ancestors)
     curr = q.parent_question_id
     while curr:
-        res = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.id == curr))
+        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == curr))
         ancestor = res.scalars().first()
         if not ancestor:
             break
@@ -735,7 +769,7 @@ async def get_question_history(question_id: int, db: AsyncSession = Depends(get_
     
     while queue:
         curr_id = queue.pop(0)
-        res = await db.execute(select(Question).options(selectinload(Question.answers)).where(Question.parent_question_id == curr_id))
+        res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.parent_question_id == curr_id))
         children = res.scalars().all()
         for child in children:
             if child.id not in visited:

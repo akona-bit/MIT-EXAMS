@@ -722,7 +722,7 @@ export default function KnowledgePage() {
         node.label.toLowerCase().includes(normalizedSearch) ||
         node.path.toLowerCase().includes(normalizedSearch);
       return (
-        matchesSearch && (typeFilter === "ALL" || node.type === typeFilter)
+        matchesSearch && (typeFilter === "ALL" || node.type?.toUpperCase() === typeFilter)
       );
     });
   }, [allNodes, search, typeFilter]);
