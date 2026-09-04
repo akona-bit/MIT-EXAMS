@@ -24,7 +24,7 @@ services:
     env: docker
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
-    dockerCommand: celery -A app.core.celery_app worker --loglevel=info
+    dockerCommand: celery -A app.worker.celery_app worker --loglevel=info
     plan: free
     envVars:
       - key: DATABASE_URL
