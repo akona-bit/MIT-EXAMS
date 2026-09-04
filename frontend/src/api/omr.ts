@@ -2,22 +2,21 @@ import client from "./client";
 
 export interface OmrSheet {
     id: number;
-    job_id: number;
-    image_path: string | null;
-    status: string; // PENDING | PROCESSING | NEEDS_REVIEW | COMPLETED | FAILED
+    status: string;
     student_id_raw: string | null;
     form_code_raw: string | null;
-    answers_raw: string | null;
-    exam_submission_id: number | null;
+    confidence_score: number | null;
     error_message?: string | null;
 }
 
 export interface OmrJob {
     id: number;
     exam_id: number;
-    uploader_id: number;
+    status: string;
     total_files: number;
-    status: string; // PROCESSING | COMPLETED | FAILED
+    processed_files: number;
+    created_at: string | null;
+    completed_at: string | null;
 }
 
 export interface OmrJobDetail {
@@ -25,21 +24,21 @@ export interface OmrJobDetail {
     sheets: OmrSheet[];
 }
 
-export async function uploadOmrSheets(examId: number, files: File[]): Promise<{ message: string; job_id: number }> {
+export async function uploadOmrSheets(examId: number, files: File[]): Promise<{ job_id: number; sheet_ids: number[]; total_files: number }> {
     const formData = new FormData();
     files.forEach((f) => formData.append("files", f));
     const response = await client.post(`/api/v1/omr/upload?exam_id=${examId}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
     });
-    return response.data;
+    return response.data.data;
 }
 
 export async function getOmrJob(jobId: number): Promise<OmrJobDetail> {
-    const response = await client.get<OmrJobDetail>(`/api/v1/omr/jobs/${jobId}`);
-    return response.data;
+    const response = await client.get(`/api/v1/omr/jobs/${jobId}`);
+    return response.data.data;
 }
 
-export async function confirmOmrSheet(sheetId: number): Promise<{ message: string; submission_id: number }> {
+export async function confirmOmrSheet(sheetId: number): Promise<{ task_id: string; message: string }> {
     const response = await client.post(`/api/v1/omr/sheets/${sheetId}/review`);
-    return response.data;
+    return response.data.data;
 }

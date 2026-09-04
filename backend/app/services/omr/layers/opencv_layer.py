@@ -89,7 +89,7 @@ class OpenCVOMRPipeline:
         # 1. Detect 4 marker góc
         markers = self._detect_markers(image)
         if markers is None or len(markers) < 4:
-            result.needs_review = True
+            result.needs_review_count = 120
             result.needs_review_reasons.append(
                 f"Không detect đủ 4 marker góc (found {len(markers) if markers else 0})"
             )
@@ -98,7 +98,7 @@ class OpenCVOMRPipeline:
         # 2. Perspective transform
         warped = self._perspective_transform(image, markers)
         if warped is None:
-            result.needs_review = True
+            result.needs_review_count = 120
             result.needs_review_reasons.append("Perspective transform thất bại")
             return result
         result.warped_image = warped

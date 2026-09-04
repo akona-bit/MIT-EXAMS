@@ -205,7 +205,7 @@ async def review_omr_sheet(
     if not sheet:
         raise HTTPException(status_code=404, detail="Sheet not found")
 
-    if sheet.status not in (OmrSheetStatus.NEEDS_REVIEW, OmrSheetStatus.COMPLETED):
+    if sheet.status != OmrSheetStatus.NEEDS_REVIEW:
         raise HTTPException(
             status_code=400,
             detail=f"Sheet status is {sheet.status.value}, cannot review"

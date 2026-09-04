@@ -5,7 +5,7 @@ Xử lý async qua queue, hỗ trợ batch hàng loạt phiếu.
 
 import asyncio
 import json
-import time
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from celery import shared_task
@@ -48,7 +48,7 @@ async def _process_sheet_async(sheet_id: int, enable_gemini: bool = True):
             )
 
             # Process
-            omr_result = engine.process_file(sheet.image_path)
+            omr_result = engine.process_url(sheet.image_path)
             result_dict = engine.to_dict(omr_result)
 
             # Update sheet
@@ -75,7 +75,7 @@ async def _process_sheet_async(sheet_id: int, enable_gemini: bool = True):
             job.processed_files += 1
             if job.processed_files >= job.total_files:
                 job.status = OmrJobStatus.COMPLETED
-                job.completed_at = time.time()
+                job.completed_at = datetime.now(timezone.utc)
             await db.commit()
 
 
@@ -204,7 +204,7 @@ async def _confirm_sheet_async(
                 user_id=user_id,
                 exam_form_id=exam_form.id,
                 sbd=sheet.student_id_raw,
-                status=ParticipantStatus.COMPLETED,
+                status=ParticipantStatus.SUBMITTED,
             )
             db.add(participant)
             await db.flush()
@@ -264,7 +264,7 @@ async def _confirm_sheet_async(
         sheet.exam_submission_id = submission.id
 
         # Update participant
-        participant.status = ParticipantStatus.COMPLETED
+        participant.status = ParticipantStatus.SUBMITTED
         participant.exam_form_id = exam_form.id
 
         await db.commit()
