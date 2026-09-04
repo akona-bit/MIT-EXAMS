@@ -274,6 +274,17 @@
 - `2026-08-09` — Hoàn thành Giai đoạn 1: Thiết lập User/Role models, JWT Authentication và Middleware RBAC (Dependencies). Tạo seed data cho 4 roles mặc định. — `models/user.py`, `core/security.py`, `api/dependencies.py`, `api/v1/auth.py`
 - `2026-08-09` — Hoàn thành Giai đoạn 0: Cấu trúc thư mục, Docker Compose, FastAPI skeleton, Vite React setup. — `backend/`, `frontend/`, `docker-compose.yml`
 
+- `2026-09-05` — **Audit toàn diện + cập nhật single source of truth:**
+  - Verified: render.yaml Celery bug (`app.core.celery_app` → phải là `app.worker.celery_app`). Chưa sửa.
+  - Verified: QuestionFormPage dùng `KnowledgeNodeSelector` (primary/secondary), KHÔNG phải 3 dropdown. Gap: chưa có DAG visual selector.
+  - Verified: `item_plot.py` đã commit (3 commits) nhưng backend không import — `scorer.py` đã thay thế. `library-docs.md` đã cập nhật.
+  - Verified: `knowledge_node_parent` vs `knowledge_node_link` — hai bảng khác nhau, cả hai đều tồn tại, không conflict.
+  - Verified: PostHog backend hoạt động (~30 events), frontend dead code.
+  - Verified: docker-compose.yml KHÔNG tồn tại (bị xóa).
+  - Cập nhật `architecture.md`: environments, celery, analytics, item_plot status, questionformpage status, ERD mapping thêm 3 bảng mới.
+  - Cập nhật `library-docs.md`: item_plot.py đã bị scorer.py thay thế.
+  - Push code + force push sau git filter-repo (xóa `create_supabase_users.py` khỏi lịch sử).
+
 ## Vấn đề đang mở / cần quyết định
 
 - Bảng tên tiếng Anh chính thức cho các entity ERD gốc tiếng Việt đã đề xuất trong `architecture.md` (phụ lục) — cần người dùng xác nhận trước khi dùng làm chuẩn cứng.

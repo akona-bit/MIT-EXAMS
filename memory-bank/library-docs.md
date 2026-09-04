@@ -20,7 +20,7 @@
 | `pytest`, `pytest-asyncio` | Test | |
 | `slowapi` | Rate limiting | Áp dụng ở endpoint nộp bài |
 
-**Mã nguồn sẵn có cần tích hợp nguyên trạng (không viết lại thuật toán):** `irt.py` (MMLE 2PL, Gauss-Hermite K=81, EAP theta, chi-square fit), `ctt.py` (độ khó/phân biệt/nhiễu), logic `chamDiem()`/`tach_phan()` trong `item_plot.py`. Khi tích hợp, bọc các hàm này trong `irt_engine/service.py`, gọi từ Celery task — **không sửa logic toán học bên trong** trừ khi có yêu cầu rõ ràng. Xem skill `cham-diem-ctt-irt` để biết chi tiết quy trình.
+**Mã nguồn sẵn có đã tích hợp:** `irt.py` (MMLE 2PL, Gauss-Hermite K=81, EAP theta, chi-square fit) nằm trong `grading/irt_engine.py`. `ctt.py` (độ khó/phân biệt/nhiễu) nằm trong `grading/ctt_engine.py`. Logic `chamDiem()`/`tach_phan()` trong `item_plot.py` **đã bị scorer.py thay thế** (scorer.py reimplement toàn diện hơn, hỗ trợ nhiều loại câu hỏi). Nếu cần import CSV format `STT_gốc-Đáp_án`, phải port riêng hàm parse từ item_plot.py. **Không viết lại thuật toán từ đầu.** Xem skill `cham-diem-ctt-irt` để biết chi tiết quy trình.
 
 ## Frontend (React)
 

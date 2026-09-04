@@ -74,8 +74,35 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 
 ## Environments
 
-- **Dev:** local (Docker Compose: postgres, redis, api, worker, frontend dev servers).
-- **Staging/Prod (giai đoạn đầu):** free tier Render/Railway (API+worker) + Supabase (Postgres) — nâng cấp lên VPS khi cần scale.
+- **Dev:** local (task_always_eager — Celery chạy sync trong FastAPI process, không cần Redis worker).
+- **Production:**
+  - Frontend: **Vercel** (2 `vercel.json` — root monorepo + `frontend/vercel.json`)
+  - Backend API: **Render** web service (`render.yaml` → `Dockerfile`)
+  - Celery Worker: **Render** worker service (`render.yaml`)
+  - Database: **Supabase** (PostgreSQL managed)
+  - File Storage: Supabase Storage
+
+## Celery
+
+- **App definition:** `backend/app/worker.py` — `celery_app = Celery("exams_worker", ...)`
+- **Local:** `task_always_eager=True` khi `REDIS_URL=localhost` — chạy sync, không cần worker riêng
+- **Production:** `render.yaml` define worker service chạy `celery -A app.worker.celery_app worker`
+- **Task modules:** `app.services.grading.scorer` (IRT calibration), `app.services.omr.tasks` (OMR processing), `app.services.email_tasks` (OTP emails)
+- **⚠️ Known bug:** `render.yaml` line 27 ghi `app.core.celery_app` — SAI, phải là `app.worker.celery_app`. Chưa sửa.
+
+## Analytics
+
+- **PostHog:** Backend đang capture ~30 events (exams, grading, matrix, knowledge, OMR, questions, resources) qua `app/core/analytics.py`.
+- Frontend `posthog.ts` defined nhưng **chưa import ở đâu** — dead code.
+- Env vars: `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST` (backend), `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST` (frontend).
+
+## Trạng thái `item_plot.py`
+
+- File: `backend/app/services/grading/item_plot.py` — **đã commit** (3 commits), nằm trong repo.
+- Chứa `chamDiem()`, `tach_phan()`, `ketQuaCham()` + 6 hàm visualization.
+- **Backend KHÔNG import file này.** `scorer.py` đã reimplement `score_question_answer()` (hỗ trợ nhiều loại câu hỏi hơn) và logic `tach_phan` inline (scorer.py:411-419).
+- `library-docs.md` nói "bọc trong `irt_engine/service.py`" nhưng chưa làm — và scorer.py đã thay thế hầu hết logic.
+- **Rủi ro:** Format CSV `STT_gốc-Đáp_án` trong `chamDiem()` (item_plot.py:67-85) không có tương đương trong `scorer.py`. Nếu cần import CSV cũ, phải port riêng hàm parse đó.
 
 ## Bảo mật tổng quan
 
@@ -84,6 +111,14 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 - Rate limiting theo IP + theo user tại các endpoint nộp bài (dùng `slowapi` hoặc middleware tương tự).
 - Tất cả traffic qua HTTPS; cookie httpOnly cho refresh token.
 
+## Trạng thái QuestionFormPage
+
+- File: `frontend/src/pages/admin/QuestionFormPage.tsx`
+- **Không dùng 3 dropdown Topic/Concept/Skill.** Dùng `KnowledgeNodeSelector` — searchable combobox.
+- Submit payload: `primary_knowledge_node_id` (int) + `secondary_knowledge_node_ids` (int[]).
+- AI auto-suggest: `suggestQuestionTags()` trả `primary_suggestion` + `secondary_suggestions`.
+- **Gap:** Không hiển thị cấu trúc DAG (no tree view, no multi-parent visual selector). Context panel chỉ hiện breadcrumb đọc-only.
+
 ## 8. Phụ lục — Đối chiếu tên bảng ERD gốc (tiếng Việt) ↔ tên bảng thật (tiếng Anh - Officially Confirmed)
 
 > Agent cập nhật bảng này khi đặt tên chính thức cho model SQLAlchemy — tránh mỗi người dùng một tên khác nhau cho cùng 1 khái niệm. Đã chốt dùng tiếng Anh 100% trong code.
@@ -91,7 +126,7 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 | Tên ERD gốc | Tên bảng thật (đã chốt) | Ghi chú |
 |---|---|---|
 | PhanThi | `Section` | Tiếng Việt/Tiếng Anh/Toán/TDKH |
-| KienThuc | `KnowledgeNode` | Cây phân cấp qua `parent_id` |
+| KienThuc | `KnowledgeNode` | DAG đa-cha qua `knowledge_node_parent` (không còn `parent_id` đơn) |
 | NguLieu | `Passage` / `Resource` | Ảnh/PDF/đoạn văn |
 | CauHoi | `Question` | |
 | DapAn | `Answer` | |
@@ -108,3 +143,6 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 | ItemAnalysis | `ItemAnalysisResult` | Giữ nguyên |
 | ChamDiem | `ExamResult` | Điểm bài thi (CTT/IRT) |
 | OMR | `OmrSession`, `OmrRecord` | Chấm thi OMR |
+| — | `KnowledgeNodeParent` | DAG parent-child (multi-parent, 1 primary). Bảng mới thay `parent_id` đơn |
+| — | `QuestionSkillTag` | Multi-skill per question (thay `knowledge_node_id` đơn). Cols: `question_id`, `knowledge_node_id`, `is_primary` |
+| — | `KnowledgeNodeLink` | Manual cross-link giữa 2 node (non-hierarchical). Cols: `source_id`, `target_id`, `label` |
