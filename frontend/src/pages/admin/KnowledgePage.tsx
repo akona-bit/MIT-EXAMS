@@ -37,7 +37,11 @@ import {
   Trash2,
   GitBranch,
   Timer,
+  Network,
 } from "lucide-react";
+import { toast } from "../../components/ui/Toast";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
+
 
 const levelLabels: Record<string, string> = {
   TOPIC: "Chủ đề",
@@ -49,9 +53,13 @@ const levelColors: Record<string, string> = {
   TOPIC: "#f97316", // Orange-500 — nổi bật, ấm
   CONCEPT: "#8b5cf6", // Violet-500 — tím mát
   SKILL: "#10b981", // Emerald-500 — xanh lá tươi
+  SUB_SKILL: "#06b6d4", // Cyan-500 — xanh cyan
 };
 
 const DEFAULT_NODE_COLOR = "#64748b"; // Slate-500 fallback
+
+const getNodeColor = (type?: string) => levelColors[type?.toUpperCase() || ""] ?? DEFAULT_NODE_COLOR;
+const getNodeLabel = (type?: string) => levelLabels[type?.toUpperCase() || ""] ?? (type ? (type.charAt(0).toUpperCase() + type.slice(1)) : "Node");
 
 function NodePill({
   node,
@@ -73,15 +81,15 @@ function NodePill({
       <div
         className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm transition-all duration-300 ${active ? "scale-110 shadow-md" : "group-hover:scale-105"}`}
         style={{
-          backgroundColor: `${levelColors[node.type] ?? levelColors.NOTE}15`,
-          color: levelColors[node.type] ?? levelColors.NOTE,
+          backgroundColor: `${getNodeColor(node.type)}15`,
+          color: getNodeColor(node.type),
         }}
       >
         <div
           className="h-2.5 w-2.5 rounded-full"
           style={{
-            backgroundColor: levelColors[node.type] ?? levelColors.NOTE,
-            boxShadow: active ? `0 0 10px ${levelColors[node.type]}` : "none",
+            backgroundColor: getNodeColor(node.type),
+            boxShadow: active ? `0 0 10px ${getNodeColor(node.type)}` : "none",
           }}
         />
       </div>
@@ -231,7 +239,7 @@ function GraphCanvas({
       const label = node.name;
       const hasNote = !!node.description;
       const fontSize = 12 / globalScale;
-      const nodeColor = levelColors[node.type] ?? DEFAULT_NODE_COLOR;
+      const nodeColor = getNodeColor(node.type);
 
       // --- Measure main label ---
       ctx.font = `${isSelected || isHovered ? "600 " : "500 "}${fontSize}px Inter, system-ui, sans-serif`;
@@ -387,14 +395,14 @@ function GraphCanvas({
 
   if (nodes.length === 0) {
     return (
-      <div className="flex h-[600px] items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/40 dark:bg-slate-900/40 text-sm text-slate-500">
+      <div className="flex h-full min-h-[600px] items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/40 dark:bg-slate-900/40 text-sm text-slate-500">
         Không có note phù hợp với bộ lọc.
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-[600px] group">
+    <div className="relative w-full h-full min-h-[600px] group">
       <div className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 rounded-2xl pointer-events-none" />
 
       <div
@@ -466,9 +474,7 @@ function GraphCanvas({
                     link.target.id === hoverNode));
               const hasFocus = selectedId || hoverNode;
 
-              const targetColor =
-                levelColors[link.target?.type] ??
-                (isDarkMode ? "#94a3b8" : "#64748b");
+              const targetColor = getNodeColor(link.target?.type);
 
               if (isActive) {
                 return targetColor;
@@ -507,10 +513,7 @@ function GraphCanvas({
             linkDirectionalParticleWidth={2.5}
             linkDirectionalParticleSpeed={0.004}
             linkDirectionalParticleColor={(link: any) => {
-              return (
-                levelColors[link.target?.type] ??
-                (isDarkMode ? "#94a3b8" : "#64748b")
-              );
+              return getNodeColor(link.target?.type);
             }}
             linkDirectionalArrowLength={(link: any) => {
               const isActive =
@@ -668,13 +671,20 @@ function GraphCanvas({
             />{" "}
             Skill
           </span>
+          <span className="flex items-center gap-1.5">
+            <i
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: levelColors.SUB_SKILL }}
+            />{" "}
+            Sub-skill
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-export default function ObsidianPage() {
+export default function KnowledgePage() {
   const { theme } = useTheme();
   const isDarkMode = theme === "dark";
   const [search, setSearch] = useState("");
@@ -684,18 +694,22 @@ export default function ObsidianPage() {
   const [noteName, setNoteName] = useState("");
   const [noteDescription, setNoteDescription] = useState("");
   const [noteType, setNoteType] = useState("TOPIC");
-  const [noteError, setNoteError] = useState("");
+  const [noteSubject, setNoteSubject] = useState("Toán");
   const [noteParentId, setNoteParentId] = useState<string>("none");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingParent, setIsEditingParent] = useState(false);
   const [newParentId, setNewParentId] = useState<string>("none");
-  const [isLinking, setIsLinking] = useState(false); // linking mode
+  const [isLinking, setIsLinking] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
   const [editingNote, setEditingNote] = useState<string | null>(null); // note text being edited
   const [isEditingNote, setIsEditingNote] = useState(false);
+  const [noteError, setNoteError] = useState("");
   const queryClient = useQueryClient();
   const graphQuery = useQuery({
     queryKey: ["knowledgeGraph"],
-    queryFn: getKnowledgeGraph,
+    queryFn: () => getKnowledgeGraph(),
   });
   const allNodes = graphQuery.data?.nodes ?? [];
   const allEdges = graphQuery.data?.edges ?? [];
@@ -732,6 +746,9 @@ export default function ObsidianPage() {
     onSuccess: () => {
       setNoteName("");
       setNoteDescription("");
+      setNoteType("TOPIC");
+      setNoteSubject("Toán");
+      setNoteParentId("none");
       setNoteError("");
       setShowNewNote(false);
       queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
@@ -751,7 +768,7 @@ export default function ObsidianPage() {
     },
     onError: (error: unknown) => {
       setIsDeleting(false);
-      alert(error instanceof Error ? error.message : "Không xóa được note.");
+      toast.error(error instanceof Error ? error.message : "Không xóa được note.");
     },
   });
 
@@ -763,7 +780,7 @@ export default function ObsidianPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
     },
     onError: (error: unknown) => {
-      alert(
+      toast.error(
         error instanceof Error
           ? error.message
           : "Không cập nhật được liên kết.",
@@ -780,7 +797,7 @@ export default function ObsidianPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
     },
     onError: (error: unknown) => {
-      alert(error instanceof Error ? error.message : "Không lưu được ghi chú.");
+      toast.error(error instanceof Error ? error.message : "Không lưu được ghi chú.");
     },
   });
 
@@ -801,16 +818,17 @@ export default function ObsidianPage() {
       description: noteDescription.trim() || undefined,
       parent_id: parent_id,
       node_type: noteType,
+      subject: noteSubject || undefined,
     });
   };
-
   return (
     <div
       className={`space-y-6 transition-colors duration-300 ${isDarkMode ? "dark" : ""}`}
     >
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient pb-1">
+          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+            <Network className="w-8 h-8 text-primary-500" />
             Cấu trúc Kiến thức
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
@@ -818,276 +836,134 @@ export default function ObsidianPage() {
             tri thức trong hệ thống.
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          type="button"
-          onClick={() => {
-            if (!showNewNote) {
-              setNoteParentId(
-                selectedNode ? String(selectedNode.entity_id) : "none",
-              );
-            }
-            setShowNewNote((value) => !value);
-          }}
-          className="inline-flex items-center justify-center rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary-500/30 hover:bg-primary-500 transition-all duration-200"
-        >
-          <Plus
-            className={`h-4 w-4 mr-2 transition-transform duration-300 ${showNewNote ? "rotate-45" : ""}`}
-          />
-          {showNewNote ? "Đóng form" : "Note mới"}
-        </motion.button>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          {
-            label: "Tổng số Node",
-            value: allNodes.length,
-            icon: FileText,
-            color: "text-blue-500 dark:text-blue-400",
-            bg: "bg-blue-500/10 dark:bg-blue-400/10",
-          },
-          {
-            label: "Tổng liên kết",
-            value: allEdges.length,
-            icon: LinkIcon,
-            color: "text-purple-500 dark:text-purple-400",
-            bg: "bg-purple-500/10 dark:bg-purple-400/10",
-          },
-          {
-            label: "Node có câu hỏi",
-            value: allNodes.filter((node) => node.question_count > 0).length,
-            icon: CheckCircle2,
-            color: "text-emerald-500 dark:text-emerald-400",
-            bg: "bg-emerald-500/10 dark:bg-emerald-400/10",
-          },
-          {
-            label: "Đang chọn",
-            value: selectedNode ? selectedNode.label : "-",
-            icon: Share2,
-            color: "text-amber-500 dark:text-amber-400",
-            bg: "bg-amber-500/10 dark:bg-amber-400/10",
-          },
-        ].map((stat, idx) => (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: idx * 0.1 }}
-            key={stat.label}
-            className="relative overflow-hidden p-5 transition-all hover:-translate-y-1 group glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl"
-          >
-            <div className="absolute -right-4 -top-4 opacity-[0.03] dark:opacity-10 transition-transform duration-500 group-hover:scale-110 group-hover:opacity-[0.06] dark:group-hover:opacity-20">
-              <stat.icon className="h-24 w-24" />
-            </div>
-            <div className="relative z-10 flex items-center gap-3">
-              <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stat.bg} ${stat.color} shadow-sm`}
-              >
-                <stat.icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  {stat.label}
-                </p>
-                <p className="mt-0.5 truncate text-xl font-black text-slate-900 dark:text-white">
-                  {stat.value}
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <AnimatePresence>
-        {showNewNote && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-            <motion.form
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.2 }}
-              onSubmit={handleCreateNote}
-              className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800"
+      <section className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-12rem)]">
+        {/* --- Toolbar / Sidebar Left --- */}
+        <aside className="lg:col-span-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 dark:border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
+              Danh sách Tri thức
+            </h2>
+            <button
+              onClick={() => setShowNewNote(true)}
+              className="p-1.5 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+              title="Thêm Node mới"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 py-4">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Tạo Node Mới
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowNewNote(false)}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-500 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="p-6 space-y-5">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Tên Node <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    value={noteName}
-                    onChange={(event) => setNoteName(event.target.value)}
-                    required
-                    placeholder="Ví dụ: Phương trình bậc hai"
-                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Loại Node
-                  </label>
-                  <select
-                    value={noteType}
-                    onChange={(e) => setNoteType(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer"
-                  >
-                    <option value="TOPIC">Chủ đề (Topic)</option>
-                    <option value="CONCEPT">Khái niệm (Concept)</option>
-                    <option value="SKILL">Kỹ năng (Skill)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Liên kết tới Node cha
-                  </label>
-                  <select
-                    value={noteParentId}
-                    onChange={(e) => setNoteParentId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer"
-                  >
-                    <option value="none">-- Không liên kết (Root) --</option>
-                    {allNodes.map((node) => (
-                      <option key={node.id} value={node.entity_id}>
-                        {node.path || node.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Mô tả (tuỳ chọn)
-                  </label>
-                  <textarea
-                    value={noteDescription}
-                    onChange={(event) => setNoteDescription(event.target.value)}
-                    rows={3}
-                    placeholder="Nhập ghi chú cho node này..."
-                    className="w-full resize-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
-                  />
-                </div>
-                {noteError && (
-                  <p className="text-sm font-medium text-red-500">
-                    {noteError}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 px-6 py-4">
-                <button
-                  type="button"
-                  onClick={() => setShowNewNote(false)}
-                  className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={createNoteMutation.isPending}
-                  className="rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 disabled:opacity-50 transition-colors shadow-lg shadow-primary-500/30"
-                >
-                  {createNoteMutation.isPending ? "Đang xử lý..." : "Tạo mới"}
-                </button>
-              </div>
-            </motion.form>
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
-        )}
-      </AnimatePresence>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)_320px] mt-6">
-        <aside className="flex flex-col overflow-hidden h-[600px] glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
-          <div className="p-4 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
-                Danh sách Node
-              </h2>
-              <span className="inline-flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                {visibleNodes.length}/{allNodes.length}
-              </span>
-            </div>
+          <div className="space-y-3">
             <input
+              type="text"
+              placeholder="Tìm kiếm node..."
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm kiếm theo tên, đường dẫn..."
-              aria-label="Tìm note"
-              className="w-full rounded-xl border border-slate-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 px-3.5 py-2 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all"
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             <select
               value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value)}
-              aria-label="Lọc loại note"
-              className="mt-2.5 w-full rounded-xl border border-slate-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all cursor-pointer"
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              <option value="ALL">Tất cả loại node</option>
+              <option value="ALL">Tất cả phân loại</option>
               <option value="TOPIC">Chủ đề (Topic)</option>
               <option value="CONCEPT">Khái niệm (Concept)</option>
               <option value="SKILL">Kỹ năng (Skill)</option>
             </select>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {graphQuery.isLoading && (
-              <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary-500 border-t-transparent"></div>
-                <p className="text-xs font-medium">Đang tải dữ liệu...</p>
-              </div>
-            )}
-            {graphQuery.isError && (
-              <p className="p-4 text-center text-sm font-medium text-danger-500">
-                Không tải được dữ liệu graph.
-              </p>
-            )}
+
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 custom-scrollbar">
             {visibleNodes.map((node) => (
               <NodePill
                 key={node.id}
                 node={node}
-                active={node.id === selectedNode?.id}
+                active={selectedId === node.id}
                 onClick={() => setSelectedId(node.id)}
               />
             ))}
-            {!graphQuery.isLoading && visibleNodes.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-2 opacity-60">
-                <FileText className="h-8 w-8" />
-                <p className="text-xs font-medium">Không có note phù hợp</p>
+            {visibleNodes.length === 0 && (
+              <div className="text-center p-4 text-sm text-slate-500 italic">
+                Không tìm thấy node nào
               </div>
             )}
           </div>
         </aside>
 
-        <main className="min-w-0">
+        {/* --- Graph Canvas Center --- */}
+        <div className="lg:col-span-2 relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 dark:border-slate-800 overflow-hidden">
           <GraphCanvas
-            nodes={visibleNodes}
+            nodes={allNodes}
             edges={allEdges}
-            selectedId={selectedNode?.id ?? null}
+            selectedId={selectedId}
             onSelect={setSelectedId}
             isDarkMode={isDarkMode}
           />
-        </main>
 
-        <aside className="flex flex-col h-[600px] overflow-y-auto custom-scrollbar p-5 glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
-          <div className="flex items-center justify-between mb-5 shrink-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-primary-600 dark:text-primary-400">
-              Chi tiết Node
-            </p>
-            {selectedNode && (
-              <span
-                className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm"
-                style={{
-                  color: levelColors[selectedNode.type] ?? levelColors.NOTE,
-                  backgroundColor: `${levelColors[selectedNode.type] ?? levelColors.NOTE}20`,
-                  border: `1px solid ${levelColors[selectedNode.type] ?? levelColors.NOTE}40`,
-                }}
+          {/* New Note Overlay */}
+          <AnimatePresence>
+            {showNewNote && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-50 p-6 overflow-y-auto"
               >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Thêm Node Tri thức</h3>
+                  <button onClick={() => setShowNewNote(false)} className="text-slate-400 hover:text-slate-600">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <form onSubmit={handleCreateNote} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tên Node</label>
+                    <input type="text" required value={noteName} onChange={e => setNoteName(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mô tả</label>
+                    <textarea value={noteDescription} onChange={e => setNoteDescription(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2" rows={2} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Loại Node</label>
+                      <select value={noteType} onChange={e => setNoteType(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2">
+                        <option value="TOPIC">Chủ đề</option>
+                        <option value="CONCEPT">Khái niệm</option>
+                        <option value="SKILL">Kỹ năng</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Môn học</label>
+                      <input type="text" required value={noteSubject} onChange={e => setNoteSubject(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Node Cha</label>
+                    <select value={noteParentId} onChange={e => setNoteParentId(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2">
+                      <option value="none">-- Không có node cha (Gốc) --</option>
+                      {allNodes.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}
+                    </select>
+                  </div>
+                  {noteError && <p className="text-red-500 text-sm">{noteError}</p>}
+                  <button type="submit" disabled={createNoteMutation.isPending} className="w-full bg-primary-600 text-white rounded-xl px-4 py-2 font-bold">
+                    {createNoteMutation.isPending ? "Đang tạo..." : "Tạo Node"}
+                  </button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* --- Details Sidebar Right --- */}
+        <aside className="lg:col-span-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 dark:border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
+              {selectedNode ? "Chi tiết Node" : "Chi tiết"}
+            </h2>
+            {selectedNode && (
+              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300">
                 {levelLabels[selectedNode.type] ?? selectedNode.type}
               </span>
             )}
@@ -1393,14 +1269,12 @@ export default function ObsidianPage() {
                   <div className="pt-2 border-t border-red-200/30 dark:border-red-900/30 mt-2">
                     <button
                       onClick={() => {
-                        if (
-                          window.confirm(
-                            `Bạn có chắc chắn muốn xóa node "${selectedNode.label}" không? Tất cả liên kết với node con sẽ bị ngắt.`,
-                          )
-                        ) {
+                        setConfirmMessage(`Bạn có chắc chắn muốn xóa node "${selectedNode.label}" không? Tất cả liên kết với node con sẽ bị ngắt.`);
+                        setConfirmAction(() => () => {
                           setIsDeleting(true);
                           deleteNoteMutation.mutate(selectedNode.entity_id);
-                        }
+                        });
+                        setConfirmOpen(true);
                       }}
                       disabled={isDeleting}
                       className="w-full flex justify-center items-center gap-2 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
@@ -1426,6 +1300,15 @@ export default function ObsidianPage() {
           )}
         </aside>
       </section>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Xác nhận"
+        message={confirmMessage}
+        onConfirm={() => { confirmAction?.(); setConfirmOpen(false); }}
+        onCancel={() => { setConfirmOpen(false); setConfirmAction(null); }}
+        isDestructive
+      />
     </div>
   );
 }

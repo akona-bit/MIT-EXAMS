@@ -4,12 +4,18 @@ import {
   updateStudentAccess,
   getStaffMembers,
   inviteUser,
+  updateStaffMember,
   type StudentItem,
   type StaffMember,
 } from "../../api/admin";
 import Button from "../../components/ui/Button";
+import { Badge } from "../../components/ui/Badge";
+import { Skeleton } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
+import { KeyRound } from "lucide-react";
+import { toast } from '../../components/ui/Toast';
 
 type Tab = "students" | "staff";
 
@@ -19,35 +25,35 @@ export default function AccessControlPage() {
   const [tab, setTab] = useState<Tab>("students");
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold text-gradient pb-1">
-          Quản lý người dùng
-        </h1>
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-          Phân biệt rõ giữa Thí sinh và Giáo viên / Quản trị viên.
-        </p>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+            <KeyRound className="w-8 h-8 text-primary-500" />
+            Quản lý người dùng
+          </h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+            Phân biệt rõ giữa Thí sinh và Giáo viên / Quản trị viên.
+          </p>
+        </div>
       </div>
 
-      {/* Tab switcher */}
       <div className="flex gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1 w-fit">
         <button
           onClick={() => setTab("students")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-            tab === "students"
-              ? "bg-white dark:bg-slate-900 text-primary-600 shadow-sm"
-              : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
-          }`}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${tab === "students"
+            ? "bg-white dark:bg-slate-900 text-primary-600 shadow-sm"
+            : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+            }`}
         >
           Thí sinh
         </button>
         <button
           onClick={() => setTab("staff")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-            tab === "staff"
-              ? "bg-white dark:bg-slate-900 text-primary-600 shadow-sm"
-              : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
-          }`}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${tab === "staff"
+            ? "bg-white dark:bg-slate-900 text-primary-600 shadow-sm"
+            : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+            }`}
         >
           Giáo viên / Quản trị viên
         </button>
@@ -74,7 +80,7 @@ function StudentsTab() {
       setStudents(data.items);
       setTotal(data.total);
     } catch {
-      // ignore
+      toast.error("Không thể tải danh sách thí sinh.");
     } finally {
       setLoading(false);
     }
@@ -89,7 +95,7 @@ function StudentsTab() {
         prev.map((s) => (s.id === userId ? { ...s, can_view_answers: result.can_view_answers } : s))
       );
     } catch {
-      alert("Không thể cập nhật quyền.");
+      toast.error("Không thể cập nhật quyền.");
     }
   };
 
@@ -123,9 +129,9 @@ function StudentsTab() {
             </thead>
             <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Đang tải...</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center"><div className="flex flex-col items-center gap-3"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-24" /></div></td></tr>
               ) : students.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Không có thí sinh nào.</td></tr>
+                <tr><td colSpan={7}><EmptyState title="Không có thí sinh nào" message="Chưa có thí sinh nào được thêm vào hệ thống." /></td></tr>
               ) : students.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs font-medium text-slate-700 dark:text-slate-300">{s.sbd || "-"}</td>
@@ -141,22 +147,19 @@ function StudentsTab() {
                   <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-400">{s.exam_count}</td>
                   <td className="px-4 py-3">
                     {s.can_view_answers ? (
-                      <span className="inline-flex rounded-full bg-success-500/10 px-2.5 py-1 text-xs font-semibold text-success-600">Đã cấp</span>
+                      <Badge variant="success">Đã cấp</Badge>
                     ) : (
-                      <span className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-500">Chưa cấp</span>
+                      <Badge variant="secondary">Chưa cấp</Badge>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
+                    <Button
+                      size="sm"
+                      variant={s.can_view_answers ? "destructive" : "default"}
                       onClick={() => toggleAccess(s.id, s.can_view_answers)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        s.can_view_answers
-                          ? "bg-danger-50 text-danger-700 hover:bg-danger-100 dark:bg-danger-500/10 dark:text-danger-400"
-                          : "bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400"
-                      }`}
                     >
                       {s.can_view_answers ? "Thu hồi" : "Cấp quyền"}
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -202,6 +205,12 @@ function StaffTab() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const [editItem, setEditItem] = useState<StaffMember | null>(null);
+  const [editRole, setEditRole] = useState("TEACHER");
+  const [editActive, setEditActive] = useState(true);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFullName, setInviteFullName] = useState("");
@@ -217,7 +226,7 @@ function StaffTab() {
       setStaff(data.items);
       setTotal(data.total);
     } catch {
-      // ignore
+      toast.error("Không thể tải danh sách nhân viên.");
     } finally {
       setLoading(false);
     }
@@ -247,6 +256,30 @@ function StaffTab() {
     }
   };
 
+  const handleSaveEdit = async () => {
+    if (!editItem) return;
+    setIsSavingEdit(true);
+    setEditError("");
+    try {
+      await updateStaffMember(editItem.id, {
+        role_name: editRole,
+        is_active: editActive,
+      });
+      setStaff((prev) =>
+        prev.map((u) =>
+          u.id === editItem.id
+            ? { ...u, role: editRole, is_active: editActive }
+            : u
+        )
+      );
+      setEditItem(null);
+    } catch (err: any) {
+      setEditError(err.response?.data?.detail || err.message || "Lỗi khi cập nhật.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
@@ -272,32 +305,38 @@ function StaffTab() {
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Vai trò</th>
                 <th className="px-4 py-3 font-semibold">Trạng thái</th>
+                <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
               {loading ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">Đang tải...</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center"><div className="flex flex-col items-center gap-3"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-24" /></div></td></tr>
               ) : staff.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">Không có giáo viên/quản trị nào.</td></tr>
+                <tr><td colSpan={5}><EmptyState title="Không có giáo viên/quản trị nào" message="Chưa có nhân viên nào được thêm vào hệ thống." /></td></tr>
               ) : staff.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{u.full_name || u.username}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{u.email}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      u.role === "ADMIN"
-                        ? "bg-danger-500/10 text-danger-600 dark:text-danger-400"
-                        : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-                    }`}>
-                      {u.role === "ADMIN" ? "Quản trị" : "Giáo viên"}
-                    </span>
+                    <Badge variant={u.role === "ADMIN" ? "destructive" : u.role === "MODERATOR" ? "warning" : "info"}>
+                      {u.role === "ADMIN" ? "Quản trị" : u.role === "MODERATOR" ? "Kiểm duyệt" : "Giáo viên"}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     {u.is_active ? (
-                      <span className="inline-flex rounded-full bg-success-500/10 px-2.5 py-1 text-xs font-semibold text-success-600">Hoạt động</span>
+                      <Badge variant="success">Hoạt động</Badge>
                     ) : (
-                      <span className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-500">Vô hiệu</span>
+                      <Badge variant="secondary">Vô hiệu</Badge>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => setEditItem(u)}
+                    >
+                      Sửa
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -305,6 +344,44 @@ function StaffTab() {
           </table>
         </div>
       </div>
+
+      {/* Edit staff modal */}
+      <Modal isOpen={!!editItem} onClose={() => !isSavingEdit && setEditItem(null)} title="Cập nhật nhân sự">
+        <div className="space-y-4 mt-4">
+          {editError && <div className="rounded-lg bg-danger-50 p-4 text-sm text-danger-700">{editError}</div>}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Người dùng</label>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {editItem?.full_name || editItem?.username} ({editItem?.email})
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Vai trò</label>
+            <select
+              value={editRole}
+              onChange={(e) => setEditRole(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            >
+              <option value="TEACHER">Giáo viên (soạn đề)</option>
+              <option value="MODERATOR">Kiểm duyệt (duyệt đề)</option>
+              <option value="ADMIN">Quản trị viên</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={editActive}
+              onChange={(e) => setEditActive(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+            />
+            Tài khoản hoạt động (bỏ chọn để vô hiệu hoá)
+          </label>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={() => setEditItem(null)} disabled={isSavingEdit}>Hủy</Button>
+            <Button type="button" onClick={handleSaveEdit} disabled={isSavingEdit}>{isSavingEdit ? "Đang lưu..." : "Lưu thay đổi"}</Button>
+          </div>
+        </div>
+      </Modal>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">

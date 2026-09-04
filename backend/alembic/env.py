@@ -18,7 +18,7 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 from app.models.base import Base
 from app.models.user import User, Role
 from app.models.otp import OTPToken
-from app.models.question import KnowledgeNode, Resource, Question, Answer, QuestionSubItem
+from app.models.question import KnowledgeNode, ResourceType, Question, Answer, QuestionSubItem
 from app.models.exam import Matrix, MatrixRule, Exam, ExamForm, ExamFormQuestion, ExamFormAnswer, ExamParticipant, ExamSubmission, ExamSubmissionAnswer, ExamTrackingLog
 from app.models.grading import ExamResult, IrtTask
 from app.models.grading import ExamResult, IrtTask, ItemAnalysisResult
@@ -29,6 +29,7 @@ from app.models.passage import Passage
 from app.models.system import SystemSetting
 from app.models.feedback import Feedback
 from app.models.ai import AiAnalysisCache, AiRequestLog
+from app.models.notification import Notification, NotificationType
 target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:

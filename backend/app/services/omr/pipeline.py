@@ -1,7 +1,6 @@
 import json
 import os
 import httpx
-import google.generativeai as genai
 from typing import Dict, Any
 
 class OMREngine:
@@ -49,12 +48,10 @@ class OMREngine:
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY chưa được cấu hình trên server.")
             
-        genai.configure(api_key=gemini_api_key)
+        from google import genai
+        from google.genai import types
         
-        model = genai.GenerativeModel(
-            model_name='gemini-1.5-pro',
-            generation_config={"response_mime_type": "application/json"}
-        )
+        client = genai.Client(api_key=gemini_api_key)
         
         prompt = """
         Bạn là một hệ thống chấm thi trắc nghiệm OMR tự động.
@@ -81,10 +78,16 @@ class OMREngine:
         """
         
         # 3. Call Gemini Vision
-        response = model.generate_content([
-            prompt,
-            {"mime_type": "image/jpeg", "data": image_bytes}
-        ])
+        response = client.models.generate_content(
+            model='gemini-1.5-pro',
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
         
         try:
             result_json = json.loads(response.text)

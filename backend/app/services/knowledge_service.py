@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, and_, func
-from app.models.question import KnowledgeNode, KnowledgeNodeParent, Question
+from app.models.question import KnowledgeNode, KnowledgeNodeParent, Question, QuestionStatus, QuestionSkillTag
 
 class KnowledgeService:
     @staticmethod
@@ -15,12 +15,43 @@ class KnowledgeService:
     @staticmethod
     async def count_approved_questions(db: AsyncSession, node_id: int) -> int:
         """Counts the number of APPROVED questions attached to this node."""
-        from app.models.question import Question, QuestionStatus, QuestionSkillTag
         stmt = select(func.count()).select_from(Question).where(
-            and_(Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == node_id), Question.status == QuestionStatus.APPROVED)
+            and_(
+                Question.skill_tags.any(QuestionSkillTag.knowledge_node_id == node_id),
+                Question.status == QuestionStatus.APPROVED
+            )
         )
         result = await db.execute(stmt)
         return result.scalar() or 0
+
+    @staticmethod
+    async def update_is_leaf(db: AsyncSession, node_id: int):
+        """Update is_leaf flag: True if node has no children OR no approved questions on children."""
+        # Check if node has any children
+        children_stmt = select(func.count()).select_from(KnowledgeNodeParent).where(KnowledgeNodeParent.parent_id == node_id)
+        children_count = (await db.execute(children_stmt)).scalar() or 0
+
+        # Check if node has approved questions
+        question_count = await KnowledgeService.count_approved_questions(db, node_id)
+
+        # A node is a leaf if: no children OR (has children but no approved questions on this node)
+        # Actually: is_leaf = True means questions CAN be attached here
+        # A node is a leaf if it has no children with approved questions
+        has_question_children = False
+        if children_count > 0:
+            # Check if any child has approved questions
+            child_ids_stmt = select(KnowledgeNodeParent.child_id).where(KnowledgeNodeParent.parent_id == node_id)
+            child_ids = (await db.execute(child_ids_stmt)).scalars().all()
+            for cid in child_ids:
+                cnt = await KnowledgeService.count_approved_questions(db, cid)
+                if cnt > 0:
+                    has_question_children = True
+                    break
+
+        is_leaf = children_count == 0 or not has_question_children
+        await db.execute(
+            update(KnowledgeNode).where(KnowledgeNode.id == node_id).values(is_leaf=is_leaf)
+        )
 
     @staticmethod
     async def get_all_descendant_leaves(db: AsyncSession, node_ids: List[int]) -> List[int]:

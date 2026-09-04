@@ -8,6 +8,7 @@ from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.models.passage import Passage
+from app.services.knowledge_service import KnowledgeService
 from app.models.question import Question, Answer, QuestionSkillTag
 from app.schemas.passage import PassageCreate, PassageUpdate, PassageResponse, PassageSearchResponse, QuestionBulkCreateRequest, QuestionBulkUpdateRequest
 
@@ -161,6 +162,17 @@ async def create_questions_bulk(public_code: str, req: QuestionBulkCreateRequest
         created_codes.append(q_code)
 
     await db.commit()
+    
+    # Update is_leaf for all affected knowledge nodes
+    all_node_ids = set()
+    for q_req in req.questions:
+        all_node_ids.add(q_req.primary_knowledge_node_id)
+        for sec_id in (q_req.secondary_knowledge_node_ids or []):
+            all_node_ids.add(sec_id)
+    for node_id in all_node_ids:
+        await KnowledgeService.update_is_leaf(db, node_id)
+    await db.commit()
+    
     return created_codes
 
 @router.put("/{public_code}/questions/bulk", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -266,20 +278,39 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
             created_codes.append(q_code)
 
     await db.commit()
+    
+    # Update is_leaf for all affected knowledge nodes
+    all_node_ids = set()
+    for q_req in req.questions:
+        all_node_ids.add(q_req.primary_knowledge_node_id)
+        for sec_id in (q_req.secondary_knowledge_node_ids or []):
+            all_node_ids.add(sec_id)
+    for node_id in all_node_ids:
+        await KnowledgeService.update_is_leaf(db, node_id)
+    await db.commit()
+    
     return created_codes
 
 
 @router.delete("/{public_code}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def delete_passage(public_code: str, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import update as sa_update
+    from app.models.question import QuestionSkillTag, Answer
     result = await db.execute(select(Passage).where(Passage.public_code == public_code))
     passage = result.scalars().first()
     if not passage:
         raise HTTPException(status_code=404, detail="Passage không tồn tại")
-    # Unlink questions from this passage
-    await db.execute(
-        sa_update(Question).where(Question.passage_id == passage.id).values(passage_id=None)
-    )
+
+    # Get all question IDs in this passage
+    q_stmt = select(Question.id).where(Question.passage_id == passage.id)
+    q_ids = (await db.execute(q_stmt)).scalars().all()
+
+    # Cascade delete related records
+    for q_id in q_ids:
+        await db.execute(delete(QuestionSkillTag).where(QuestionSkillTag.question_id == q_id))
+        await db.execute(delete(Answer).where(Answer.question_id == q_id))
+    await db.execute(delete(Question).where(Question.passage_id == passage.id))
+
     await db.delete(passage)
     await db.commit()
     return None

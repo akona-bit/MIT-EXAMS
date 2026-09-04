@@ -7,6 +7,7 @@ import {
   getMatrixUsage,
   createMatrixVersion,
   checkMatrixFeasibilityLocal,
+  generateAiMatrix,
 } from "../../api/matrix";
 import { getKnowledgeTree } from "../../api/knowledge";
 import { passageApi, PassageSearchResponse } from "../../api/passages";
@@ -16,7 +17,9 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import SmartMatrixWizard from "../../components/admin/SmartMatrixWizard";
 import MatrixVisualization from "../../components/matrix/MatrixVisualization";
-import { Layers, Link2, AlertTriangle, Activity } from "lucide-react";
+import { Layers, Link2, AlertTriangle, Activity, Sparkles, Wand2, Plus, Trash2, Settings, BarChart2, CheckCircle2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "../../components/ui/Toast";
 
 export default function MatrixFormPage() {
   const { id } = useParams();
@@ -50,6 +53,11 @@ export default function MatrixFormPage() {
   const [matrixUsage, setMatrixUsage] = useState<{ is_used: boolean; total_runs: number } | null>(null);
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
 
+  // AI Generate State
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+
   // Health Score State
   const [healthScore, setHealthScore] = useState<number | null>(null);
   const [shortages, setShortages] = useState<string[]>([]);
@@ -73,7 +81,6 @@ export default function MatrixFormPage() {
         setName(matrix.name);
         setDescription(matrix.description || "");
         
-        // Map backend groups to local_id
         const fetchedGroups = (matrix.groups || []).map(g => ({
           ...g,
           local_id: g.id?.toString() || Math.random().toString(36).slice(2)
@@ -90,18 +97,16 @@ export default function MatrixFormPage() {
           group_local_id: r.group_id ? groupMap.get(r.group_id) : undefined
         })));
         
-        // Check usage for versioning
         getMatrixUsage(matrixId).then(setMatrixUsage).catch(console.error);
       })
       .catch((error) => {
         console.error(error);
-        alert("Không tìm thấy ma trận để chỉnh sửa");
+        toast.error("Không tìm thấy ma trận để chỉnh sửa");
         navigate("/admin/matrix");
       })
       .finally(() => setIsFetching(false));
   }, [id, navigate]);
 
-  // Debounced Feasibility Check
   useEffect(() => {
     if (rules.length === 0) {
       setHealthScore(null);
@@ -123,7 +128,7 @@ export default function MatrixFormPage() {
           console.error("Lỗi kiểm tra khả thi:", err);
         })
         .finally(() => setIsCheckingFeasibility(false));
-    }, 1000); // 1s debounce
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [rules]);
@@ -133,11 +138,11 @@ export default function MatrixFormPage() {
     setIsCreatingVersion(true);
     try {
       const newMatrix = await createMatrixVersion(Number(id));
-      alert(`Đã tạo bản sao ma trận mới (ID: ${newMatrix.id}). Đang chuyển sang chỉnh sửa bản sao...`);
+      toast.success(`Đã tạo bản sao ma trận mới (ID: ${newMatrix.id}). Đang chuyển sang chỉnh sửa bản sao...`);
       navigate(`/admin/matrix/${newMatrix.id}/edit`);
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra khi tạo bản sao");
+      toast.error("Có lỗi xảy ra khi tạo bản sao");
     } finally {
       setIsCreatingVersion(false);
     }
@@ -147,23 +152,23 @@ export default function MatrixFormPage() {
     e.preventDefault();
 
     if (!name.trim()) {
-      alert("Tên ma trận không được để trống");
+      toast.warning("Tên ma trận không được để trống");
       return;
     }
 
     if (isEditMode && matrixUsage?.is_used) {
-      alert("Ma trận này đã được sử dụng. Vui lòng bấm 'Tạo bản sao ngay' để chỉnh sửa an toàn trên phiên bản mới.");
+      toast.warning("Ma trận này đã được sử dụng. Vui lòng bấm 'Tạo bản sao ngay' để chỉnh sửa an toàn trên phiên bản mới.");
       return;
     }
 
     if (rules.length === 0) {
-      alert("Cần ít nhất 1 quy tắc (rule) cho ma trận");
+      toast.warning("Cần ít nhất 1 quy tắc (rule) cho ma trận");
       return;
     }
 
     const invalidRule = rules.find((r) => !r.knowledge_node_id || !r.question_type || !r.count || r.count <= 0);
     if (invalidRule) {
-      alert("Vui lòng điền đầy đủ và hợp lệ thông tin cho tất cả quy tắc (Chủ đề, Dạng câu, Số lượng > 0)");
+      toast.warning("Vui lòng điền đầy đủ và hợp lệ thông tin cho tất cả quy tắc (Chủ đề, Dạng câu, Số lượng > 0)");
       return;
     }
 
@@ -203,7 +208,7 @@ export default function MatrixFormPage() {
       navigate("/admin/matrix");
     } catch (error) {
       console.error(error);
-      alert(
+      toast.error(
         isEditMode
           ? "Có lỗi xảy ra khi cập nhật ma trận"
           : "Có lỗi xảy ra khi tạo ma trận",
@@ -218,12 +223,39 @@ export default function MatrixFormPage() {
       ...rules,
       {
         knowledge_node_id: nodes.length > 0 ? nodes[0].id : 0,
-        question_type: "SINGLE_CHOICE",
         level: 1,
+        question_type: "SINGLE_CHOICE",
         count: 1,
         part: 1,
       },
     ]);
+  };
+
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsGeneratingAi(true);
+    try {
+      const res = await generateAiMatrix(aiPrompt);
+      if (res.rules && res.rules.length > 0) {
+        const newRules = res.rules.filter(r => r.node_id).map(r => ({
+          knowledge_node_id: r.node_id!,
+          level: r.cognitive_level,
+          question_type: r.question_type,
+          count: r.count,
+          part: 1,
+        }));
+        setRules([...rules, ...newRules]);
+        setAiPrompt("");
+        setIsAiModalOpen(false);
+      } else {
+        toast.warning("AI không tạo được quy tắc nào hợp lệ. Vui lòng thử lại với prompt chi tiết hơn.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi gọi AI sinh ma trận.");
+    } finally {
+      setIsGeneratingAi(false);
+    }
   };
 
   const removeRule = (index: number) => {
@@ -231,7 +263,6 @@ export default function MatrixFormPage() {
     newRules.splice(index, 1);
     setRules(newRules);
     
-    // Clean up selected indices if needed
     const newSelected = new Set(selectedRuleIndices);
     newSelected.delete(index);
     setSelectedRuleIndices(newSelected);
@@ -267,12 +298,11 @@ export default function MatrixFormPage() {
       if (p) {
         passageId = p.id;
       } else {
-        // try to fetch code
         try {
            const fp = await passageApi.getByCode(reqPassageCode);
            passageId = fp.id;
         } catch {
-           alert("Mã ngữ liệu không hợp lệ");
+           toast.warning("Mã ngữ liệu không hợp lệ");
            return;
         }
       }
@@ -287,7 +317,6 @@ export default function MatrixFormPage() {
     
     setGroups([...groups, newGroup]);
     
-    // Update rules
     const newRules = [...rules];
     selectedRuleIndices.forEach(idx => {
       newRules[idx].group_local_id = local_id;
@@ -321,279 +350,322 @@ export default function MatrixFormPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold text-gradient pb-1">
-          {isEditMode ? "Chỉnh sửa ma trận" : "Thêm ma trận mới"}
-        </h1>
-        <Button variant="ghost" onClick={() => navigate(-1)}>
-          Quay lại
-        </Button>
+    <div className="max-w-6xl mx-auto space-y-8 pb-24">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+           <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+             {isEditMode ? "Chỉnh sửa ma trận" : "Tạo Ma Trận Mới"}
+           </h1>
+           <p className="text-slate-500 dark:text-slate-400 mt-1">
+             Thiết lập cấu trúc đặc tả để hệ thống tự động sinh đề thi
+           </p>
+        </div>
+        <div className="flex items-center gap-3">
+           <Button variant="ghost" onClick={() => navigate(-1)} className="font-semibold">Hủy bỏ</Button>
+           <Button onClick={handleSubmit} isLoading={isLoading} size="lg" className="bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-500/25 px-8 rounded-xl font-bold">
+             {isEditMode ? "Lưu thay đổi" : "Lưu ma trận"}
+           </Button>
+        </div>
       </div>
 
       {isFetching ? (
-        <div className="rounded-2xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl">
-          Đang tải dữ liệu ma trận...
+        <div className="flex items-center justify-center h-64 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-white/60 dark:border-white/10 backdrop-blur-xl">
+           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
         </div>
       ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="glass-card space-y-8"
-        >
-          {/* Versioning Warning (Prominent) */}
+        <form onSubmit={handleSubmit} className="space-y-8 relative">
+          
+          {/* Versioning Warning */}
           {isEditMode && matrixUsage?.is_used && (
-            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-amber-800 dark:text-amber-300">Cảnh báo: Ma trận đang được sử dụng</h4>
-                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 mb-3">
-                    Ma trận này đã dùng để sinh <strong>{matrixUsage.total_runs}</strong> đề thi.
-                    Lưu thay đổi sẽ ảnh hưởng đến lịch sử sinh đề cũ. Hệ thống đã khóa tính năng lưu đè, vui lòng <strong>Tạo bản sao</strong> để chỉnh sửa an toàn.
+            <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl shadow-sm">
+              <div className="flex items-start gap-4">
+                <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-md">
+                   <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-amber-900 dark:text-amber-200 text-lg">Ma trận đang được sử dụng</h4>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1 mb-4 leading-relaxed max-w-3xl">
+                    Ma trận này đã được dùng để sinh <strong>{matrixUsage.total_runs}</strong> đề thi.
+                    Lưu đè sẽ phá vỡ tính nhất quán của các đề thi đã phát hành. Vui lòng tạo bản sao mới để tiếp tục chỉnh sửa.
                   </p>
                   <Button
                     type="button"
                     onClick={handleCreateVersion}
                     isLoading={isCreatingVersion}
-                    className="bg-amber-600 hover:bg-amber-700 text-white border-transparent"
+                    className="bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/30 font-bold"
                   >
-                    <Layers className="w-4 h-4 mr-2" /> Tạo bản sao ngay
+                    <Layers className="w-4 h-4 mr-2" /> Tạo Phiên Bản Mới
                   </Button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Health Score Widget */}
-          <div className="p-4 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center justify-between transition-all">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-full">
-                <Activity className={`w-6 h-6 ${isCheckingFeasibility ? 'text-slate-400 animate-pulse' : 'text-blue-500'}`} />
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  Chỉ số sức khỏe (Health Score)
-                  {isCheckingFeasibility && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-normal animate-pulse">Đang kiểm tra...</span>}
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Đánh giá khả năng sinh đề thành công dựa trên ngân hàng câu hỏi.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-6">
-              {healthScore !== null && !isCheckingFeasibility && (
-                <div className="text-right">
-                  <div className="flex items-end justify-end gap-1">
-                    <span className={`text-2xl font-black ${healthScore === 100 ? 'text-green-500' : healthScore >= 80 ? 'text-amber-500' : 'text-red-500'}`}>
-                      {healthScore}%
-                    </span>
-                  </div>
-                  {shortages.length > 0 && (
-                    <p className="text-xs text-red-500 font-medium mt-1">Thiếu {shortages.length} ô/nhóm</p>
-                  )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+             
+             {/* LEFT COLUMN: Main Info & Actions */}
+             <div className="lg:col-span-2 space-y-8">
+                {/* General Info Card */}
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/60 dark:border-white/10 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-none">
+                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
+                      <Settings className="w-5 h-5 text-primary-500" />
+                      Thông tin cơ bản
+                   </h2>
+                   <div className="space-y-5">
+                     <Input
+                       label="Tên ma trận"
+                       required
+                       placeholder="VD: Đề thi khảo sát Toán 12 - Lần 1"
+                       value={name}
+                       onChange={(e) => setName(e.target.value)}
+                       className="text-lg font-semibold"
+                     />
+                     <div className="space-y-2">
+                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                         Mô tả chi tiết
+                       </label>
+                       <textarea
+                         rows={3}
+                         className="w-full px-4 py-3 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-shadow"
+                         value={description}
+                         onChange={(e) => setDescription(e.target.value)}
+                         placeholder="Ghi chú thêm về mục đích của ma trận này..."
+                       />
+                     </div>
+                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-          
-          {shortages.length > 0 && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-lg">
-              <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1">Cảnh báo thiếu câu hỏi:</p>
-              <ul className="list-disc list-inside text-xs text-red-600 dark:text-red-300 space-y-0.5">
-                {shortages.slice(0, 5).map((s, i) => <li key={i}>{s}</li>)}
-                {shortages.length > 5 && <li>...và {shortages.length - 5} ô khác</li>}
-              </ul>
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Input
-              label="Tên ma trận"
-              required
-              placeholder="VD: Đề thi thử ĐGNL 2026"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Mô tả
-              </label>
-              <textarea
-                rows={2}
-                className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Nhập mô tả ma trận (tuỳ chọn)..."
-              />
-            </div>
-          </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-2">
-              <div className="flex items-center gap-4">
-                <h3 className="font-semibold text-lg text-slate-900 dark:text-white">
-                  Cấu trúc đề thi (Rules)
-                </h3>
-                {selectedRuleIndices.size > 1 && (
-                  <Button type="button" onClick={handleGroupRules} size="sm" variant="outline" className="flex items-center gap-1.5 border-primary-500 text-primary-600 bg-primary-50 dark:bg-primary-500/10">
-                    <Layers className="w-4 h-4" />
-                    Gộp {selectedRuleIndices.size} ô thành nhóm
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button 
-                  type="button" 
-                  onClick={() => setShowVisualization(!showVisualization)} 
-                  size="sm" 
-                  variant="outline"
-                  className={showVisualization ? 'bg-primary-50 text-primary-600 border-primary-200' : ''}
-                >
-                  {showVisualization ? 'Ẩn Biểu đồ' : 'Xem Biểu đồ'}
-                </Button>
-                <Button type="button" onClick={addRule} size="sm" variant="outline">
-                  + Thêm quy tắc
-                </Button>
-              </div>
-            </div>
-            
-            {showVisualization && rules.length > 0 && (
-              <div className="mb-4">
-                <MatrixVisualization 
-                  data={rules.map(r => ({
-                    ...r,
-                    knowledge_node: nodes.find(n => n.id === r.knowledge_node_id)
-                  }))} 
-                />
-              </div>
-            )}
-
-            {rules.length === 0 ? (
-              <div className="text-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Chưa có quy tắc nào. Bấm nút "Thêm quy tắc" để bắt đầu.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {rules.map((rule, idx) => {
-                  const group = rule.group_local_id ? groups.find(g => g.local_id === rule.group_local_id) : null;
-                  const isSelected = selectedRuleIndices.has(idx);
-                  
-                  return (
-                    <div key={idx} className={`p-4 bg-slate-50 dark:bg-slate-800/50 border ${isSelected ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-900/20' : 'border-slate-200 dark:border-white/5'} rounded-xl flex flex-col md:flex-row gap-4 items-end transition-colors relative`}>
-                      
-                      <div className="flex items-center justify-center pb-2 pl-2">
-                        <input type="checkbox" className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-slate-300 dark:border-slate-600 bg-transparent"
-                          checked={isSelected}
-                          onChange={() => toggleSelectRule(idx)}
-                        />
+                {/* Rules Builder Workspace */}
+                <div className="bg-slate-100/50 dark:bg-slate-900/30 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6">
+                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                      <div>
+                         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-indigo-500" />
+                            Cấu trúc sinh đề
+                         </h2>
+                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Định nghĩa các tiêu chí lấy câu hỏi từ ngân hàng</p>
                       </div>
-                      
-                      {group && (
-                        <div className="absolute -top-3 left-10 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 shadow-sm z-10">
-                           <Link2 className="w-3 h-3" />
-                           {group.label || "Nhóm"}
-                           <button type="button" onClick={() => ungroupRule(idx)} className="ml-1 hover:text-amber-900">&times;</button>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {selectedRuleIndices.size > 1 && (
+                          <Button type="button" onClick={handleGroupRules} size="sm" className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 shadow-sm font-bold">
+                            <Link2 className="w-4 h-4 mr-1.5" /> Gộp {selectedRuleIndices.size} ô
+                          </Button>
+                        )}
+                        <Button type="button" onClick={() => setIsSmartWizardOpen(true)} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 font-bold">
+                           <Wand2 className="w-4 h-4 mr-1.5" /> Smart Builder
+                        </Button>
+                        <Button type="button" onClick={() => setIsAiModalOpen(true)} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/20 font-bold">
+                           <Sparkles className="w-4 h-4 mr-1.5" /> AI
+                        </Button>
+                        <Button type="button" onClick={addRule} size="sm" className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white shadow-md font-bold">
+                           <Plus className="w-4 h-4 mr-1" /> Thêm Rule
+                        </Button>
+                      </div>
+                   </div>
+
+                   {rules.length === 0 ? (
+                     <div className="text-center p-12 bg-white/50 dark:bg-slate-800/20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700">
+                        <div className="w-16 h-16 mx-auto bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                           <Layers className="w-8 h-8 text-slate-400" />
                         </div>
-                      )}
+                        <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">Chưa có cấu trúc</h3>
+                        <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                          Bạn có thể thêm rule thủ công, dùng AI, hoặc sử dụng Smart Builder để phân bổ nhanh.
+                        </p>
+                     </div>
+                   ) : (
+                     <div className="space-y-4">
+                       <AnimatePresence>
+                         {rules.map((rule, idx) => {
+                           const group = rule.group_local_id ? groups.find(g => g.local_id === rule.group_local_id) : null;
+                           const isSelected = selectedRuleIndices.has(idx);
+                           
+                           return (
+                             <motion.div 
+                               initial={{ opacity: 0, y: 10 }}
+                               animate={{ opacity: 1, y: 0 }}
+                               exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                               key={idx} 
+                               className={`relative flex items-stretch gap-0 rounded-2xl transition-all shadow-sm ${
+                                 isSelected ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-300 dark:border-primary-700' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                               }`}
+                             >
+                               {/* Selector sidebar */}
+                               <div className={`w-10 flex flex-col items-center justify-center rounded-l-2xl border-r border-slate-100 dark:border-slate-800 ${isSelected ? 'bg-primary-100 dark:bg-primary-900/40' : 'bg-slate-50 dark:bg-slate-950'}`}>
+                                 <input 
+                                   type="checkbox" 
+                                   className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-slate-300 cursor-pointer"
+                                   checked={isSelected}
+                                   onChange={() => toggleSelectRule(idx)}
+                                 />
+                               </div>
+
+                               {/* Form Fields */}
+                               <div className="flex-1 p-4 grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
+                                 {group && (
+                                   <div className="absolute -top-3 left-12 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 shadow-sm z-10">
+                                      <Link2 className="w-3 h-3" />
+                                      {group.label || "Nhóm"}
+                                      <button type="button" onClick={() => ungroupRule(idx)} className="ml-1 hover:text-amber-950 font-black">&times;</button>
+                                   </div>
+                                 )}
+
+                                 <div className="col-span-2 space-y-1.5">
+                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chủ đề kiến thức</label>
+                                   <select
+                                     required
+                                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-primary-500"
+                                     value={rule.knowledge_node_id || ""}
+                                     onChange={(e) => updateRule(idx, "knowledge_node_id", Number(e.target.value))}
+                                   >
+                                     <option value="" disabled>-- Chọn chủ đề --</option>
+                                     {renderNodeOptions(nodes)}
+                                   </select>
+                                 </div>
+
+                                 <div className="space-y-1.5">
+                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dạng câu</label>
+                                   <select
+                                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-primary-500"
+                                     value={rule.question_type || "SINGLE_CHOICE"}
+                                     onChange={(e) => updateRule(idx, "question_type", e.target.value)}
+                                   >
+                                     <option value="SINGLE_CHOICE">Trắc nghiệm</option>
+                                     <option value="MULTIPLE_CHOICE">Nhiều lựa chọn</option>
+                                     <option value="TRUE_FALSE">Đúng Sai</option>
+                                     <option value="FILL_IN_BLANK">Điền khuyết</option>
+                                   </select>
+                                 </div>
+
+                                 <div className="space-y-1.5">
+                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mức độ</label>
+                                   <select
+                                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-primary-500"
+                                     value={rule.level || 1}
+                                     onChange={(e) => updateRule(idx, "level", Number(e.target.value))}
+                                   >
+                                     <option value={1}>NB</option>
+                                     <option value={2}>TH</option>
+                                     <option value={3}>VD</option>
+                                     <option value={4}>VDC</option>
+                                   </select>
+                                 </div>
+
+                                 <div className="flex gap-2">
+                                   <div className="flex-1 space-y-1.5">
+                                     <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Số lượng</label>
+                                     <input
+                                       type="number" min="1" required
+                                       className="w-full px-3 py-2 text-sm font-bold text-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-primary-500"
+                                       value={rule.count || 1}
+                                       onChange={(e) => updateRule(idx, "count", Number(e.target.value))}
+                                     />
+                                   </div>
+                                   <div className="pt-5 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => removeRule(idx)}
+                                        className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                        title="Xóa"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                   </div>
+                                 </div>
+                               </div>
+                             </motion.div>
+                           );
+                         })}
+                       </AnimatePresence>
+                     </div>
+                   )}
+                </div>
+             </div>
+
+             {/* RIGHT COLUMN: Sidebar (Health & Visualization) */}
+             <div className="space-y-6">
+                {/* Health Score Panel (Sticky) */}
+                <div className="sticky top-24 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/60 dark:border-white/10 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-none">
+                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+                      <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                         <Activity className={`w-5 h-5 ${isCheckingFeasibility ? 'text-slate-400 animate-spin' : 'text-emerald-500'}`} />
+                         Health Score
+                      </h3>
+                      <div className="text-3xl font-black tracking-tighter">
+                         {healthScore !== null && !isCheckingFeasibility ? (
+                            <span className={healthScore === 100 ? 'text-emerald-500' : healthScore >= 80 ? 'text-amber-500' : 'text-red-500'}>
+                               {healthScore}%
+                            </span>
+                         ) : (
+                            <span className="text-slate-300 dark:text-slate-700 animate-pulse">--</span>
+                         )}
+                      </div>
+                   </div>
+
+                   {shortages.length > 0 ? (
+                     <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl p-4">
+                       <p className="text-sm font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5 mb-2">
+                         <AlertTriangle className="w-4 h-4" /> Thiếu câu hỏi trong kho
+                       </p>
+                       <ul className="list-disc pl-4 text-xs font-medium text-red-600 dark:text-red-300 space-y-1">
+                         {shortages.slice(0, 5).map((s, i) => <li key={i}>{s}</li>)}
+                         {shortages.length > 5 && <li className="text-red-500/70 italic">...và {shortages.length - 5} mục khác</li>}
+                       </ul>
+                     </div>
+                   ) : (
+                     <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-xl p-4 flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                           <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Khả thi 100%</p>
+                           <p className="text-xs text-emerald-600 dark:text-emerald-400/80 mt-0.5">Ngân hàng có đủ câu hỏi để đáp ứng cấu trúc ma trận này.</p>
+                        </div>
+                     </div>
+                   )}
+
+                   <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex justify-between items-center mb-4">
+                         <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                            <BarChart2 className="w-4 h-4 text-slate-400" /> Biểu đồ cấu trúc
+                         </h4>
+                         <button 
+                           type="button" 
+                           onClick={() => setShowVisualization(!showVisualization)}
+                           className="text-xs font-bold text-primary-600 hover:text-primary-700 bg-primary-50 px-2 py-1 rounded"
+                         >
+                           {showVisualization ? "Ẩn đi" : "Hiện thị"}
+                         </button>
+                      </div>
                       
-                      <div className="w-full md:w-1/3 space-y-1">
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Chủ đề kiến thức</label>
-                        <select
-                          required
-                          className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-lg shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                          value={rule.knowledge_node_id || ""}
-                          onChange={(e) => updateRule(idx, "knowledge_node_id", Number(e.target.value))}
-                        >
-                          <option value="" disabled>-- Chọn chủ đề --</option>
-                          {renderNodeOptions(nodes)}
-                        </select>
-                      </div>
-
-                      <div className="w-full md:w-1/6 space-y-1">
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Dạng câu</label>
-                        <select
-                          className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-lg shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                          value={rule.question_type || "SINGLE_CHOICE"}
-                          onChange={(e) => updateRule(idx, "question_type", e.target.value)}
-                        >
-                          <option value="SINGLE_CHOICE">Trắc nghiệm</option>
-                          <option value="MULTIPLE_CHOICE">Nhiều lựa chọn</option>
-                          <option value="TRUE_FALSE">Đúng / Sai</option>
-                          <option value="FILL_IN_BLANK">Điền khuyết</option>
-                          <option value="COMPOSITE">Câu hỏi chùm</option>
-                        </select>
-                      </div>
-
-                      <div className="w-full md:w-1/6 space-y-1">
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Mức độ</label>
-                        <select
-                          className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-lg shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                          value={rule.level || 1}
-                          onChange={(e) => updateRule(idx, "level", Number(e.target.value))}
-                        >
-                          <option value={1}>Nhận biết</option>
-                          <option value={2}>Thông hiểu</option>
-                          <option value={3}>Vận dụng</option>
-                          <option value={4}>Vận dụng cao</option>
-                        </select>
-                      </div>
-                      
-                      <div className="w-full md:w-1/6 space-y-1">
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Phần thi</label>
-                        <select
-                          className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-lg shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                          value={rule.part || 1}
-                          onChange={(e) => updateRule(idx, "part", Number(e.target.value))}
-                        >
-                          <option value={1}>Phần 1 - Tiếng Việt</option>
-                          <option value={2}>Phần 2 - Tiếng Anh</option>
-                          <option value={3}>Phần 3 - Toán</option>
-                          <option value={4}>Phần 4 - Khoa học</option>
-                        </select>
-                      </div>
-
-                      <div className="w-full md:w-1/6 space-y-1">
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Số lượng</label>
-                        <input
-                          type="number"
-                          min="1"
-                          required
-                          className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-lg shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                          value={rule.count || 1}
-                          onChange={(e) => updateRule(idx, "count", Number(e.target.value))}
-                        />
-                      </div>
-
-                      <div className="pb-1">
-                        <button
-                          type="button"
-                          onClick={() => removeRule(idx)}
-                          className="p-2 text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 rounded-lg transition-colors"
-                          title="Xóa"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                            <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end pt-6 border-t border-slate-200 dark:border-white/10">
-            <Button type="submit" isLoading={isLoading} size="lg" className="shadow-lg shadow-primary-500/20">
-              {isEditMode ? "Cập nhật ma trận" : "Lưu ma trận"}
-            </Button>
+                      <AnimatePresence>
+                         {showVisualization && rules.length > 0 && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                               <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-2 min-h-[200px]">
+                                 <MatrixVisualization 
+                                   data={rules.map(r => ({
+                                     ...r,
+                                     knowledge_node: nodes.find(n => n.id === r.knowledge_node_id)
+                                   }))} 
+                                 />
+                               </div>
+                            </motion.div>
+                         )}
+                      </AnimatePresence>
+                   </div>
+                </div>
+             </div>
           </div>
         </form>
       )}
 
+      {/* Modals remain mostly unchanged in logic, just updated styles inside them if needed. */}
+      {/* Group Modal */}
       <Modal isOpen={isGroupModalOpen} onClose={() => setIsGroupModalOpen(false)} title="Gộp nhóm câu hỏi">
          <div className="p-6 space-y-4">
             <Input 
@@ -606,7 +678,7 @@ export default function MatrixFormPage() {
                <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">Cố định Ngữ liệu (Mã ngữ liệu)</label>
                <input 
                   type="text" 
-                  className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-white/10 rounded-lg shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md" 
+                  className="w-full px-3 py-2 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-white/10 rounded-lg focus:ring-4 focus:ring-primary-500/20 outline-none" 
                   placeholder="VD: PASSAGE-123 (Bỏ trống để chọn ngẫu nhiên passage)" 
                   value={reqPassageCode} 
                   onChange={e => setReqPassageCode(e.target.value)}
@@ -621,9 +693,40 @@ export default function MatrixFormPage() {
             </div>
             <div className="pt-4 flex justify-end gap-3">
                <Button variant="outline" onClick={() => setIsGroupModalOpen(false)}>Hủy</Button>
-               <Button onClick={submitGroup}>Gộp nhóm</Button>
+               <Button onClick={submitGroup}>Xác nhận Gộp nhóm</Button>
             </div>
          </div>
+      </Modal>
+
+      {/* AI Generate Modal */}
+      <Modal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} title="Sinh ma trận bằng AI">
+        <div className="p-6 space-y-4">
+          <div className="rounded-xl bg-violet-50 dark:bg-violet-900/20 p-4 border border-violet-100 dark:border-violet-800/50 flex gap-3 items-start">
+            <div className="p-2 bg-violet-200 text-violet-700 rounded-lg shrink-0">
+               <Sparkles className="w-5 h-5" />
+            </div>
+            <p className="text-sm text-violet-800 dark:text-violet-300 leading-relaxed font-medium">
+               Nhập yêu cầu bằng ngôn ngữ tự nhiên. AI sẽ phân tích và tự động trích xuất các quy tắc phân bổ chuyên đề, mức độ, dạng câu.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Prompt yêu cầu:</label>
+            <textarea
+              className="w-full h-32 px-4 py-3 text-sm border rounded-xl resize-none bg-slate-50 focus:bg-white dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-violet-500 outline-none transition-all shadow-inner"
+              placeholder="VD: Tạo cấu trúc đề thi 1 tiết Toán 12 chương Hàm số gồm 20 câu trắc nghiệm (10 nhận biết, 5 thông hiểu, 5 vận dụng)..."
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              disabled={isGeneratingAi}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="ghost" onClick={() => setIsAiModalOpen(false)} disabled={isGeneratingAi}>Hủy bỏ</Button>
+            <Button onClick={handleAiGenerate} isLoading={isGeneratingAi} className="bg-violet-600 hover:bg-violet-700 text-white font-bold shadow-lg shadow-violet-500/30 px-6 rounded-xl">
+              <Sparkles className="w-4 h-4 mr-2" />
+              {isGeneratingAi ? "Đang xử lý..." : "Bắt đầu Sinh"}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <SmartMatrixWizard isOpen={isSmartWizardOpen} onClose={() => { setIsSmartWizardOpen(false); navigate("/admin/matrix"); }} />

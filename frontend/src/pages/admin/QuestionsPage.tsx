@@ -10,6 +10,7 @@ import type { Question, QuestionSimilarityResponse } from "../../types";
 import DataTable, { type Column } from "../../components/ui/DataTable";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
+import Select from "../../components/ui/Select";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import {
   Plus,
@@ -22,7 +23,9 @@ import {
   AlertCircle,
   History,
   Sparkles,
+  Database,
 } from "lucide-react";
+import AiReviewQueueTab from "../../components/admin/question/AiReviewQueueTab";
 import AiReviewModal from "../../components/admin/question/AiReviewModal";
 
 export default function QuestionsPage() {
@@ -46,8 +49,9 @@ export default function QuestionsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   const [aiReviewItem, setAiReviewItem] = useState<Question | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING">("ALL");
+  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "AI_REVIEW">("ALL");
   const [filterLevel, setFilterLevel] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
   const [filterNode, setFilterNode] = useState<string>("");
@@ -174,7 +178,7 @@ export default function QuestionsPage() {
       header: "Chuyên đề",
       render: (row) => (
         <span className="text-xs text-slate-600 dark:text-slate-400">
-          {row.knowledge_node?.name || `Node #${row.knowledge_node_id}`}
+          {row.primary_knowledge_node?.name || `Node #${row.primary_knowledge_node_id}`}
         </span>
       ),
     },
@@ -321,11 +325,20 @@ export default function QuestionsPage() {
     },
   ];
 
+  const filteredQuestions = searchTerm
+    ? questions.filter(
+        (q) =>
+          q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          q.primary_knowledge_node?.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : questions;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient pb-1">
+          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+            <Database className="w-8 h-8 text-primary-500" />
             Ngân hàng Câu hỏi
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
@@ -347,92 +360,107 @@ export default function QuestionsPage() {
         >
           Hàng chờ duyệt
         </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === "AI_REVIEW" ? "bg-white shadow text-slate-900 dark:bg-slate-700 dark:text-white" : "text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"}`}
+          onClick={() => setActiveTab("AI_REVIEW")}
+        >
+          <Sparkles className="w-4 h-4 text-violet-500" />
+          Phân tích AI
+        </button>
       </div>
 
-      <div className="glass-card flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm câu hỏi..."
-              className="h-11 w-full rounded-xl border border-white/60 bg-white/80 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500/50 focus:ring-4 focus:ring-primary-500/20 dark:border-white/10 dark:bg-slate-900/60 dark:focus:border-primary-500/50 backdrop-blur-md shadow-sm"
-            />
-          </div>
-          <div className="shrink-0 flex gap-2 flex-col sm:flex-row">
-            <Link to="/admin/questions/new">
-              <Button
-                size="lg"
-                className="w-full sm:w-auto shadow-lg shadow-primary-500/30 hover:-translate-y-0.5"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Thêm câu đơn
-              </Button>
-            </Link>
-            <Link to="/admin/questions/new-group">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full sm:w-auto hover:-translate-y-0.5 border-primary-500 text-primary-600"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Thêm nhóm (Ngữ liệu)
-              </Button>
-            </Link>
-          </div>
-        </div>
+      {activeTab === "AI_REVIEW" ? (
+        <AiReviewQueueTab />
+      ) : (
+        <>
+          <div className="glass-card flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm câu hỏi..."
+                  className="h-11 w-full rounded-xl border border-white/60 bg-white/80 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500/50 focus:ring-4 focus:ring-primary-500/20 dark:border-white/10 dark:bg-slate-900/60 dark:focus:border-primary-500/50 backdrop-blur-md shadow-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="shrink-0 flex gap-2 flex-col sm:flex-row">
+                <Link to="/admin/questions/new">
+                  <Button
+                    size="lg"
+                    className="w-full sm:w-auto shadow-lg shadow-primary-500/30 hover:-translate-y-0.5"
+                  >
+                    <Plus className="mr-2 h-5 w-5" />
+                    Thêm câu đơn
+                  </Button>
+                </Link>
+                <Link to="/admin/questions/new-group">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full sm:w-auto hover:-translate-y-0.5 border-primary-500 text-primary-600"
+                  >
+                    <Plus className="mr-2 h-5 w-5" />
+                    Thêm nhóm (Ngữ liệu)
+                  </Button>
+                </Link>
+              </div>
+            </div>
 
-        {/* Filters Row */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-          <select
-            className="border border-slate-300 rounded p-2 text-sm"
-            value={filterLevel}
-            onChange={(e) => setFilterLevel(e.target.value)}
-          >
-            <option value="">Tất cả mức độ</option>
-            <option value="1">Nhận biết</option>
-            <option value="2">Thông hiểu</option>
-            <option value="3">Vận dụng</option>
-            <option value="4">Vận dụng cao</option>
-          </select>
-          <select
-            className="border border-slate-300 rounded p-2 text-sm"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-          >
-            <option value="">Tất cả dạng</option>
-            <option value="SINGLE_CHOICE">Trắc nghiệm</option>
-            <option value="TRUE_FALSE">Đúng / Sai</option>
-            <option value="FILL_IN_BLANK">Điền khuyết</option>
-          </select>
-          <select
-            className="border border-slate-300 rounded p-2 text-sm"
-            value={filterPassage}
-            onChange={(e) => setFilterPassage(e.target.value)}
-          >
-            <option value="">Nguồn ngữ liệu</option>
-            <option value="true">Có ngữ liệu (Chùm)</option>
-            <option value="false">Câu hỏi độc lập</option>
-          </select>
-          <div className="col-span-2">
-            <input
-              type="text"
-              placeholder="Filter theo Knowledge Node ID..."
-              className="w-full border border-slate-300 rounded p-2 text-sm"
-              value={filterNode}
-              onChange={(e) => setFilterNode(e.target.value)}
-            />
+            {/* Filters Row */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <Select
+                value={filterLevel}
+                onChange={(e) => setFilterLevel(e.target.value)}
+                options={[
+                  { value: "1", label: "Nhận biết" },
+                  { value: "2", label: "Thông hiểu" },
+                  { value: "3", label: "Vận dụng" },
+                  { value: "4", label: "Vận dụng cao" },
+                ]}
+                placeholder="Tất cả mức độ"
+              />
+              <Select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                options={[
+                  { value: "SINGLE_CHOICE", label: "Trắc nghiệm" },
+                  { value: "TRUE_FALSE", label: "Đúng / Sai" },
+                  { value: "FILL_IN_BLANK", label: "Điền khuyết" },
+                ]}
+                placeholder="Tất cả dạng"
+              />
+              <Select
+                value={filterPassage}
+                onChange={(e) => setFilterPassage(e.target.value)}
+                options={[
+                  { value: "true", label: "Có ngữ liệu (Chùm)" },
+                  { value: "false", label: "Câu hỏi độc lập" },
+                ]}
+                placeholder="Nguồn ngữ liệu"
+              />
+              <div className="col-span-2">
+                <input
+                  type="text"
+                  placeholder="Filter theo Knowledge Node ID..."
+                  className="w-full border border-slate-300 rounded p-2 text-sm dark:bg-slate-800 dark:border-slate-600"
+                  value={filterNode}
+                  onChange={(e) => setFilterNode(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <DataTable
-        data={questions}
-        columns={columns}
-        keyExtractor={(item) => item.id}
-        isLoading={isLoading}
-        emptyMessage="Chưa có câu hỏi nào trong ngân hàng."
-      />
+          <DataTable
+            data={filteredQuestions}
+            columns={columns}
+            keyExtractor={(item) => item.id}
+            isLoading={isLoading}
+            emptyMessage={searchTerm ? "Không tìm thấy câu hỏi phù hợp." : "Chưa có câu hỏi nào trong ngân hàng."}
+          />
+        </>
+      )}
 
       <AiReviewModal
         isOpen={!!aiReviewItem}

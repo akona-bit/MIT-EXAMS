@@ -1,11 +1,14 @@
 import os
 from typing import List, Dict, Any
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Cấu hình API key từ biến môi trường
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
+else:
+    client = None
 
 class MatrixVisionService:
     @staticmethod
@@ -14,11 +17,9 @@ class MatrixVisionService:
         Gửi ảnh lên Gemini Vision để nhận diện bảng ma trận đặc tả,
         buộc mô hình trả về định dạng TSV.
         """
-        if not GEMINI_API_KEY:
+        if not GEMINI_API_KEY or not client:
             raise ValueError("GEMINI_API_KEY chưa được cấu hình trên server.")
             
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        
         prompt = """
         Bạn là một trợ lý ảo chuyên phân tích ảnh ma trận đề thi/đặc tả đề thi trắc nghiệm.
         Hãy đọc bảng trong ảnh và trích xuất dữ liệu ra định dạng TSV (Tab-Separated Values).
@@ -34,10 +35,13 @@ class MatrixVisionService:
         Trả về kết quả TSV:
         """
         
-        response = model.generate_content([
-            prompt, 
-            {"mime_type": "image/jpeg", "data": image_bytes}
-        ])
+        response = client.models.generate_content(
+            model='gemini-1.5-pro',
+            contents=[
+                prompt, 
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+            ]
+        )
         
         # Clean up markdown if model still returned it
         text = response.text.strip()

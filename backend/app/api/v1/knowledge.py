@@ -38,20 +38,26 @@ def _build_tree_node(
     nodes_by_id: Dict[int, KnowledgeNode],
     question_count_by_node: Dict[int, int],
     primary_parents: Dict[int, Optional[int]],
+    valid_ids: Optional[set] = None,
     depth: int = 0,
 ) -> Dict[str, Any]:
     children = [
-        _build_tree_node(child, children_by_primary_parent, nodes_by_id, question_count_by_node, primary_parents, depth + 1)
+        _build_tree_node(child, children_by_primary_parent, nodes_by_id, question_count_by_node, primary_parents, valid_ids, depth + 1)
         for child in sorted(children_by_primary_parent.get(node.id, []), key=lambda item: item.name.lower())
+        if valid_ids is None or child.id in valid_ids
     ]
     return {
         "id": node.id,
         "name": node.name,
         "description": node.description,
+        "node_type": node.node_type.value if node.node_type else "SKILL",
+        "subject": node.subject,
+        "short_code": node.short_code,
         "parent_id": primary_parents.get(node.id),
         "level": _level_name(depth),
         "path": _build_path(node.id, nodes_by_id, primary_parents),
         "question_count": question_count_by_node.get(node.id, 0),
+        "is_leaf": node.is_leaf if node.is_leaf is not None else True,
         "children": children,
     }
 
@@ -78,8 +84,12 @@ async def _load_knowledge_state(db: AsyncSession):
         p_id = primary_parents.get(node.id)
         children_by_primary_parent.setdefault(p_id, []).append(node)
 
-    from app.models.question import QuestionSkillTag
-    question_result = await db.execute(select(QuestionSkillTag.question_id, QuestionSkillTag.knowledge_node_id))
+    from app.models.question import QuestionSkillTag, QuestionStatus
+    question_result = await db.execute(
+        select(QuestionSkillTag.question_id, QuestionSkillTag.knowledge_node_id)
+        .join(Question, Question.id == QuestionSkillTag.question_id)
+        .where(Question.status == QuestionStatus.APPROVED)
+    )
     question_rows = question_result.all()
     question_count_by_node: Dict[int, int] = {}
     for _, knowledge_node_id in question_rows:
@@ -97,12 +107,35 @@ async def get_knowledge_nodes(db: AsyncSession = Depends(get_db)):
 async def get_knowledge_tree(subject: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents = await _load_knowledge_state(db)
 
-    roots = [node for node in nodes if primary_parents.get(node.id) is None]
+    # Compute valid_ids for deep subject filtering
+    valid_ids = None
     if subject:
-        roots = [node for node in roots if node.subject == subject]
+        valid_ids = set()
+        # Find all nodes matching subject and their descendants
+        for node in nodes:
+            if node.subject == subject:
+                valid_ids.add(node.id)
+                queue = [node.id]
+                while queue:
+                    curr = queue.pop(0)
+                    children = [c.id for c in children_by_primary_parent.get(curr, [])]
+                    valid_ids.update(children)
+                    queue.extend(children)
+        # Include ancestors so tree is connected to roots
+        ancestors = set()
+        for nid in valid_ids:
+            curr = nid
+            while curr:
+                ancestors.add(curr)
+                curr = primary_parents.get(curr)
+        valid_ids = valid_ids.union(ancestors)
+
+    roots = [node for node in nodes if primary_parents.get(node.id) is None]
+    if valid_ids:
+        roots = [node for node in roots if node.id in valid_ids]
 
     return [
-        _build_tree_node(root, children_by_primary_parent, nodes_by_id, question_count_by_node, primary_parents)
+        _build_tree_node(root, children_by_primary_parent, nodes_by_id, question_count_by_node, primary_parents, valid_ids)
         for root in sorted(roots, key=lambda item: item.name.lower())
     ]
 
@@ -159,50 +192,6 @@ async def get_knowledge_node_context(node_id: int, db: AsyncSession = Depends(ge
         ]
     }
 
-
-@router.get("/graph")
-async def get_knowledge_graph(db: AsyncSession = Depends(get_db)):
-    nodes, nodes_by_id, children_by_primary_parent, question_count_by_node, primary_parents, all_parents = await _load_knowledge_state(db)
-    graph_nodes = []
-    graph_edges = []
-
-    for node in nodes:
-        graph_nodes.append({
-            "id": f"knowledge:{node.id}",
-            "entity_id": node.id,
-            "label": node.name,
-            "type": node.node_type.value if node.node_type else "SKILL",
-            "path": _build_path(node.id, nodes_by_id, primary_parents),
-            "question_count": question_count_by_node.get(node.id, 0),
-            "description": node.description,
-            "note": node.note,
-        })
-
-        # DAG Edges (All relations)
-        for pid in all_parents.get(node.id, []):
-            is_primary = (pid == primary_parents.get(node.id))
-            graph_edges.append({
-                "id": f"knowledge:{pid}->knowledge:{node.id}",
-                "source": f"knowledge:{pid}",
-                "target": f"knowledge:{node.id}",
-                "type": "PARENT_OF",
-                "is_primary": is_primary,
-            })
-
-    # Load manual links
-    link_result = await db.execute(select(KnowledgeNodeLink))
-    manual_links = link_result.scalars().all()
-    for link in manual_links:
-        graph_edges.append({
-            "id": f"manual:{link.id}",
-            "source": f"knowledge:{link.source_id}",
-            "target": f"knowledge:{link.target_id}",
-            "type": "MANUAL",
-            "label": link.label,
-            "link_id": link.id,
-        })
-
-    return {"nodes": graph_nodes, "edges": graph_edges}
 
 @router.post("/", response_model=KnowledgeNodeResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def create_knowledge_node(request: Request, node_in: KnowledgeNodeCreate, db: AsyncSession = Depends(get_db)):

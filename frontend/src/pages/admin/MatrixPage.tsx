@@ -4,12 +4,16 @@ import { getMatrices, deleteMatrix } from '../../api/matrix';
 import type { Matrix } from '../../types';
 import DataTable, { type Column } from '../../components/ui/DataTable';
 import Button from '../../components/ui/Button';
-import { Eye, Pencil, Trash2, Sparkles } from 'lucide-react';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { Eye, Pencil, Trash2, Sparkles, LayoutGrid } from 'lucide-react';
+import { toast } from '../../components/ui/Toast';
 
 export default function MatrixPage() {
   const navigate = useNavigate();
   const [matrices, setMatrices] = useState<Matrix[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const fetchMatrices = async () => {
     setIsLoading(true);
@@ -28,13 +32,21 @@ export default function MatrixPage() {
   }, []);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa ma trận này? Các đề thi đã tạo từ ma trận có thể bị ảnh hưởng.')) return;
+    setDeleteId(id);
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteId === null) return;
     try {
-      await deleteMatrix(id);
+      await deleteMatrix(deleteId);
       fetchMatrices();
     } catch (error) {
       console.error(error);
-      alert('Có lỗi xảy ra khi xóa ma trận.');
+      toast.error('Có lỗi xảy ra khi xóa ma trận.');
+    } finally {
+      setConfirmOpen(false);
+      setDeleteId(null);
     }
   };
 
@@ -73,10 +85,13 @@ export default function MatrixPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient pb-1">Ma trận Đặc tả</h1>
+          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+            <LayoutGrid className="w-8 h-8 text-primary-500" />
+            Ma trận Đặc tả
+          </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Quản lý cấu trúc đề thi</p>
         </div>
         <div className="flex gap-3">
@@ -105,9 +120,21 @@ export default function MatrixPage() {
             columns={columns}
             keyExtractor={(item) => item.id}
             isLoading={isLoading}
+            emptyMessage="Chưa có ma trận đặc tả nào"
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Xóa ma trận"
+        message="Bạn có chắc chắn muốn xóa ma trận này? Các đề thi đã tạo từ ma trận có thể bị ảnh hưởng."
+        confirmText="Xóa"
+        cancelText="Hủy"
+        isDestructive
+        onConfirm={confirmDelete}
+        onCancel={() => { setConfirmOpen(false); setDeleteId(null); }}
+      />
     </div>
   );
 }

@@ -92,3 +92,21 @@ export async function createMatrixVersion(matrixId: number): Promise<Matrix> {
   const response = await client.post(`/api/v1/matrix/${matrixId}/create-version`);
   return response.data;
 }
+
+export interface AiMatrixRuleResponse {
+  node_id?: number;
+  node_name: string;
+  cognitive_level: number;
+  question_type: string;
+  count: number;
+}
+
+export interface AiMatrixGenerateResponse {
+  rules: AiMatrixRuleResponse[];
+  ai_model: string;
+}
+
+export async function generateAiMatrix(prompt: string): Promise<AiMatrixGenerateResponse> {
+  const response = await client.post<AiMatrixGenerateResponse>('/api/v1/matrix/ai-generate', { prompt });
+  return response.data;
+}

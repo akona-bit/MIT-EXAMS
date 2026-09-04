@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime
-import json
+from datetime import datetime, timezone
 
 from app.db.database import get_db
 from app.api.dependencies import get_current_user
@@ -27,7 +26,7 @@ async def create_feedback(
     )
     latest_feedback = latest_feedback_result.scalars().first()
     
-    if latest_feedback and (datetime.utcnow() - latest_feedback.created_at).total_seconds() < 60:
+    if latest_feedback and (datetime.now(timezone.utc) - latest_feedback.created_at.replace(tzinfo=timezone.utc)).total_seconds() < 60:
         raise HTTPException(status_code=429, detail="Bạn thao tác quá nhanh. Vui lòng đợi 1 phút trước khi gửi góp ý tiếp theo.")
         
     feedback = Feedback(

@@ -112,7 +112,7 @@ async def delete_exam(request: Request, exam_id: int, db: AsyncSession = Depends
     if exam.status == ExamStatus.PUBLISHED:
         raise HTTPException(status_code=400, detail="Không thể xóa exam đã phát hành")
     # Delete related data
-    form_ids = [f.id for f in await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))]
+    form_ids = [f.id for f in (await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))).scalars().all()]
     if form_ids:
         await db.execute(sa_delete(ExamFormQuestion).where(ExamFormQuestion.exam_form_id.in_(form_ids)))
     await db.execute(sa_delete(ExamForm).where(ExamForm.exam_id == exam_id))

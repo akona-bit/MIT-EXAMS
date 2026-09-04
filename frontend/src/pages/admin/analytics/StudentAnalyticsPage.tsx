@@ -11,11 +11,13 @@ import {
   Radar,
 } from "recharts";
 import { Button } from "../../../components/ui/Button";
+import { toast } from '../../../components/ui/Toast';
 import { Card } from "../../../components/ui/Card";
 import { Skeleton } from "../../../components/ui/Skeleton";
 import CelebrationOverlay from "./CelebrationOverlay";
 import { motion } from "framer-motion";
 import { useTheme } from "../../../stores/themeStore";
+import client from "../../../api/client";
 
 export default function StudentAnalyticsPage() {
   const [search, setSearch] = useState("");
@@ -32,10 +34,10 @@ export default function StudentAnalyticsPage() {
 
   const fetchClassSummary = async () => {
     try {
-      const res = await fetch(
-        "http://localhost:8000/api/v1/analytics/class-summary",
+      const res = await client.get(
+        "/api/v1/analytics/class-summary",
       );
-      const data = await res.json();
+      const data = res.data;
       setClassSummary(data);
     } catch (e) {
       console.error("Failed to fetch class summary");
@@ -51,25 +53,25 @@ export default function StudentAnalyticsPage() {
     setResponses(null);
 
     try {
-      const res1 = await fetch(
-        `http://localhost:8000/api/v1/analytics/students?search=${encodeURIComponent(search)}`,
+      const res1 = await client.get(
+        `/api/v1/analytics/students?search=${encodeURIComponent(search)}`,
       );
-      const data1 = await res1.json();
+      const data1 = res1.data;
 
       let resData = null;
       try {
-        const res2 = await fetch(
-          `http://localhost:8000/api/v1/analytics/responses/${encodeURIComponent(search)}`,
+        const res2 = await client.get(
+          `/api/v1/analytics/responses/${encodeURIComponent(search)}`,
         );
-        if (res2.ok) {
-          resData = await res2.json();
+        if (res2.status === 200) {
+          resData = res2.data;
         }
       } catch (err) {}
 
       if (data1.items && data1.items.length > 0) {
         setStudent(data1.items[0]);
       } else {
-        alert("Không tìm thấy học sinh!");
+        toast.warning("Không tìm thấy học sinh!");
       }
       if (resData) {
         setResponses(resData);

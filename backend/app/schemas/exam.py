@@ -60,6 +60,15 @@ class MatrixResponse(MatrixBase):
 
 # --- Exam Generation Request ---
 class GenerateExamRequest(BaseModel):
+    """Request to create a new exam from a matrix (POST /exams/generate)."""
+    matrix_id: int
+    exam_name: str
+    exam_description: Optional[str] = None
+    number_of_forms: int = 1
+    distinct_questions: bool = False
+
+class GenerateExamFormsRequest(BaseModel):
+    """Request to add shuffled forms to an existing exam (POST /matrix/{id}/generate)."""
     exam_id: int
     number_of_forms: int = 1
     distinct_questions: bool = False
@@ -179,3 +188,17 @@ class SmartMatrixConfirmRequest(BaseModel):
     total_questions: int = Field(..., gt=0)
     level_ratios: Dict[int, float]
     type_ratios: Dict[str, float]
+
+class AiMatrixGenerateRequest(BaseModel):
+    prompt: str = Field(..., min_length=5)
+
+class AiMatrixRuleResponse(BaseModel):
+    node_id: Optional[int] = None
+    node_name: str
+    cognitive_level: int
+    question_type: str
+    count: int
+
+class AiMatrixGenerateResponse(BaseModel):
+    rules: List[AiMatrixRuleResponse]
+    ai_model: str = "gemini-1.5-flash-latest"

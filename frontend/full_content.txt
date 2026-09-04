@@ -1,0 +1,39 @@
+Created At: 2026-09-04T06:44:19+07:00
+Completed At: 2026-09-04T06:44:19+07:00
+File Path: `file:///d:/MIT/frontend/src/pages/admin/KnowledgePage.tsx`
+Total Lines: 1466
+Total Bytes: 66779
+Showing lines 800 to 830
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+800:     onSuccess: () => {
+801:       queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
+802:     },
+803:   });
+804: 
+805:   const handleCreateNote = (event: FormEvent<HTMLFormElement>) => {
+806:     event.preventDefault();
+807:     if (!noteName.trim()) return;
+808:     const parent_id =
+809:       noteParentId === "none" ? undefined : parseInt(noteParentId, 10);
+810:     createNoteMutation.mutate({
+811:       name: noteName.trim(),
+812:       description: noteDescription.trim() || undefined,
+813:       parent_id: parent_id,
+814:       node_type: noteType,
+815:       subject: noteSubject || undefined,
+816:     });
+817:   };
+818: 
+819:   return (
+820:     <div
+821:       className={`space-y-6 transition-colors duration-300 ${isDarkMode ? "dark" : ""}`}
+822:     >
+823:       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+824:         <div>
+825:           <h1 className="text-3xl font-extrabold text-gradient pb-1">
+826:             Cấu trúc Kiến thức
+827:           </h1>
+828:           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+829:             Không gian trực quan để khám phá các chủ đề, liên kết và ngữ cảnh
+830:             tri thức trong hệ thống.
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

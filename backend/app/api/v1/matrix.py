@@ -12,7 +12,7 @@ from app.schemas.exam import (
     MatrixImportExecuteRequest, SmartMatrixLeavesRequest, SmartMatrixLeavesResponse,
     SmartMatrixLeafNode, SmartMatrixProposeRequest, SmartMatrixProposeResponse,
     SmartMatrixProposedSkill, SmartMatrixConfirmRequest, SmartMatrixSkillAllocation,
-    MatrixRuleCreate
+    MatrixRuleCreate, AiMatrixGenerateRequest, AiMatrixGenerateResponse
 )
 from app.services.matrix_import import MatrixImportService
 from app.services.knowledge_service import KnowledgeService
@@ -49,6 +49,33 @@ async def get_matrix(matrix_id: int, db: AsyncSession = Depends(get_db)):
     if not matrix:
         raise HTTPException(status_code=404, detail="Matrix not found")
     return matrix
+
+from app.services.ai_analysis import generate_matrix_rules
+
+@router.post("/ai-generate", response_model=AiMatrixGenerateResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def ai_generate_matrix(request: AiMatrixGenerateRequest, db: AsyncSession = Depends(get_db)):
+    nodes_result = await db.execute(select(KnowledgeNode.id, KnowledgeNode.name, KnowledgeNode.node_type))
+    existing_nodes = [{"id": n.id, "name": n.name, "type": n.node_type.value if n.node_type else "TOPIC"} for n in nodes_result.all()]
+    
+    ai_result = await generate_matrix_rules(prompt=request.prompt, existing_nodes=existing_nodes)
+    
+    name_to_id = {n["name"].lower(): n["id"] for n in existing_nodes}
+    
+    response_rules = []
+    for raw_rule in ai_result.get("result", []):
+        node_name = raw_rule.get("node_name")
+        if not node_name: continue
+        
+        node_id = name_to_id.get(node_name.lower())
+        response_rules.append({
+            "node_id": node_id,
+            "node_name": node_name,
+            "cognitive_level": raw_rule.get("cognitive_level", 2),
+            "question_type": raw_rule.get("question_type", "SINGLE_CHOICE"),
+            "count": raw_rule.get("count", 1)
+        })
+        
+    return AiMatrixGenerateResponse(rules=response_rules)
 
 from app.models.exam import MatrixRuleGroup
 
@@ -164,7 +191,7 @@ async def delete_matrix(request: Request, matrix_id: int, db: AsyncSession = Dep
     capture(request, "matrix_deleted", {"matrix_id": matrix_id})
     return {"message": "Matrix deleted"}
 
-from app.schemas.exam import GenerateExamRequest
+from app.schemas.exam import GenerateExamFormsRequest
 from app.models.exam import ExamGenerationRun, ExamGenerationStatus, Exam, ExamForm, ExamFormQuestion, ExamStatus
 from app.services.exam_matrix_generator import load_pool_from_db, parse_matrix_rules, generate_multiple_versions, generate_exam
 # Level enum cho message lỗi (đồng bộ với LEVEL_MAP trong exam_matrix_generator)
@@ -387,7 +414,7 @@ async def check_matrix_feasibility(matrix_id: int, db: AsyncSession = Depends(ge
     }
 
 @router.post("/{matrix_id}/generate", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
+async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamFormsRequest, db: AsyncSession = Depends(get_db)):
     # Validate Matrix
     result = await db.execute(select(Matrix).options(selectinload(Matrix.rules)).where(Matrix.id == matrix_id))
     matrix = result.scalars().first()

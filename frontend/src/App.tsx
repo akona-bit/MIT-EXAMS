@@ -1,14 +1,12 @@
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  Outlet,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./stores/authStore";
 import { ThemeProvider } from "./stores/themeStore";
+import { NotificationProvider } from "./stores/notificationStore";
+import { ToastProvider } from "./components/ui/Toast";
+import ErrorBoundary from "./components/ui/ErrorBoundary";
 // Layouts
 import AdminShell from "./components/layout/AdminShell";
+import StudentShell from "./components/layout/StudentShell";
 
 // Pages
 import LoginPage from "./pages/auth/LoginPage";
@@ -29,20 +27,19 @@ import ExamFormPage from "./pages/admin/ExamFormPage";
 import StudentHomePage from "./pages/student/StudentHomePage";
 import StudentExamShell from "./pages/student/StudentExamShell";
 import StudentExamResultPage from "./pages/student/StudentExamResultPage";
+import StudentDetailPage from "./pages/student/StudentDetailPage";
+import StudentComparePage from "./pages/student/StudentComparePage";
 
-import ObsidianPage from "./pages/admin/ObsidianPage";
-import KnowledgeGraphPage from "./pages/admin/KnowledgeGraphPage";
+import KnowledgePage from "./pages/admin/KnowledgePage";
 import ResourcesPage from "./pages/admin/ResourcesPage";
 import AccessControlPage from "./pages/admin/AccessControlPage";
+import OmrPage from "./pages/admin/OmrPage";
 
 import StudentManagementPage from "./pages/admin/analytics/StudentManagementPage";
-import StudentDetailPage from "./pages/admin/analytics/StudentDetailPage";
-import StudentComparePage from "./pages/admin/analytics/StudentComparePage";
 import AdvancedAnalyticsPage from "./pages/admin/analytics/AdvancedAnalyticsPage";
-import FraudDetectionPage from "./pages/admin/analytics/FraudDetectionPage";
-import ExamComparePage from "./pages/admin/ExamComparePage";
 import SystemSettingsPage from "./pages/admin/settings/SystemSettingsPage";
 import AdminFeedbacksPage from "./pages/admin/AdminFeedbacksPage";
+import AdminNotificationsPage from "./pages/admin/AdminNotificationsPage";
 
 // --- Route Guards ---
 
@@ -127,27 +124,39 @@ function AppRoutes() {
           <Route path="matrix/:id/edit" element={<MatrixFormPage />} />
           <Route path="exams" element={<ExamsPage />} />
           <Route path="exams/new" element={<ExamFormPage />} />
-          <Route path="exams/compare" element={<ExamComparePage />} />
           <Route path="exams/:id" element={<ExamDetailPage />} />
-          <Route path="obsidian" element={<ObsidianPage />} />
-          <Route path="graph" element={<KnowledgeGraphPage />} />
+          <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="resources" element={<ResourcesPage />} />
+          <Route path="omr" element={<OmrPage />} />
           <Route path="access" element={<AccessControlPage />} />
           <Route path="students" element={<StudentManagementPage />} />
-          <Route path="students/compare" element={<StudentComparePage />} />
-          <Route path="students/:id" element={<StudentDetailPage />} />
           <Route path="analytics/ds" element={<AdvancedAnalyticsPage />} />
-          <Route path="analytics/fraud" element={<FraudDetectionPage />} />
           <Route path="feedbacks" element={<AdminFeedbacksPage />} />
+          <Route path="notifications" element={<AdminNotificationsPage />} />
           <Route path="settings" element={<SystemSettingsPage />} />
         </Route>
       </Route>
 
       {/* Student Routes */}
       <Route element={<ProtectedRoute allowedRoles={["STUDENT"]} />}>
-        <Route path="/student" element={<StudentHomePage />} />
+        <Route
+          path="/student"
+          element={
+            <StudentShell>
+              <Outlet />
+            </StudentShell>
+          }
+        >
+          <Route index element={<StudentHomePage />} />
+          <Route path="profile" element={<StudentDetailPage />} />
+          <Route path="compare" element={<StudentComparePage />} />
+        </Route>
         <Route path="/exam/:id/session" element={<StudentExamShell />} />
-        <Route path="/student/exam/:examId/result" element={<StudentExamResultPage />} />
+        <Route path="/student/exam/:examId/result" element={
+          <StudentShell backTo="/student" backLabel="Trang chủ">
+            <StudentExamResultPage />
+          </StudentShell>
+        } />
       </Route>
 
       {/* Fallback */}
@@ -161,9 +170,15 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <NotificationProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
+            </BrowserRouter>
+          </ToastProvider>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

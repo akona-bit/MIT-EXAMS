@@ -2,6 +2,7 @@ import { type ReactNode, useState, useEffect, useCallback, useMemo } from "react
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
 import { useTheme } from "../../stores/themeStore";
+import NotificationBell from "./NotificationBell";
 import { motion, AnimatePresence } from "framer-motion";
 import { Command } from "cmdk";
 import {
@@ -11,7 +12,6 @@ import {
   FileEdit,
   BarChart3,
   BookMarked,
-  FileText,
   KeyRound,
   LogOut,
   Menu,
@@ -25,6 +25,8 @@ import {
   Settings,
   X,
   MessageSquare,
+  ScanLine,
+  Bell,
 } from "lucide-react";
 
 interface AdminShellProps {
@@ -59,10 +61,8 @@ const navSections: NavSection[] = [
     icon: <Library className="h-4 w-4" />,
     items: [
       { label: "Ngân hàng Câu hỏi", path: "/admin/questions", icon: <Library className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Chủ đề Kiến thức", path: "/admin/obsidian", icon: <Share2 className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Đồ thị Tri thức", path: "/admin/graph", icon: <Network className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Kho ngữ liệu (Đọc)", path: "/admin/passages", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Lưu trữ (File/Ảnh)", path: "/admin/resources", icon: <FileText className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Quản lý Tri thức", path: "/admin/knowledge", icon: <Share2 className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Kho Học liệu", path: "/admin/resources", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Ma trận Đặc tả", path: "/admin/matrix", icon: <Network className="h-5 w-5" strokeWidth={1.8} /> },
     ],
   },
@@ -72,9 +72,9 @@ const navSections: NavSection[] = [
     icon: <FileEdit className="h-4 w-4" />,
     items: [
       { label: "Kỳ thi", path: "/admin/exams", icon: <FileEdit className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Chấm bài (OMR)", path: "/admin/omr", icon: <ScanLine className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Quản lý Thí sinh", path: "/admin/students", icon: <Users className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Giám sát Gian lận", path: "/admin/analytics/fraud", icon: <Activity className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Quyền xem đáp án", path: "/admin/access", icon: <KeyRound className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Người dùng & Phân quyền", path: "/admin/access", icon: <KeyRound className="h-5 w-5" strokeWidth={1.8} /> },
     ],
   },
   {
@@ -84,6 +84,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Phân tích DS", path: "/admin/analytics/ds", icon: <BarChart3 className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Quản lý Góp ý", path: "/admin/feedbacks", icon: <MessageSquare className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Thông báo", path: "/admin/notifications", icon: <Bell className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Cài đặt chung", path: "/admin/settings", icon: <Settings className="h-5 w-5" strokeWidth={1.8} /> },
     ],
   },
@@ -95,7 +96,7 @@ function getStoredSections(): string[] {
   try {
     const stored = localStorage.getItem(LS_SIDEBAR_SECTIONS);
     if (stored) return JSON.parse(stored);
-  } catch {}
+  } catch { }
   return navSections.map((s) => s.id);
 }
 
@@ -178,7 +179,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         try {
           const data = JSON.parse(event.data);
           if (data.onlineUsers !== undefined) setOnlineUsers(data.onlineUsers);
-        } catch {}
+        } catch { }
       };
       ws.onclose = () => setTimeout(connect, 5000);
     };
@@ -296,9 +297,8 @@ export default function AdminShell({ children }: AdminShellProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-white/60 bg-white/60 backdrop-blur-xl dark:border-white/10 dark:bg-[#030712]/60 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 transition-transform duration-300 ease-in-out lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center gap-3 px-6">
@@ -332,11 +332,10 @@ export default function AdminShell({ children }: AdminShellProps) {
               <div key={section.id}>
                 <button
                   onClick={() => toggleSection(section.id)}
-                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                    hasActiveChild
-                      ? "text-primary-600 dark:text-primary-400"
-                      : "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-                  }`}
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${hasActiveChild
+                    ? "text-primary-600 dark:text-primary-400"
+                    : "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                    }`}
                 >
                   <span className="shrink-0">{section.icon}</span>
                   <span className="flex-1 text-left">{section.label}</span>
@@ -366,11 +365,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                               key={item.path}
                               to={item.path}
                               onClick={() => setSidebarOpen(false)}
-                              className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-300 overflow-hidden ${
-                                active
-                                  ? "text-primary-700 dark:text-primary-300"
-                                  : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-white/5"
-                              }`}
+                              className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-300 overflow-hidden ${active
+                                ? "text-primary-700 dark:text-primary-300"
+                                : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-white/5"
+                                }`}
                             >
                               {active && (
                                 <motion.div
@@ -381,11 +379,10 @@ export default function AdminShell({ children }: AdminShellProps) {
                                 />
                               )}
                               <span
-                                className={`relative z-10 shrink-0 transition-colors ${
-                                  active
-                                    ? "text-primary-600 dark:text-primary-400"
-                                    : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
-                                }`}
+                                className={`relative z-10 shrink-0 transition-colors ${active
+                                  ? "text-primary-600 dark:text-primary-400"
+                                  : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                                  }`}
                               >
                                 {item.icon}
                               </span>
@@ -403,8 +400,8 @@ export default function AdminShell({ children }: AdminShellProps) {
         </nav>
 
         {/* User card */}
-        <div className="p-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-3 shadow-[0_4px_12px_rgb(0,0,0,0.05)] dark:border-white/10 dark:bg-slate-900/40 backdrop-blur-md">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white shadow-sm dark:bg-white dark:text-slate-900">
               {user?.username?.[0]?.toUpperCase() || "A"}
             </div>
@@ -426,7 +423,7 @@ export default function AdminShell({ children }: AdminShellProps) {
       {/* Main Content */}
       <div className="flex min-h-screen flex-col lg:pl-[280px]">
         {/* Header */}
-        <header className="sticky top-0 z-30 border-b border-white/60 bg-white/60 backdrop-blur-xl dark:border-white/10 dark:bg-[#030712]/60 transition-all duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 transition-all duration-300">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-4">
               <button
@@ -437,20 +434,20 @@ export default function AdminShell({ children }: AdminShellProps) {
               </button>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
-              <div className="hidden sm:flex items-center gap-4 rounded-full border border-slate-200/60 bg-white/60 px-4 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm">
-                <div className="flex items-center gap-1.5" title="Khung hình/giây (FPS)">
+              {import.meta.env.DEV && (
+                <div className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200/60 bg-white/60 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm">
                   <Activity className="h-3.5 w-3.5 text-blue-500" />
-                  <span className="w-[42px] text-right">{fps} FPS</span>
+                  <span>{fps} FPS</span>
                 </div>
-                <div className="h-3 w-[1px] bg-slate-300 dark:bg-slate-700"></div>
-                <div className="flex items-center gap-1.5" title="Người dùng đang online">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                  </span>
-                  <span>{onlineUsers} Online</span>
-                </div>
+              )}
+              <div className="hidden sm:flex items-center gap-2 rounded-full border border-slate-200/60 bg-white/60 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                </span>
+                <span>{onlineUsers} Online</span>
               </div>
+              <NotificationBell />
               <button
                 onClick={toggleTheme}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/60 bg-white/60 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white shadow-sm"

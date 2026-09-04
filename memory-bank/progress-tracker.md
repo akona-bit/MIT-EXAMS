@@ -4,8 +4,8 @@
 
 ## Trạng thái tổng quan
 
-**Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND)
-**Cập nhật lần cuối:** 2026-09-02
+**Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND) + UI REDESIGN
+**Cập nhật lần cuối:** 2026-09-04
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -65,6 +65,13 @@
 - [x] Hỗ trợ upload ảnh/PDF qua `OmrBatchUploader`
 - [x] Pipeline OpenCV cơ bản (Mô phỏng bóc tách SBD, Mã đề, 120 câu hỏi)
 - [x] Hàng đợi review thủ công cho ô tô mờ/không chắc chắn (`OmrSheetStatus.NEEDS_REVIEW`)
+- [x] **Hybrid 2 lớp OMR** (2026-09-04):
+  - [x] Lớp 1 — OpenCV: marker detection, perspective transform, auto-threshold từ hàng Type, đọc SBD/Mã đề/120 câu
+  - [x] Lớp 2 — Gemini Vision: chỉ xử lý câu needs_review, crop ảnh nhỏ, prompt JSON
+  - [x] Calibration tool: auto-detect bubble coordinates từ ảnh phiếu trống
+  - [x] Celery tasks: `process_omr_sheet_task`, `process_omr_batch_task`, `confirm_omr_sheet_task`
+  - [x] API endpoints: upload, job status, sheet detail, review, reject, calibrate
+  - [x] Unit tests: marker detection, perspective transform, fill ratio, threshold calibration
 
 ### Giai đoạn 8 — Thống kê & Dashboard
 
@@ -75,6 +82,8 @@
 
 ### Giai đoạn 9 — Hoàn thiện
 
+- `2026-09-01` — **Ổn định môi trường test backend**: venv cũ (`backend/venv`) đã bị xóa khỏi máy — chuyển sang chạy test bằng Python 3.11 global (`C:\...\Python311\python.exe`, đã có đủ fastapi/sqlalchemy/pytest). Fix lỗi mapper "Passage failed to locate a name" xảy ra khi chạy nhiều file test cùng lúc (configure_mappers fail ở file chạy trước sẽ poison cả process): thêm `backend/tests/conftest.py` import toàn bộ model module (passage/omr/obsidian/system/audit/user/question/exam/grading) ngay từ đầu — đây là fix gốc, các import phòng thủ trong từng file test giữ nguyên để chạy standalone vẫn ổn. Xác nhận 29/29 test pass (unit_db_mocking + exam_result_service + happy_paths + suspend_autosave + grading_scorer).
+
 - [x] Backup định kỳ (Qua API `/api/v1/admin/backup-db`)
 - [x] Rate limiting endpoint nộp bài (`slowapi` 5/min)
 - [x] Audit log/nhật ký hoạt động (Bảng `AuditLog`)
@@ -82,6 +91,71 @@
 - [x] Hệ thống Feedback (Góp ý/Báo lỗi)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-04` — **Cải thiện UI/UX Toàn diện (Extreme Premium Upgrade)**:
+  - [x] Tích hợp `framer-motion` cho toàn bộ UI component cốt lõi.
+  - [x] Tạo `PageTransition` component bọc ngoài các trang Admin/Student để có hiệu ứng fade-in mượt mà thay vì nhảy trang giật cục.
+  - [x] Nâng cấp `Button.tsx` (`<motion.button>`) thêm tương tác nảy (tap scale) và `Card.tsx` (`<motion.div>`) thêm floating hover & inner glow.
+  - [x] Tinh chỉnh CSS hệ thống (`index.css`): Bổ sung SVG Noise/Grain Texture 5% opacity hoà trộn vào mesh gradient background để tạo hiệu ứng frosted glass/Apple-style cao cấp.
+  - [x] Áp dụng animation trượt tuần tự (staggered entrance) cho các thẻ bài thi tại trang chủ Học sinh (`StudentHomePage.tsx`).
+
+- `2026-09-04` — **Dọn dẹp hệ thống & Đồng bộ Giao diện**:
+  - [x] Xóa bỏ 4 trang Prototype tĩnh/lỗi (`StudentComparePage`, `StudentDetailPage`, `ExamComparePage`, `FraudDetectionPage`) do không còn dùng hoặc thiếu API hỗ trợ.
+  - [x] Xóa sạch các route chết trong `App.tsx` và sidebar trong `AdminShell.tsx`.
+  - [x] Kiểm tra và xác nhận đồng bộ giao diện Premium (Gradient Header, Glassmorphism Card, Glow Button) trên toàn bộ hệ thống Admin. Sửa nhỏ một vài Header chưa áp dụng class `text-gradient`.
+
+- `2026-09-04` — **Tích hợp AI chuyên sâu vào Tạo Câu hỏi & Sinh Ma trận**:
+  - [x] Backend: Thêm endpoint `/api/v1/matrix/ai-generate` gọi Gemini tạo quy tắc ma trận từ prompt, bổ sung schema cho Request/Response. Nâng cấp service `suggest_question_tags` để auto-map tên chủ đề AI sinh ra với DB `node_id`.
+  - [x] Frontend: Sửa `QuestionFormPage`, gỡ bỏ auto-suggest debounced gây phiền toái, thêm nút "🪄 Phân tích AI" chủ động. Xử lý logic check `node_id` chặt chẽ.
+  - [x] Frontend: Cập nhật `MatrixFormPage`, tạo Modal "Sinh ma trận bằng AI", tích hợp gọi API để render hàng loạt rule (mức độ, dạng câu, số lượng) thẳng vào form.
+
+- `2026-09-04` — **Fix StudentDetailPage**:
+  - [x] Xóa mock data `mockHistory`, thay bằng `[]` + empty state với Clock icon "Chưa có lịch sử làm bài".
+  - [x] Thêm loading spinner state, entrance animation (`animate-in fade-in slide-in-from-bottom-4`).
+  - [x] Fix `user?.registration_number` → `user?.username` (trường không tồn tại trên User type).
+  - [x] Xóa import `useEffect` không dùng, bỏ comment TODO.
+
+- `2026-09-04` — **Xây lại "Quản lý Thí sinh" theo database (bỏ demo CSV)**:
+  - Vấn đề: trang cũ đọc CSV demo (`data/raw_students.csv`) với cột cố định "Toán (IRT)/TDKH (IRT)", không theo DB, không linh hoạt theo kỳ thi/mã đề; frontend dùng raw `fetch` localhost không kèm token; endpoint `/analytics/*` không có auth.
+  - [x] Backend: thêm `GET /admin/exams/{exam_id}/participants-detail` (ADMIN/TEACHER) — join ExamParticipant + User + ExamForm (mã đề) + ExamSubmission + ExamResult; trả `sections` (các phần thi thực tế của kỳ thi, suy từ ExamFormQuestion.part — không hard-code 4 phần), filter theo form_code/status/search (SBD, tên, email), batch-load ExamResult tránh N+1.
+  - [x] Frontend: xây lại `StudentManagementPage.tsx` — chọn kỳ thi → KPI (tổng/đã nộp/đang thi/bị cấm) + bảng thí sinh với cột điểm động theo từng phần của đề, mã đề badge, trạng thái (Chưa bắt đầu/Đang thi/Đã nộp/Bị đình chỉ), tổng thô CTT, điểm thực IRT (chỉ hiện khi score_method=IRT, đúng ngưỡng N≥200), thời gian nộp; filter mã đề + trạng thái + search debounce.
+  - [x] API client: `getExamParticipants` trong `api/admin.ts`.
+  - Ghi chú: trang so sánh thí sinh cũ (`/admin/students/compare`, `/admin/students/:id`) vẫn dựa CSV demo — cần xây lại sau nếu muốn; endpoint `/analytics/*` (class-summary, students, item-analysis) vẫn chưa có auth.
+
+- `2026-09-04` — **Audit Sidebar Admin + bổ sung UI còn thiếu (OMR UI, AI Review Queue, Staff Edit)**:
+  - [x] Audit 6 điểm sidebar: (1) Quản lý user/role đã có backend (`/admin/staff` CRUD, `/users/invite`) + UI `/admin/access` nhưng bị đặt sai tên "Quyền xem đáp án"; (2) Duyệt câu hỏi đã đủ (tab PENDING + approve/reject); (3) OMR backend xong nhưng 0 UI; (4) AI review chỉ có modal per-question, thiếu queue; (5) Settings đã đủ; (6) Notifications chưa tồn tại ở bất kỳ tầng nào (chưa làm, chờ quyết định product).
+  - [x] Backend: thêm `GET /questions/ai-review-queue` (filter theo review_status, phân trang, join Question) — đặt trước route `/{question_id}` để tránh path shadowing.
+  - [x] Frontend: trang `OmrPage.tsx` (`/admin/omr`) — chọn kỳ thi, upload nhiều ảnh phiếu, poll job realtime, bảng sheets với badge trạng thái, nút "Xác nhận & chấm" cho sheet NEEDS_REVIEW.
+  - [x] Frontend: trang `AiReviewQueuePage.tsx` (`/admin/ai-review`) — 4 tab trạng thái, tái sử dụng `AiReviewModal` theo question_id, refresh queue sau khi duyệt.
+  - [x] Frontend: `AccessControlPage` StaffTab — thêm modal Sửa nhân sự (đổi role TEACHER/MODERATOR/ADMIN, bật/tắt is_active) dùng `PUT /admin/staff/{id}` có sẵn.
+  - [x] Sidebar: đổi label "Quyền xem đáp án" → "Người dùng & Phân quyền"; thêm "Chấm bài (OMR)" vào Vận hành Thi cử và "Duyệt phân tích AI" vào Nội dung & Kiến thức.
+
+- `2026-09-04` — **UI Redesign toàn diện (5 phase)**:
+  - [x] **Phase 1 — Nền tảng**: Tạo 5 UI components mới (`Select`, `Textarea`, `Tabs`, `Toast`, `Alert`). Backend: `Notification` model + 5 API endpoints (list, unread-count, read, read-all, delete, send). Frontend: `notificationStore` (React context + polling 30s), `NotificationBell` (bell icon + unread badge + dropdown + detail modal). ToastProvider integrated. Bell thêm vào AdminShell header + StudentHomePage header.
+  - [x] **Phase 2 — Replace alert/confirm**: Thay thế 52 `alert()` → `toast.success/error/warning/info` trên 14 files. Thay 3 `window.confirm()` → `<ConfirmDialog>` trên 3 files (QuestionFormPage, KnowledgePage, ResourcesPage).
+  - [x] **Phase 3 — Fix mismatches**: `resources.ts` thêm `/api/v1/` prefix. TeacherAnalyticsPage + StudentAnalyticsPage fix hardcoded `localhost:8000` → api client. Thêm `deleteExam`, `updateExam`, `completeExam` API functions.
+  - [x] **Phase 4 — UI polish**: Tạo `StudentShell` layout (logo, bell, user info, logout). Wrap student routes. Simplify student page headers.
+  - [x] **Phase 5 — Admin notifications**: Tạo `AdminNotificationsPage` (gửi thông báo user/role/all, lịch sử, đánh dấu đã đọc). Route `/admin/notifications` + nav item.
+  - Toast fix: `toast` export là constant object (không phải function) để hỗ trợ `toast.error()` syntax.
+  - Backend tests: 74/74 pass. Frontend: tất cả toast type errors resolved.
+
+- `2026-09-04` — **Cải thiện UI/UX toàn website (6 phase)**:
+  - [x] **Phase 1 — Quick Fixes**: Fix font conflict (tailwind.config.js统一 Plus Jakarta Sans), fix NotificationBell delete button (thêm `group` class), ẩn FPS counter (dev mode only), consolidate z-index scale trong tailwind config.
+  - [x] **Phase 2 — Loading & Error States**: Tạo `PageSkeleton`, `ErrorState`, `EmptyState` components mới.
+  - [x] **Phase 3 — Error Boundary**: Tạo `ErrorBoundary` class component, wrap `<AppRoutes />` để crash không white-screen toàn app.
+  - [x] **Phase 4 — Admin Pages Polish**: AccessControlPage (Badge/Button/Skeleton/EmptyState + toast.error cho silent catches), AdminFeedbacksPage (Badge/Select/Skeleton + entrance animation), ExamsPage (search functionality + Button styling), MatrixPage (emptyMessage + ConfirmDialog thay confirm()), PassagesPage (Badge thay raw span), AdminNotificationsPage (page title consistency + skeleton loading + empty state + entrance animation), QuestionsPage (Select component thay raw select).
+  - [x] **Phase 5 — Student Pages**: StudentDetailPage (xoá mock data, thêm loading/empty state, fix User type), StudentComparePage (xoá mock data, thêm empty state), StudentHomePage (skeleton cards loading, proper empty/error states).
+  - [x] **Phase 6 — Button success variant**: Thêm `success` variant cho Button component.
+  - Backend tests: 74/74 pass. Frontend: tất cả new errors resolved, chỉ còn pre-existing unused imports.
+
+- `2026-09-04` — **Xây dựng Module OMR Hybrid 2 Lớp (OpenCV + Gemini Vision)**:
+  - [x] Tạo cấu trúc `backend/app/services/omr/` với các module: `layout_config.py`, `layers/opencv_layer.py`, `layers/gemini_layer.py`, `hybrid_omr.py`, `calibration.py`, `tasks.py`
+  - [x] **Lớp 1 OpenCV**: Detect 4 marker góc → perspective transform → tự động threshold từ hàng Type (calibration pattern) → đọc SBD (6 cột x 10 hàng), Mã đề (3 cột x 10 hàng), 120 câu (5 khối x 24 câu x 4 lựa chọn). Logic quyết định: 0 ô → trống, 1 ô → chọn + tính gap, ≥2 ô → multi-mark needs_review
+  - [x] **Lớp 2 Gemini Vision**: Chỉ xử lý câu needs_review từ Lớp 1. Crop ảnh nhỏ (không gửi cả trang) để tiết kiệm token. Prompt trả JSON `{trang_thai, dap_an}`. Bắt buộc `nhieu_dap_an` khi gap không rõ ràng. Backend chỉ lưu khi `trang_thai=hop_le`
+  - [x] **Calibration tool**: Auto-detect bubble contours từ ảnh phiếu trống, cluster thành SBD/Mã đề/Questions/Type, xuất JSON config
+  - [x] **Celery tasks**: `process_omr_sheet_task` (single), `process_omr_batch_task` (batch), `confirm_omr_sheet_task` (confirm sau review)
+  - [x] **API endpoints**: `POST /upload`, `GET /jobs/{id}`, `GET /sheets/{id}`, `POST /sheets/{id}/review`, `POST /sheets/{id}/reject`, `POST /calibrate`
+  - [x] **Unit tests**: 30+ test cases cho marker detection, perspective transform, fill ratio, threshold calibration, question read, SBD read, edge cases
 
 - `2026-09-03` — **Triển khai AI Analysis & Mở rộng Matrix Generator**:
   - [x] **Phase 1-2**: Xây dựng bảng `ai_analysis_cache` và tích hợp Gemini 1.5 Pro API thông qua endpoint `POST /questions/{id}/analyze`, ép kiểu trả về JSON chứa attributes sư phạm (concepts, skills, cognitive_level).

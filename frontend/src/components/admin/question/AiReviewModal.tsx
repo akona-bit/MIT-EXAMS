@@ -166,7 +166,7 @@ export default function AiReviewModal({ isOpen, onClose, questionId }: AiReviewM
               Lưu chỉnh sửa
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               onClick={() => handleSubmit(AiReviewStatus.HUMAN_CONFIRMED)}
               disabled={isSubmitting}
             >

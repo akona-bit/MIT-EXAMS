@@ -2,6 +2,11 @@ import pytest
 from types import SimpleNamespace
 from datetime import datetime, timezone
 
+# Đảm bảo toàn bộ model được đăng ký mapper trước khi configure_mappers chạy
+# (app thật import tất cả qua main.py; test riêng lẻ phải tự import)
+import app.models.passage  # noqa: F401
+import app.models.omr  # noqa: F401
+
 from app.services import generator, exam_session
 from app.services.grading import scorer
 
@@ -12,6 +17,10 @@ class MockScalarResult:
         self._single = single
 
     def scalars(self):
+        return self
+
+    def unique(self):
+        # Mocks the unique() call that deduplicates results before all()
         return self
 
     def all(self):
@@ -128,7 +137,7 @@ async def test_grade_submission_ctt_happy_path_scores_correctly():
 
     # Form questions: two form questions mapping to question ids and parts
     # (scorer mới cần question_ref.type/.sub_items và fq.answers[].answer_id)
-    q_ref = SimpleNamespace(type="SINGLE_CHOICE", sub_items=[], scoring_config=None)
+    q_ref = SimpleNamespace(type=SimpleNamespace(value="SINGLE_CHOICE"), sub_items=[], scoring_config=None)
     fq1 = SimpleNamespace(id=401, question_id=1001, position=1, part=1, question_ref=q_ref, answers=[SimpleNamespace(answer_id=501)])
     fq2 = SimpleNamespace(id=402, question_id=1002, position=2, part=1, question_ref=q_ref, answers=[SimpleNamespace(answer_id=502)])
 

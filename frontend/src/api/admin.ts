@@ -89,3 +89,41 @@ export const updateSystemSetting = async (key: string, value: string, descriptio
   const response = await client.put<SystemSetting>(`/api/v1/admin/settings/${key}`, { value, description });
   return response.data;
 };
+
+// ── Quản lý Thí sinh theo kỳ thi (DB-driven) ──
+
+export interface ExamParticipantRow {
+  participant_id: number;
+  user_id: number;
+  sbd: string | null;
+  full_name: string | null;
+  email: string | null;
+  username: string | null;
+  form_code: string | null;
+  status: string; // NOT_STARTED | IN_PROGRESS | SUBMITTED | SUSPENDED
+  is_banned: boolean;
+  start_time: string | null;
+  submit_time: string | null;
+  score_method: string | null; // CTT | IRT
+  ctt_scores: Record<string, number | null>; // key: "part1".."partN" (động theo đề)
+  irt_scores: Record<string, number | null>;
+  raw_total: number | null;
+  total_score: number | null; // IRT scaled 0-1200 (nếu có)
+}
+
+export interface ExamParticipantsResponse {
+  sections: number[]; // các phần thi thực tế của kỳ thi (vd [1,2,3,4])
+  total: number;
+  items: ExamParticipantRow[];
+}
+
+export const getExamParticipants = async (
+  examId: number,
+  params: { form_code?: string; status?: string; search?: string } = {}
+): Promise<ExamParticipantsResponse> => {
+  const response = await client.get<ExamParticipantsResponse>(
+    `/api/v1/admin/exams/${examId}/participants-detail`,
+    { params }
+  );
+  return response.data;
+};

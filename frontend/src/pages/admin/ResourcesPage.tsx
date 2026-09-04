@@ -3,7 +3,9 @@ import {
   passageApi,
   PassageSearchResponse,
 } from "../../api/passages";
+import { resourceApi, ResourceResponse, TAB_TYPE_MAP } from "../../api/resources";
 import Button from "../../components/ui/Button";
+import { toast } from "../../components/ui/Toast";
 import {
   BookOpen,
   Search,
@@ -16,9 +18,12 @@ import {
   Plus,
   Trash2,
   X,
+  Copy,
+  Library,
 } from "lucide-react";
 import PassageEditStep from "../../components/admin/passage/PassageEditStep";
 import Modal from "../../components/ui/Modal";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -33,88 +38,94 @@ interface TabDef {
 }
 
 const tabs: TabDef[] = [
-  { id: "van-ban", label: "Văn bản", icon: <BookOpen className="h-4 w-4" />, description: "Đoạn văn, bài đọc hiểu dùng chung cho câu hỏi chùm", createLabel: "Thêm ngữ liệu văn bản" },
-  { id: "bang", label: "Bảng biểu", icon: <Table2 className="h-4 w-4" />, description: "Bảng dữ liệu, biểu đồ, sơ đồ dùng trong câu hỏi", createLabel: "Thêm bảng biểu" },
-  { id: "anh", label: "Hình ảnh", icon: <Image className="h-4 w-4" />, description: "Ảnh minh họa, biểu đồ, sơ đồ, tranh vẽ", createLabel: "Thêm hình ảnh" },
-  { id: "pdf", label: "Tài liệu PDF", icon: <FileText className="h-4 w-4" />, description: "Tài liệu PDF, scan từ sách/bộ đề", createLabel: "Thêm tài liệu PDF" },
-  { id: "viet-tay", label: "Viết tay", icon: <PenTool className="h-4 w-4" />, description: "Ngữ liệu viết tay, scan phiếu trả lời", createLabel: "Thêm ngữ liệu viết tay" },
+  { id: "van-ban", label: "Văn bản", icon: <BookOpen className="h-4 w-4" />, description: "Đoạn văn, bài đọc hiểu dùng chung", createLabel: "Thêm văn bản" },
+  { id: "anh", label: "Hình ảnh", icon: <Image className="h-4 w-4" />, description: "Ảnh minh họa, biểu đồ", createLabel: "Upload hình ảnh" },
+  { id: "pdf", label: "Tài liệu PDF", icon: <FileText className="h-4 w-4" />, description: "Tài liệu đính kèm dạng PDF", createLabel: "Upload PDF" },
+  { id: "viet-tay", label: "Viết tay", icon: <PenTool className="h-4 w-4" />, description: "Phiếu làm bài, bài viết tay (Ảnh/PDF)", createLabel: "Upload bài viết tay" },
+  { id: "bang", label: "Bảng biểu", icon: <Table2 className="h-4 w-4" />, description: "Bảng dữ liệu (Markdown)", createLabel: "Thêm bảng biểu" },
 ];
-
-interface ResourceItem {
-  id: string;
-  name: string;
-  preview: string;
-  type: ResourceTab;
-  questionCount: number;
-  createdAt: string;
-}
 
 /* ── Main page ────────────────────────────────────────────── */
 
 export default function ResourcesPage() {
   const [activeTab, setActiveTab] = useState<ResourceTab>("van-ban");
 
-  // Passage state (van-ban tab)
+  // Passages
   const [passages, setPassages] = useState<PassageSearchResponse["results"]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
 
-  // Generic resource items for non-van-ban tabs (localStorage-backed for now)
-  const [resourceItems, setResourceItems] = useState<ResourceItem[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("mit-resources") || "[]");
-    } catch {
-      return [];
-    }
-  });
+  // Resources from DB
+  const [resources, setResources] = useState<ResourceResponse[]>([]);
 
-  // Modal State for Create/Edit
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Passage draft
   const [passageDraft, setPassageDraft] = useState({
     passageContent: "",
     sourceAuthor: "",
     sourceTitle: "",
   });
 
-  // Generic resource draft
   const [resourceDraft, setResourceDraft] = useState({
     name: "",
     description: "",
-    content: "", // markdown/table data
+    content: "",
     file: null as File | null,
     filePreview: "",
   });
 
-  /* ── Passage CRUD ──────────────────────────────────────── */
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
 
-  const loadPassages = async () => {
+  const loadData = async () => {
     setIsLoading(true);
     try {
-      const res = await passageApi.search(search, 100);
-      setPassages(res.results);
+      if (activeTab === "van-ban") {
+        const res = await passageApi.search(search, 100);
+        setPassages(res.results);
+      } else {
+        const resourceType = TAB_TYPE_MAP[activeTab];
+        const res = await resourceApi.list(resourceType);
+        setResources(res);
+      }
       setError("");
     } catch {
-      setError("Không thể tải kho ngữ liệu.");
+      setError("Không thể tải kho dữ liệu.");
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === "van-ban") loadPassages();
+    loadData();
   }, [search, activeTab]);
 
+  /* ── Passage Actions ──────────────────────────── */
   const handleOpenCreatePassage = () => {
     setPassageDraft({ passageContent: "", sourceAuthor: "", sourceTitle: "" });
     setEditingId(null);
     setModalMode("create");
     setIsModalOpen(true);
+  };
+
+  const handleDeletePassage = async (code: string) => {
+    setConfirmMessage("Bạn có chắc chắn muốn xóa ngữ liệu này? Thao tác sẽ gỡ liên kết khỏi các câu hỏi nhưng không xóa nội dung câu hỏi.");
+    setConfirmAction(() => async () => {
+      try {
+        await passageApi.delete(code);
+        toast.success("Đã xóa ngữ liệu thành công");
+        loadData();
+      } catch (error: any) {
+        toast.error(error.response?.data?.detail || "Không thể xóa ngữ liệu");
+      }
+    });
+    setConfirmOpen(true);
   };
 
   const handleOpenEditPassage = async (code: string) => {
@@ -138,7 +149,7 @@ export default function ResourcesPage() {
 
   const handleSavePassage = async () => {
     if (!passageDraft.passageContent.trim()) {
-      alert("Vui lòng nhập nội dung ngữ liệu");
+      toast.warning("Vui lòng nhập nội dung ngữ liệu");
       return;
     }
     setIsSaving(true);
@@ -157,21 +168,15 @@ export default function ResourcesPage() {
         });
       }
       setIsModalOpen(false);
-      loadPassages();
+      loadData();
     } catch {
-      alert("Có lỗi xảy ra khi lưu ngữ liệu.");
+      toast.error("Có lỗi xảy ra khi lưu ngữ liệu.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  /* ── Generic resource CRUD (localStorage) ─────────────── */
-
-  const persistResources = (items: ResourceItem[]) => {
-    setResourceItems(items);
-    localStorage.setItem("mit-resources", JSON.stringify(items));
-  };
-
+  /* ── Resource Actions ─────────────────────────── */
   const handleOpenCreateResource = () => {
     setResourceDraft({ name: "", description: "", content: "", file: null, filePreview: "" });
     setEditingId(null);
@@ -179,77 +184,73 @@ export default function ResourcesPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEditResource = (item: ResourceItem) => {
-    setResourceDraft({
-      name: item.name,
-      description: item.preview,
-      content: "",
-      file: null,
-      filePreview: "",
-    });
-    setEditingId(item.id);
-    setModalMode("edit");
-    setIsModalOpen(true);
-  };
-
-  const handleSaveResource = () => {
-    if (!resourceDraft.name.trim()) {
-      alert("Vui lòng nhập tên ngữ liệu");
-      return;
-    }
+  const handleSaveResource = async () => {
     setIsSaving(true);
     try {
-      const now = new Date().toISOString();
-      if (modalMode === "edit" && editingId) {
-        persistResources(
-          resourceItems.map((r) =>
-            r.id === editingId ? { ...r, name: resourceDraft.name, preview: resourceDraft.description } : r
-          )
-        );
+      let uploadFile = resourceDraft.file;
+      const resourceType = TAB_TYPE_MAP[activeTab];
+      
+      if (activeTab === "bang") {
+        if (!resourceDraft.name.trim() || !resourceDraft.content.trim()) {
+          toast.warning("Vui lòng nhập đủ tên và nội dung bảng.");
+          setIsSaving(false);
+          return;
+        }
+        // Tạo file .md từ text
+        const blob = new Blob([resourceDraft.content], { type: "text/markdown" });
+        uploadFile = new File([blob], `${resourceDraft.name}.md`, { type: "text/markdown" });
       } else {
-        const newItem: ResourceItem = {
-          id: `${activeTab}-${Date.now()}`,
-          name: resourceDraft.name,
-          preview: resourceDraft.description,
-          type: activeTab,
-          questionCount: 0,
-          createdAt: now,
-        };
-        persistResources([...resourceItems, newItem]);
+        if (!uploadFile) {
+          toast.warning("Vui lòng chọn file.");
+          setIsSaving(false);
+          return;
+        }
       }
+
+      await resourceApi.upload(uploadFile, resourceType);
       setIsModalOpen(false);
-    } catch {
-      alert("Có lỗi xảy ra khi lưu.");
+      loadData();
+    } catch (e: any) {
+      toast.error("Upload thất bại: " + (e.response?.data?.detail || e.message));
     } finally {
       setIsSaving(false);
     }
   };
 
+  const confirmDeleteResource = async (id: string) => {
+    try {
+      await resourceApi.delete(id);
+      loadData();
+    } catch {
+      toast.error("Không thể xóa file.");
+    }
+  };
+
   const handleDeleteResource = (id: string) => {
-    if (!window.confirm("Xác nhận xóa ngữ liệu này?")) return;
-    persistResources(resourceItems.filter((r) => r.id !== id));
+    setConfirmMessage("Xác nhận xóa file này khỏi Supabase?");
+    setConfirmAction(() => () => { confirmDeleteResource(id); });
+    setConfirmOpen(true);
   };
 
   const currentTab = tabs.find((t) => t.id === activeTab)!;
-
-  const filteredResources = resourceItems.filter((r) => r.type === activeTab);
-
   const isPassageTab = activeTab === "van-ban";
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-in fade-in duration-500 pt-4 px-4 sm:px-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient pb-1">Kho ngữ liệu</h1>
+          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+            <Library className="w-8 h-8 text-primary-500" />
+            Kho Học Liệu
+          </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Quản lý các loại ngữ liệu dùng trong đề thi và câu hỏi.
+            Quản lý tập trung các đoạn văn, hình ảnh, tài liệu dùng chung.
           </p>
         </div>
         <Button
           onClick={isPassageTab ? handleOpenCreatePassage : handleOpenCreateResource}
           size="lg"
-          className="w-full sm:w-auto shadow-lg shadow-primary-500/30 hover:-translate-y-0.5"
+          className="w-full sm:w-auto shadow-lg shadow-primary-500/30"
         >
           <Plus className="h-4 w-4 mr-1.5" />
           {currentTab.createLabel}
@@ -257,42 +258,31 @@ export default function ResourcesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-2xl border border-slate-200/60 bg-white/60 p-1 dark:border-slate-700/60 dark:bg-slate-900/60 overflow-x-auto">
-        {tabs.map((tab) => {
-          const count = tab.id === "van-ban" ? passages.length : resourceItems.filter((r) => r.type === tab.id).length;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
-                activeTab === tab.id
-                  ? "bg-white text-primary-600 shadow-sm dark:bg-slate-800 dark:text-primary-400"
-                  : "text-slate-500 hover:text-slate-700 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-white/5"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-              {count > 0 && (
-                <span className="ml-1 rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="flex gap-2 rounded-2xl border border-slate-200/60 bg-white/60 p-1.5 dark:border-slate-700/60 dark:bg-slate-900/60 overflow-x-auto shadow-sm">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => { setActiveTab(tab.id); setSearch(""); }}
+            className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-bold transition-all duration-300 ${
+              activeTab === tab.id
+                ? "bg-primary-500 text-white shadow-md shadow-primary-500/20"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tab description */}
-      <p className="text-sm text-slate-500 dark:text-slate-400">{currentTab.description}</p>
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{currentTab.description}</p>
 
-      {/* Error */}
       {error && (
-        <div role="alert" className="rounded-xl border border-danger-500/20 bg-danger-500/10 px-4 py-3 text-sm text-danger-500">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
           {error}
         </div>
       )}
 
-      {/* Tab Content */}
       {isPassageTab ? (
         <VanBanTab
           passages={passages}
@@ -300,17 +290,20 @@ export default function ResourcesPage() {
           search={search}
           setSearch={setSearch}
           onEdit={handleOpenEditPassage}
+          onDelete={handleDeletePassage}
         />
       ) : (
         <ResourceListTab
-          items={filteredResources}
+          items={resources}
+          isLoading={isLoading}
           tab={currentTab}
-          onEdit={handleOpenEditResource}
+          search={search}
+          setSearch={setSearch}
           onDelete={handleDeleteResource}
         />
       )}
 
-      {/* Modal: Passage create/edit */}
+      {/* Modal: Passage */}
       {isPassageTab && (
         <Modal
           isOpen={isModalOpen}
@@ -324,24 +317,20 @@ export default function ResourcesPage() {
               updateDraft={(u) => setPassageDraft((p) => ({ ...p, ...u }))}
             />
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSaving}>
-                Hủy
-              </Button>
-              <Button onClick={handleSavePassage} isLoading={isSaving}>
-                {modalMode === "edit" ? "Cập nhật" : "Tạo ngữ liệu"}
-              </Button>
+              <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Hủy</Button>
+              <Button onClick={handleSavePassage} isLoading={isSaving}>Lưu</Button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Modal: Resource create/edit */}
+      {/* Modal: Resource */}
       {!isPassageTab && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => !isSaving && setIsModalOpen(false)}
-          title={modalMode === "edit" ? `Chỉnh sửa ${currentTab.label.toLowerCase()}` : currentTab.createLabel}
-          maxWidth="max-w-3xl"
+          title={currentTab.createLabel}
+          maxWidth="max-w-xl"
         >
           <div className="p-6">
             <ResourceForm
@@ -350,89 +339,57 @@ export default function ResourcesPage() {
               setDraft={setResourceDraft}
             />
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSaving}>
-                Hủy
-              </Button>
-              <Button onClick={handleSaveResource} isLoading={isSaving}>
-                {modalMode === "edit" ? "Cập nhật" : "Tạo mới"}
-              </Button>
+              <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Hủy</Button>
+              <Button onClick={handleSaveResource} isLoading={isSaving}>Upload</Button>
             </div>
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Xác nhận"
+        message={confirmMessage}
+        onConfirm={() => { confirmAction?.(); setConfirmOpen(false); }}
+        onCancel={() => { setConfirmOpen(false); setConfirmAction(null); }}
+        isDestructive
+      />
     </div>
   );
 }
 
-/* ── Van Ban Tab ──────────────────────────────────────────── */
-
-function VanBanTab({
-  passages,
-  isLoading,
-  search,
-  setSearch,
-  onEdit,
-}: {
-  passages: PassageSearchResponse["results"];
-  isLoading: boolean;
-  search: string;
-  setSearch: (v: string) => void;
-  onEdit: (code: string) => void;
-}) {
+function VanBanTab({ passages, isLoading, search, setSearch, onEdit, onDelete }: any) {
   return (
     <>
       <div className="relative max-w-md">
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-          <Search className="h-4 w-4 text-slate-400" />
-        </div>
+        <Search className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
-          type="text"
-          className="block w-full rounded-xl border-slate-200 pl-10 focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:border-slate-700 dark:bg-slate-900/50"
-          placeholder="Tìm kiếm ngữ liệu văn bản..."
+          className="block w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900/50"
+          placeholder="Tìm kiếm ngữ liệu..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      {isLoading && passages.length === 0 ? (
-        <div className="flex h-48 items-center justify-center rounded-2xl border border-slate-200/60 dark:border-slate-700/60 glass-card">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-500" />
-        </div>
+      {isLoading ? (
+        <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>
       ) : passages.length === 0 ? (
-        <EmptyState message="Chưa có ngữ liệu văn bản nào" hint="Nhấn nút &quot;Thêm ngữ liệu văn bản&quot; để bắt đầu." />
+        <EmptyState message="Chưa có ngữ liệu văn bản nào" hint="Nhấn Thêm văn bản để tạo mới." />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {passages.map((p) => (
-            <article
-              key={p.public_code}
-              className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg glass-card transition hover:-translate-y-0.5 hover:shadow-xl p-5"
-            >
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {passages.map((p: any) => (
+            <article key={p.public_code} className="glass-card flex flex-col justify-between p-6 hover:-translate-y-1 transition duration-300 shadow-sm hover:shadow-xl">
               <div>
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-primary-500" />
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">
-                      {p.public_code}
-                    </span>
-                  </div>
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                    {p.question_count} câu hỏi
-                  </span>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">{p.public_code}</span>
+                  <span className="text-xs font-bold text-primary-600 bg-primary-50 dark:bg-primary-900/30 px-2 py-1 rounded-full">{p.question_count} câu hỏi</span>
                 </div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-1 mb-1" title={p.source_title || "Không rõ nguồn"}>
-                  {p.source_title || "Ngữ liệu không tên"}
-                </h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white line-clamp-1 mb-2">{p.source_title || "Ngữ liệu không tên"}</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-3 italic">"{p.preview}"</p>
               </div>
-              <div className="mt-4 flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
-                <button
-                  type="button"
-                  onClick={() => onEdit(p.public_code)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  Sửa
-                </button>
+              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button onClick={() => onEdit(p.public_code)} className="flex items-center gap-1.5 text-sm font-semibold text-primary-600 hover:text-primary-700"><Edit3 className="w-4 h-4"/> Sửa</button>
+                <button onClick={() => onDelete(p.public_code)} className="flex items-center gap-1.5 text-sm font-semibold text-danger-500 hover:text-danger-600"><Trash2 className="w-4 h-4"/> Xóa</button>
               </div>
             </article>
           ))}
@@ -442,89 +399,55 @@ function VanBanTab({
   );
 }
 
-/* ── Resource List Tab (bang, anh, pdf, viet-tay) ──────────── */
-
-function ResourceListTab({
-  items,
-  tab,
-  onEdit,
-  onDelete,
-}: {
-  items: ResourceItem[];
-  tab: TabDef;
-  onEdit: (item: ResourceItem) => void;
-  onDelete: (id: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const filtered = items.filter(
-    (r) =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.preview.toLowerCase().includes(search.toLowerCase())
-  );
+function ResourceListTab({ items, isLoading, tab, search, setSearch, onDelete }: any) {
+  const filtered = items.filter((r: ResourceResponse) => r.original_name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <>
       <div className="relative max-w-md">
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-          <Search className="h-4 w-4 text-slate-400" />
-        </div>
+        <Search className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
-          type="text"
-          className="block w-full rounded-xl border-slate-200 pl-10 focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:border-slate-700 dark:bg-slate-900/50"
+          className="block w-full rounded-xl border border-slate-200 pl-10 pr-4 py-2.5 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900/50"
           placeholder={`Tìm kiếm ${tab.label.toLowerCase()}...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          message={`Chưa có ${tab.label.toLowerCase()} nào`}
-          hint={`Nhấn nút "${tab.createLabel}" để bắt đầu.`}
-        />
+      {isLoading ? (
+        <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" /></div>
+      ) : filtered.length === 0 ? (
+        <EmptyState message={`Chưa có ${tab.label.toLowerCase()} nào`} hint={`Nhấn "${tab.createLabel}" để upload.`} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((item) => (
-            <article
-              key={item.id}
-              className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg glass-card transition hover:-translate-y-0.5 hover:shadow-xl p-5"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-primary-500">{tab.icon}</span>
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">
-                      {item.id}
-                    </span>
-                  </div>
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                    {item.questionCount} câu hỏi
-                  </span>
-                </div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-1 mb-1">
-                  {item.name}
-                </h3>
-                {item.preview && (
-                  <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 italic">"{item.preview}"</p>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
+          {filtered.map((item: ResourceResponse) => (
+            <article key={item.id} className="glass-card overflow-hidden flex flex-col transition duration-300 hover:shadow-xl group">
+              <div className="h-40 bg-slate-100 dark:bg-slate-800 relative flex items-center justify-center p-4">
+                {item.type === 'IMAGE' ? (
+                   <img src={item.content_url} alt={item.original_name} className="max-h-full max-w-full object-contain rounded-md" />
+                ) : item.type === 'PDF' ? (
+                   <FileText className="w-16 h-16 text-red-400" />
+                ) : item.type === 'HANDWRITING' ? (
+                   <PenTool className="w-16 h-16 text-amber-400" />
+                ) : item.type === 'CHART' ? (
+                   <Table2 className="w-16 h-16 text-indigo-400" />
+                ) : (
+                   <BookOpen className="w-16 h-16 text-slate-400" />
                 )}
+                
+                {/* Hover Delete Button */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <button onClick={() => onDelete(item.id)} className="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 shadow-lg hover:scale-110 transition-transform">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-              <div className="mt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-3">
-                <button
-                  type="button"
-                  onClick={() => onEdit(item)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  Sửa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete(item.id)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Xóa
-                </button>
+              <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{new Date(item.created_at).toLocaleDateString('vi-VN')}</p>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate" title={item.original_name}>
+                  {item.original_name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">{(item.size_bytes / 1024).toFixed(1)} KB</p>
               </div>
             </article>
           ))}
@@ -534,130 +457,54 @@ function ResourceListTab({
   );
 }
 
-/* ── Resource Form (for non-van-ban tabs) ─────────────────── */
-
-function ResourceForm({
-  tab,
-  draft,
-  setDraft,
-}: {
-  tab: ResourceTab;
-  draft: { name: string; description: string; content: string; file: File | null; filePreview: string };
-  setDraft: React.Dispatch<React.SetStateAction<typeof draft>>;
-}) {
+function ResourceForm({ tab, draft, setDraft }: any) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setDraft((prev) => ({ ...prev, file, filePreview: URL.createObjectURL(file) }));
-  };
-
-  const removeFile = () => {
-    setDraft((prev) => ({ ...prev, file: null, filePreview: "" }));
+    setDraft((prev: any) => ({ ...prev, file, filePreview: URL.createObjectURL(file) }));
   };
 
   return (
     <div className="space-y-5">
-      {/* Name */}
-      <div>
-        <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
-          Tên ngữ liệu <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900/50"
-          placeholder={
-            tab === "bang" ? "Ví dụ: Bảng so sánh hệ mặt trời" :
-            tab === "anh" ? "Ví dụ: Sơ đồ chu trình nước" :
-            tab === "pdf" ? "Ví dụ: Đề tham khảo 2024" :
-            "Ví dụ: Phiếu trả lời THPT Quốc gia"
-          }
-          value={draft.name}
-          onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-        />
-      </div>
-
-      {/* Description */}
-      <div>
-        <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
-          Mô tả / Ghi chú
-        </label>
-        <textarea
-          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900/50"
-          rows={3}
-          placeholder="Mô tả ngắn gọn về ngữ liệu..."
-          value={draft.description}
-          onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
-        />
-      </div>
-
-      {/* File upload (for bang, anh, pdf, viet-tay) */}
-      {(tab === "anh" || tab === "pdf" || tab === "viet-tay") && (
+      {tab === "bang" ? (
+        <>
+          <div>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">Tên bảng biểu *</label>
+            <input className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-900/50" value={draft.name} onChange={(e) => setDraft((p: any) => ({ ...p, name: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">Nội dung Markdown *</label>
+            <textarea className="w-full rounded-xl border border-slate-200 px-4 py-2.5 font-mono text-sm dark:bg-slate-900/50" rows={8} value={draft.content} onChange={(e) => setDraft((p: any) => ({ ...p, content: e.target.value }))} />
+          </div>
+        </>
+      ) : (
         <div>
-          <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
-            Tải tệp lên <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">Tải tệp lên *</label>
           {draft.file ? (
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
-              {tab === "anh" && draft.filePreview && (
-                <img src={draft.filePreview} alt="" className="h-12 w-12 rounded-lg object-cover" />
-              )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{draft.file.name}</p>
+                <p className="truncate text-sm font-bold">{draft.file.name}</p>
                 <p className="text-xs text-slate-500">{(draft.file.size / 1024).toFixed(1)} KB</p>
               </div>
-              <button onClick={removeFile} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-red-500 dark:hover:bg-slate-700">
-                <X className="h-4 w-4" />
-              </button>
+              <button onClick={() => setDraft((p:any) => ({...p, file: null}))} className="text-slate-400 hover:text-red-500"><X className="h-5 w-5" /></button>
             </div>
           ) : (
-            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-white/50 px-6 py-8 text-center transition hover:border-primary-400 hover:bg-primary-50/50 dark:border-slate-600 dark:hover:border-primary-500">
+            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100 px-6 py-12 text-center transition dark:border-slate-600 dark:bg-slate-800/20">
               <Upload className="h-8 w-8 text-slate-400" />
-              <div>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Nhấn để tải lên hoặc kéo thả
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {tab === "anh" && "PNG, JPG, SVG (tối đa 5MB)"}
-                  {tab === "pdf" && "PDF (tối đa 20MB)"}
-                  {tab === "viet-tay" && "PNG, JPG, PDF (tối đa 10MB)"}
-                </p>
-              </div>
-              <input type="file" className="hidden" accept={
-                tab === "anh" ? "image/*" :
-                tab === "pdf" ? ".pdf" :
-                "image/*,.pdf"
-              } onChange={handleFileChange} />
+              <p className="text-sm font-semibold">Nhấn hoặc kéo thả file vào đây</p>
+              <input type="file" className="hidden" accept={tab === "pdf" ? ".pdf" : "image/*"} onChange={handleFileChange} />
             </label>
           )}
-        </div>
-      )}
-
-      {/* Table content (for bang tab) */}
-      {tab === "bang" && (
-        <div>
-          <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
-            Nội dung bảng <span className="text-red-500">*</span>
-          </label>
-          <p className="text-xs text-slate-500 mb-2">Dán nội dung bảng dạng text, Markdown, hoặc mô tả cấu trúc bảng.</p>
-          <textarea
-            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 font-mono text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900/50"
-            rows={8}
-            placeholder={"| Hành tinh | Khối lượng (kg) | Bán kính (km) |\n|----------|----------------|-------------|\n| Thủy Ngân | 3.30×10²³     | 2.439       |\n| Kim Tinh | 4.87×10²⁴     | 6.052       |"}
-            value={draft.content}
-            onChange={(e) => setDraft((p) => ({ ...p, content: e.target.value }))}
-          />
         </div>
       )}
     </div>
   );
 }
 
-/* ── Shared empty state ───────────────────────────────────── */
-
 function EmptyState({ message, hint }: { message: string; hint: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/40 dark:bg-slate-900/40 px-6 py-16 text-center">
-      <p className="text-lg font-semibold text-slate-800 dark:text-slate-200">{message}</p>
+    <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700/50 bg-white/40 dark:bg-slate-900/20 px-6 py-20 text-center">
+      <p className="text-lg font-bold text-slate-800 dark:text-slate-200">{message}</p>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
     </div>
   );

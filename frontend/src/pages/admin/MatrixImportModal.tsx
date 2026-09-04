@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
+import { toast } from "../../components/ui/Toast";
 import { previewMatrixImport, executeMatrixImport, previewVisionImport } from "../../api/matrix";
 import { CheckCircle2, ArrowRight, ArrowLeft, FileUp, Image as ImageIcon } from "lucide-react";
 
@@ -45,11 +46,11 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
 
   const handleNextInput = async () => {
     if (inputType === 'text' && !content.trim()) {
-      alert("Vui lòng nhập dữ liệu bảng");
+      toast.warning("Vui lòng nhập dữ liệu bảng");
       return;
     }
     if (inputType === 'image' && !imageFile) {
-      alert("Vui lòng chọn ảnh để phân tích");
+      toast.warning("Vui lòng chọn ảnh để phân tích");
       return;
     }
 
@@ -73,7 +74,7 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
       setStep('preview');
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra khi xem trước dữ liệu");
+      toast.error("Có lỗi xảy ra khi xem trước dữ liệu");
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +90,7 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
   const handleConfirmImport = async () => {
     const unresolved = previewRows.some(r => r.status !== "✅ Khớp chính xác");
     if (unresolved) {
-      alert("Vui lòng xử lý tất cả các dòng chưa khớp trước khi nhập");
+      toast.warning("Vui lòng xử lý tất cả các dòng chưa khớp trước khi nhập");
       return;
     }
 
@@ -103,7 +104,7 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra khi nhập dữ liệu");
+      toast.error("Có lỗi xảy ra khi nhập dữ liệu");
     } finally {
       setIsLoading(false);
     }

@@ -1,18 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createQuestion,
   getQuestion,
   updateQuestion,
-  checkDuplicate
+  checkDuplicate,
+  suggestQuestionTags,
+  type AiSuggestTagsResponse,
+  type AiSuggestedNode,
 } from "../../api/questions";
+import { passageApi, PassageSearchResponse } from "../../api/passages";
 import type { QuestionCreate, QuestionSimilarityResponse } from "../../types";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import MarkdownEditor from "../../components/editor/MarkdownEditor";
 import KnowledgeNodeSelector from "../../components/admin/question/KnowledgeNodeSelector";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Search, Plus, Trash2, Sparkles, Check } from "lucide-react";
+import { toast } from "../../components/ui/Toast";
 
 export default function QuestionFormPage() {
   const { id } = useParams();
@@ -24,11 +29,16 @@ export default function QuestionFormPage() {
   const [content, setContent] = useState("");
   const [level, setLevel] = useState(1);
   const [type, setType] = useState("SINGLE_CHOICE");
-  const [nodeId, setNodeId] = useState("");
+  
+  // Knowledge Node State
+  const [subject, setSubject] = useState("Toán"); // Default subject
+  const [primaryNodeId, setPrimaryNodeId] = useState<number | null>(null);
+  const [secondaryNodeIds, setSecondaryNodeIds] = useState<number[]>([]);
+
   const [sourceAuthor, setSourceAuthor] = useState("");
   const [sourceTitle, setSourceTitle] = useState("");
   
-  // SINGLE_CHOICE state
+  // Answers state
   const [answers, setAnswers] = useState([
     { content: "", is_correct: true, position: 1 },
     { content: "", is_correct: false, position: 2 },
@@ -42,6 +52,22 @@ export default function QuestionFormPage() {
   const [duplicates, setDuplicates] = useState<QuestionSimilarityResponse[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
+  // Passage state
+  const [passageSearch, setPassageSearch] = useState("");
+  const [passageResults, setPassageResults] = useState<PassageSearchResponse["results"]>([]);
+  const [selectedPassageId, setSelectedPassageId] = useState<number | null>(null);
+  const [selectedPassagePreview, setSelectedPassagePreview] = useState("");
+  const [isSearchingPassage, setIsSearchingPassage] = useState(false);
+
+  // AI Suggest Tags state
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestTagsResponse | null>(null);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [acceptedSuggestions, setAcceptedSuggestions] = useState<{primary?: boolean; secondary: number[]}>({primary: false, secondary: []});
+  const suggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+
   useEffect(() => {
     if (!id) return;
     const questionId = Number(id);
@@ -51,20 +77,36 @@ export default function QuestionFormPage() {
     }
 
     getQuestion(questionId)
-      .then((question) => {
+      .then((question: any) => {
         setContent(question.content);
         setLevel(question.level);
         setType(question.type || "SINGLE_CHOICE");
-        setNodeId(String(question.knowledge_node_id));
+        
+        // Setup nodes
+        if (question.skill_tags) {
+          const primaryTag = question.skill_tags.find((t: any) => t.is_primary);
+          if (primaryTag) setPrimaryNodeId(primaryTag.knowledge_node_id);
+          setSecondaryNodeIds(question.skill_tags.filter((t: any) => !t.is_primary).map((t: any) => t.knowledge_node_id));
+        } else if (question.primary_knowledge_node_id) { // Fallback just in case
+          setPrimaryNodeId(question.primary_knowledge_node_id);
+        } else if (question.knowledge_node_id) {
+          setPrimaryNodeId(question.knowledge_node_id);
+        }
+        
         setSourceAuthor(question.source_author || "");
         setSourceTitle(question.source_title || "");
+        
+        if (question.passage_id) {
+          setSelectedPassageId(question.passage_id);
+          setSelectedPassagePreview(`Ngữ liệu ID #${question.passage_id}`);
+        }
         
         if (question.type === "FILL_IN_BLANK") {
           setFibAnswer(question.answers[0]?.content || "");
         } else {
           setAnswers(
             question.answers.length > 0
-              ? question.answers.slice().sort((a, b) => a.position - b.position)
+              ? question.answers.slice().sort((a: any, b: any) => a.position - b.position)
               : [
                   { content: "Đúng", is_correct: true, position: 1 },
                   { content: "Sai", is_correct: false, position: 2 }
@@ -74,24 +116,60 @@ export default function QuestionFormPage() {
       })
       .catch((error) => {
         console.error(error);
-        alert("Không tìm thấy câu hỏi để chỉnh sửa");
+        toast.error("Không tìm thấy câu hỏi để chỉnh sửa");
         navigate("/admin/questions");
       })
       .finally(() => setIsFetching(false));
   }, [id, navigate]);
 
-  const handleTypeChange = (newType: string) => {
-    if (content || answers.some(a => a.content) || fibAnswer) {
-      const ok = window.confirm("Thay đổi dạng câu hỏi có thể làm mất dữ liệu bạn đang nhập. Chắc chắn tiếp tục?");
-      if (!ok) return;
+  // Passage Search Effect
+  useEffect(() => {
+    if (!passageSearch.trim()) {
+      setPassageResults([]);
+      return;
     }
+    const timer = setTimeout(() => {
+      setIsSearchingPassage(true);
+      passageApi.search(passageSearch, 5).then(res => {
+        setPassageResults(res.results);
+      }).catch(console.error).finally(() => setIsSearchingPassage(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [passageSearch]);
+
+  const analyzeWithAi = async () => {
+    if (!content.trim() || content.length < 20) {
+      toast.warning("Nội dung quá ngắn để AI phân tích. Vui lòng nhập chi tiết hơn.");
+      return;
+    }
+    
+    setIsSuggesting(true);
+    try {
+      const answerTexts = answers.map((a, i) => `${String.fromCharCode(65 + i)}. ${a.content}`).filter(a => a.length > 4);
+      const res = await suggestQuestionTags({
+        content,
+        answers: answerTexts.length > 0 ? answerTexts : undefined,
+      });
+      setAiSuggestions(res);
+      setAcceptedSuggestions({primary: false, secondary: []});
+      if (res.cognitive_level) {
+        setLevel(res.cognitive_level);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi gọi AI. Vui lòng thử lại sau.");
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+  const applyTypeChange = (newType: string) => {
     setType(newType);
     if (newType === "TRUE_FALSE") {
       setAnswers([
         { content: "Đúng", is_correct: true, position: 1 },
         { content: "Sai", is_correct: false, position: 2 }
       ]);
-    } else if (newType === "SINGLE_CHOICE") {
+    } else if (newType === "SINGLE_CHOICE" || newType === "MULTIPLE_CHOICE") {
       setAnswers([
         { content: "", is_correct: true, position: 1 },
         { content: "", is_correct: false, position: 2 },
@@ -99,8 +177,38 @@ export default function QuestionFormPage() {
         { content: "", is_correct: false, position: 4 },
       ]);
     } else if (newType === "COMPOSITE") {
-       alert("Dạng câu hỏi chùm (COMPOSITE) sẽ được thiết kế ở phiên bản sau.");
+       toast.info("Dạng câu hỏi chùm (COMPOSITE) sẽ được thiết kế ở phiên bản sau.");
        setType("SINGLE_CHOICE");
+    }
+  };
+
+  const handleTypeChange = (newType: string) => {
+    if (content || answers.some(a => a.content) || fibAnswer) {
+      setConfirmMessage("Thay đổi dạng câu hỏi có thể làm mất dữ liệu bạn đang nhập. Chắc chắn tiếp tục?");
+      setConfirmAction(() => () => { applyTypeChange(newType); });
+      setConfirmOpen(true);
+      return;
+    }
+    applyTypeChange(newType);
+  };
+
+  const acceptAiSuggestion = (node: AiSuggestedNode, isPrimary: boolean) => {
+    if (!node.node_id) {
+      toast.warning(`Chủ đề "${node.name}" chưa có trong hệ thống. Vui lòng chọn thủ công hoặc tạo mới trước.`);
+      return;
+    }
+    
+    if (isPrimary) {
+      setPrimaryNodeId(node.node_id);
+      setAcceptedSuggestions(prev => ({...prev, primary: true}));
+    } else {
+      if (!secondaryNodeIds.includes(node.node_id)) {
+        setSecondaryNodeIds(prev => [...prev, node.node_id!]);
+      }
+      setAcceptedSuggestions(prev => ({
+        ...prev, 
+        secondary: [...prev.secondary, node.name as any]
+      }));
     }
   };
 
@@ -117,13 +225,17 @@ export default function QuestionFormPage() {
   };
 
   const validateForm = () => {
-    if (!nodeId) return "Vui lòng chọn Kỹ năng (Skill)";
+    if (!primaryNodeId) return "Vui lòng chọn Kỹ năng (Skill) chính";
     if (!content.trim()) return "Nội dung câu hỏi không được để trống";
     
     if (type === "SINGLE_CHOICE") {
       const normalizedAnswers = getNormalizedAnswers();
-      if (normalizedAnswers.length !== 4) return "Cần nhập đầy đủ 4 đáp án";
-      if (!normalizedAnswers.some(a => a.is_correct)) return "Vui lòng chọn một đáp án đúng";
+      if (normalizedAnswers.length < 2) return "Cần nhập ít nhất 2 đáp án";
+      if (normalizedAnswers.filter(a => a.is_correct).length !== 1) return "Vui lòng chọn ĐÚNG 1 đáp án đúng";
+    } else if (type === "MULTIPLE_CHOICE") {
+      const normalizedAnswers = getNormalizedAnswers();
+      if (normalizedAnswers.length < 2) return "Cần nhập ít nhất 2 đáp án";
+      if (normalizedAnswers.filter(a => a.is_correct).length < 1) return "Vui lòng chọn ÍT NHẤT 1 đáp án đúng";
     } else if (type === "FILL_IN_BLANK") {
       if (!fibAnswer.trim()) return "Vui lòng nhập đáp án điền khuyết";
     }
@@ -138,21 +250,23 @@ export default function QuestionFormPage() {
         content,
         level,
         type,
-        knowledge_node_id: parseInt(nodeId),
+        primary_knowledge_node_id: primaryNodeId as number,
+        secondary_knowledge_node_ids: secondaryNodeIds,
+        passage_id: selectedPassageId,
         source_author: sourceAuthor || undefined,
         source_title: sourceTitle || undefined,
         answers: getNormalizedAnswers(),
       };
 
       if (isEditMode && id) {
-        await updateQuestion(Number(id), data);
+        await updateQuestion(Number(id), data as any);
       } else {
         await createQuestion(data);
       }
       navigate("/admin/questions");
     } catch (error: any) {
       console.error(error);
-      alert(error.response?.data?.detail || "Có lỗi xảy ra khi lưu câu hỏi");
+      toast.error(error.response?.data?.detail || "Có lỗi xảy ra khi lưu câu hỏi");
     } finally {
       setIsLoading(false);
     }
@@ -162,27 +276,32 @@ export default function QuestionFormPage() {
     if (e) e.preventDefault();
     const error = validateForm();
     if (error) {
-      alert(error);
+      toast.error(String(error));
       return;
     }
 
-    if (!isEditMode) {
-      setIsLoading(true);
-      try {
-        const dups = await checkDuplicate(content, parseInt(nodeId));
-        if (dups.length > 0) {
-          setDuplicates(dups);
-          setShowDuplicateDialog(true);
-          setIsLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.error("Duplicate check failed", err);
+    submitQuestion();
+  };
+
+  const handleDuplicateCheck = async () => {
+    if (!primaryNodeId) { toast.warning("Vui lòng chọn Kỹ năng (Skill) chính trước"); return; }
+    if (!content.trim()) { toast.warning("Vui lòng nhập nội dung câu hỏi"); return; }
+    
+    setIsLoading(true);
+    try {
+      const dups = await checkDuplicate(content, primaryNodeId);
+      if (dups.length > 0) {
+        setDuplicates(dups);
+        setShowDuplicateDialog(true);
+      } else {
+        toast.success("Không tìm thấy câu hỏi trùng lặp nào! (Độ an toàn cao)");
       }
+    } catch (err) {
+      console.error("Duplicate check failed", err);
+      toast.error("Lỗi khi kiểm tra trùng lặp");
+    } finally {
       setIsLoading(false);
     }
-
-    submitQuestion();
   };
 
   const updateAnswer = (index: number, val: string) => {
@@ -191,16 +310,31 @@ export default function QuestionFormPage() {
     setAnswers(newAnswers);
   };
 
-  const setCorrectAnswer = (index: number) => {
-    const newAnswers = answers.map((a, i) => ({
-      ...a,
-      is_correct: i === index,
-    }));
+  const setCorrectAnswer = (index: number, isMulti: boolean = false) => {
+    if (isMulti) {
+      const newAnswers = [...answers];
+      newAnswers[index].is_correct = !newAnswers[index].is_correct;
+      setAnswers(newAnswers);
+    } else {
+      const newAnswers = answers.map((a, i) => ({
+        ...a,
+        is_correct: i === index,
+      }));
+      setAnswers(newAnswers);
+    }
+  };
+
+  const addAnswer = () => {
+    setAnswers([...answers, { content: "", is_correct: false, position: answers.length + 1 }]);
+  };
+
+  const removeAnswer = (index: number) => {
+    const newAnswers = answers.filter((_, i) => i !== index);
     setAnswers(newAnswers);
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 pb-20">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-extrabold text-gradient pb-1">
           {isEditMode ? "Chỉnh sửa câu hỏi" : "Thêm câu hỏi mới"}
@@ -215,100 +349,297 @@ export default function QuestionFormPage() {
           Đang tải dữ liệu câu hỏi...
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="glass-card space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8">
           
-          <div className="space-y-2">
-            <KnowledgeNodeSelector value={nodeId} onChange={setNodeId} />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Mức độ
-              </label>
-              <select
-                className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                value={level}
-                onChange={(e) => setLevel(Number(e.target.value))}
-              >
-                <option value={1}>Nhận biết</option>
-                <option value={2}>Thông hiểu</option>
-                <option value={3}>Vận dụng</option>
-                <option value={4}>Vận dụng cao</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Dạng câu hỏi
-              </label>
-              <select
-                className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
-                value={type}
-                onChange={(e) => handleTypeChange(e.target.value)}
-              >
-                <option value="SINGLE_CHOICE">Trắc nghiệm một lựa chọn</option>
-                <option value="TRUE_FALSE">Đúng / Sai</option>
-                <option value="FILL_IN_BLANK">Điền khuyết</option>
-                <option value="COMPOSITE">Câu hỏi chùm (Sắp ra mắt)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Nội dung câu hỏi
-            </label>
-            <MarkdownEditor
-              value={content}
-              onChange={setContent}
-              placeholder="Nhập nội dung câu hỏi..."
-            />
-          </div>
-
-          <div className="space-y-5">
-            <h3 className="font-semibold text-slate-900 dark:text-white border-b border-slate-200 dark:border-white/10 pb-3">
-              Đáp án
-            </h3>
+          <div className="glass-card space-y-6">
+            <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">1. Phân loại & Ma trận</h2>
             
-            {type === "SINGLE_CHOICE" && answers.map((ans, idx) => (
-              <div key={idx} className="flex items-start gap-4">
-                <div className="pt-3">
-                  <input
-                    type="radio"
-                    name="correct_answer"
-                    checked={ans.is_correct}
-                    onChange={() => setCorrectAnswer(idx)}
-                    className="w-5 h-5 text-primary-500 focus:ring-primary-500 border-slate-300 rounded-full cursor-pointer"
-                  />
-                </div>
-                <div className="flex-1">
-                  <Input
-                    label=""
-                    placeholder={`Đáp án ${String.fromCharCode(65 + idx)}`}
-                    value={ans.content}
-                    onChange={(e) => updateAnswer(idx, e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-            ))}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Môn học (Dùng để lọc cây kiến thức)
+              </label>
+              <select
+                className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              >
+                <option value="Toán">Toán</option>
+                <option value="Vật lí">Vật lí</option>
+                <option value="Hóa học">Hóa học</option>
+                <option value="Sinh học">Sinh học</option>
+                <option value="Lịch sử">Lịch sử</option>
+                <option value="Địa lí">Địa lí</option>
+                <option value="Tiếng Anh">Tiếng Anh</option>
+                <option value="Ngữ văn">Ngữ văn</option>
+              </select>
+            </div>
+            
+            <KnowledgeNodeSelector 
+              primaryValue={primaryNodeId} 
+              onPrimaryChange={setPrimaryNodeId}
+              secondaryValues={secondaryNodeIds}
+              onSecondaryChange={setSecondaryNodeIds}
+              subject={subject} 
+            />
 
-            {type === "TRUE_FALSE" && answers.map((ans, idx) => (
-              <div key={idx} className="flex items-center gap-4">
-                 <input
-                    type="radio"
-                    name="correct_answer"
-                    checked={ans.is_correct}
-                    onChange={() => setCorrectAnswer(idx)}
-                    className="w-5 h-5 text-primary-500 focus:ring-primary-500 border-slate-300 rounded-full cursor-pointer"
-                  />
-                  <span className="font-medium">{ans.content}</span>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Phân tích AI
+              </label>
+              <button
+                type="button"
+                onClick={analyzeWithAi}
+                disabled={isSuggesting}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-100 rounded-lg hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:hover:bg-violet-900/50 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {isSuggesting ? "Đang phân tích..." : "🪄 Phân tích nội dung"}
+              </button>
+            </div>
+
+            {/* AI Suggested Tags */}
+            {aiSuggestions && (
+              <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-violet-700 dark:text-violet-300">
+                  <Sparkles className="w-4 h-4" />
+                  Gợi ý từ AI
+                </div>
+                
+                {aiSuggestions && (
+                  <div className="space-y-2">
+                    {/* Primary suggestion */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-500 w-16">Chính:</span>
+                      <button
+                        type="button"
+                        onClick={() => acceptAiSuggestion(aiSuggestions.primary_suggestion, true)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          acceptedSuggestions.primary
+                            ? "bg-green-100 text-green-700 border border-green-300"
+                            : "bg-white dark:bg-slate-800 border border-violet-300 dark:border-violet-600 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+                        }`}
+                      >
+                        {acceptedSuggestions.primary && <Check className="w-3.5 h-3.5" />}
+                        {aiSuggestions.primary_suggestion.name}
+                        <span className="text-xs opacity-60">
+                          ({(aiSuggestions.primary_suggestion.confidence * 100).toFixed(0)}%)
+                        </span>
+                      </button>
+                    </div>
+                    
+                    {/* Secondary suggestions */}
+                    {aiSuggestions.secondary_suggestions.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs font-medium text-slate-500 w-16 pt-1">Liên quan:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {aiSuggestions.secondary_suggestions.map((node, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => acceptAiSuggestion(node, false)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                acceptedSuggestions.secondary.includes(idx)
+                                  ? "bg-green-100 text-green-700 border border-green-300"
+                                  : "bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                              }`}
+                            >
+                              {acceptedSuggestions.secondary.includes(idx) && <Check className="w-3 h-3" />}
+                              {node.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cognitive level */}
+                    {aiSuggestions.cognitive_level && (
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>Mức nhận thức:</span>
+                        <span className="font-medium text-violet-600 dark:text-violet-400">
+                          {["", "Nhận biết", "Thông hiểu", "Vận dụng", "Vận dụng cao"][aiSuggestions.cognitive_level]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            ))}
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Mức độ
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                  value={level}
+                  onChange={(e) => setLevel(Number(e.target.value))}
+                >
+                  <option value={1}>Nhận biết</option>
+                  <option value={2}>Thông hiểu</option>
+                  <option value={3}>Vận dụng</option>
+                  <option value={4}>Vận dụng cao</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Dạng câu hỏi
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                  value={type}
+                  onChange={(e) => handleTypeChange(e.target.value)}
+                >
+                  <option value="SINGLE_CHOICE">Trắc nghiệm một lựa chọn</option>
+                  <option value="MULTIPLE_CHOICE">Trắc nghiệm nhiều lựa chọn</option>
+                  <option value="TRUE_FALSE">Đúng / Sai</option>
+                  <option value="FILL_IN_BLANK">Điền khuyết</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Gắn Ngữ liệu (Tuỳ chọn)
+              </label>
+              <div className="flex gap-2 relative">
+                {selectedPassageId ? (
+                  <div className="flex-1 flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2">
+                    <span className="text-blue-700 dark:text-blue-300 text-sm font-medium">{selectedPassagePreview}</span>
+                    <button type="button" onClick={() => setSelectedPassageId(null)} className="text-blue-500 hover:text-blue-700 font-bold">X</button>
+                  </div>
+                ) : (
+                  <div className="flex-1 relative">
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <Input 
+                      label=""
+                      placeholder="Tìm ID hoặc mã ngữ liệu..."
+                      className="pl-9"
+                      value={passageSearch}
+                      onChange={e => setPassageSearch(e.target.value)}
+                    />
+                    {passageResults.length > 0 && passageSearch && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-auto left-0">
+                        <ul className="py-1">
+                          {passageResults.map(p => (
+                            <li 
+                              key={p.id} 
+                              className="px-3 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer"
+                              onClick={() => {
+                                setSelectedPassageId(p.id);
+                                setSelectedPassagePreview(p.source_title ? `${p.public_code} - ${p.source_title}` : `${p.public_code}`);
+                                setPassageSearch("");
+                                setPassageResults([]);
+                              }}
+                            >
+                              <div className="font-medium text-slate-900 dark:text-slate-100">{p.public_code} {p.source_title && `- ${p.source_title}`}</div>
+                              <div className="text-xs text-slate-500 truncate">{p.preview}</div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="glass-card space-y-6">
+            <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">2. Nội dung</h2>
+            <div className="space-y-4">
+              <MarkdownEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Nhập nội dung câu hỏi..."
+              />
+              <div className="flex justify-end">
+                 <Button type="button" variant="outline" size="sm" onClick={handleDuplicateCheck} isLoading={isLoading}>
+                    Kiểm tra trùng lặp thủ công
+                 </Button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="glass-card space-y-6">
+            <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">3. Đáp án</h2>
+            
+            {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+              <div className="space-y-4">
+                {answers.map((ans, idx) => (
+                  <div key={idx} className="flex items-start gap-4">
+                    <div className="pt-3 flex flex-col items-center">
+                      <input
+                        type={type === "SINGLE_CHOICE" ? "radio" : "checkbox"}
+                        name="correct_answer"
+                        checked={ans.is_correct}
+                        onChange={() => setCorrectAnswer(idx, type === "MULTIPLE_CHOICE")}
+                        className="w-5 h-5 text-primary-500 focus:ring-primary-500 border-slate-300 cursor-pointer"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 uppercase">Đúng</span>
+                    </div>
+                    <div className="flex-1">
+                      <Input
+                        label=""
+                        placeholder={`Đáp án ${String.fromCharCode(65 + idx)}`}
+                        value={ans.content}
+                        onChange={(e) => updateAnswer(idx, e.target.value)}
+                        required
+                      />
+                    </div>
+                    {answers.length > 2 && (
+                      <div className="pt-2">
+                        <button type="button" onClick={() => removeAnswer(idx)} className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-slate-100 hover:bg-red-50 rounded-lg">
+                           <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                <div className="pt-2">
+                  <Button type="button" variant="outline" size="sm" onClick={addAnswer} className="w-full border-dashed border-2">
+                     <Plus className="w-4 h-4 mr-2" /> Thêm đáp án
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {type === "TRUE_FALSE" && (
+               <div className="space-y-4">
+                 <p className="text-sm text-slate-500 mb-4">Lưu ý: Bạn có thể nhập 4 mệnh đề nhỏ nếu đây là câu Đúng/Sai dạng chùm.</p>
+                 {answers.map((ans, idx) => (
+                  <div key={idx} className="flex items-start gap-4 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex-1">
+                      <Input
+                        label={`Mệnh đề ${String.fromCharCode(65 + idx)}`}
+                        placeholder="Nhập nội dung mệnh đề..."
+                        value={ans.content}
+                        onChange={(e) => updateAnswer(idx, e.target.value)}
+                      />
+                    </div>
+                    <div className="pt-7 flex gap-4">
+                       <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="radio" checked={ans.is_correct} onChange={() => setCorrectAnswer(idx, true)} className="text-green-500" />
+                          <span className="text-sm font-medium text-green-700">Đúng</span>
+                       </label>
+                       <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="radio" checked={!ans.is_correct} onChange={() => {
+                             const newAnswers = [...answers];
+                             newAnswers[idx].is_correct = false;
+                             setAnswers(newAnswers);
+                          }} className="text-red-500" />
+                          <span className="text-sm font-medium text-red-700">Sai</span>
+                       </label>
+                    </div>
+                  </div>
+                ))}
+               </div>
+            )}
 
             {type === "FILL_IN_BLANK" && (
                <Input
-                 label=""
+                 label="Đáp án chính xác"
                  placeholder="Nhập đáp án đúng..."
                  value={fibAnswer}
                  onChange={(e) => setFibAnswer(e.target.value)}
@@ -316,35 +647,34 @@ export default function QuestionFormPage() {
                />
             )}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Nguồn (Tác giả)
-              </label>
-              <Input
-                label=""
-                placeholder="VD: Bộ GD&ĐT"
-                value={sourceAuthor}
-                onChange={(e) => setSourceAuthor(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Nguồn (Đề thi/Tài liệu)
-              </label>
-              <Input
-                label=""
-                placeholder="VD: Đề minh họa ĐGNL 2024"
-                value={sourceTitle}
-                onChange={(e) => setSourceTitle(e.target.value)}
-              />
+          
+          <div className="glass-card space-y-6">
+            <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">4. Nguồn (Tùy chọn)</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">Tác giả</label>
+                <Input
+                  label=""
+                  placeholder="VD: Bộ GD&ĐT"
+                  value={sourceAuthor}
+                  onChange={(e) => setSourceAuthor(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">Đề thi / Tài liệu</label>
+                <Input
+                  label=""
+                  placeholder="VD: Đề minh họa ĐGNL 2024"
+                  value={sourceTitle}
+                  onChange={(e) => setSourceTitle(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-6 border-t border-slate-200 dark:border-white/10">
-            <Button type="submit" isLoading={isLoading} size="lg" className="shadow-lg shadow-primary-500/20">
-              {isEditMode ? "Cập nhật câu hỏi" : "Lưu câu hỏi"}
+          <div className="flex justify-end pt-4 pb-12 sticky bottom-0 z-20">
+            <Button type="submit" isLoading={isLoading} size="lg" className="shadow-lg shadow-primary-500/20 px-12 py-6 text-lg">
+              {isEditMode ? "Lưu thay đổi" : "Hoàn tất tạo câu hỏi"}
             </Button>
           </div>
         </form>
@@ -352,28 +682,37 @@ export default function QuestionFormPage() {
 
       {/* Duplicate Alert Dialog */}
       <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Xác nhận"
+        message={confirmMessage}
+        onConfirm={() => { confirmAction?.(); setConfirmOpen(false); }}
+        onCancel={() => { setConfirmOpen(false); setConfirmAction(null); }}
+        isDestructive
+      />
+
+      <ConfirmDialog
         isOpen={showDuplicateDialog}
-        title="Cảnh báo trùng lặp nội dung!"
+        title="Phát hiện trùng lặp"
         message={
           <div className="space-y-3 text-sm">
-            <p className="flex items-center gap-2 text-amber-600">
-              <AlertCircle className="w-4 h-4" /> Hệ thống phát hiện có các câu hỏi tương tự trong cùng chuyên đề. Bạn có chắc chắn muốn lưu thành câu mới?
+            <p className="flex items-center gap-2 text-amber-600 font-medium">
+              <AlertCircle className="w-5 h-5" /> Có một số câu hỏi tương tự trong hệ thống.
             </p>
             <div className="max-h-48 overflow-y-auto space-y-2 border border-slate-200 p-2 rounded">
               {duplicates.map(d => (
-                <div key={d.question_id} className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-semibold">ID: #{d.question_id}</span>
-                    <span className="text-red-500 font-medium">Giống {(d.similarity_score * 100).toFixed(1)}%</span>
+                <div key={d.question_id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold text-blue-600">ID: #{d.question_id}</span>
+                    <span className="text-red-500 font-bold">Giống {(d.similarity_score * 100).toFixed(1)}%</span>
                   </div>
-                  <p className="text-xs text-slate-600 line-clamp-2">{d.content}</p>
+                  <p className="text-xs text-slate-600 line-clamp-3">{d.content}</p>
                 </div>
               ))}
             </div>
           </div>
         }
-        confirmText="Vẫn lưu (Tạo mới)"
-        cancelText="Hủy bỏ, tôi sẽ sửa lại"
+        confirmText="Tạo mới bỏ qua cảnh báo"
+        cancelText="Đóng"
         onConfirm={() => {
           setShowDuplicateDialog(false);
           submitQuestion();

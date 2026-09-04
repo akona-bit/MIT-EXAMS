@@ -11,12 +11,123 @@ from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User, Role
 from app.core.security import get_password_hash
-from app.models.exam import ExamParticipant, ExamSubmission
+from app.models.exam import Exam, ExamForm, ExamFormQuestion, ExamParticipant, ExamSubmission, ParticipantStatus
 from app.models.grading import ExamResult
 from app.models.audit import AuditAction
 from app.services.audit import log_audit
+from sqlalchemy.orm import selectinload
 
 router = APIRouter()
+
+
+@router.get("/exams/{exam_id}/participants-detail", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def get_exam_participants_detail(
+    exam_id: int,
+    form_code: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Danh sách thí sinh của một kỳ thi, đọc trực tiếp từ DB:
+    ExamParticipant + User + ExamForm (mã đề) + ExamSubmission + ExamResult.
+    Cột điểm theo phần (part 1-4) trả về động theo cấu trúc đề thực tế của kỳ thi.
+    """
+    exam = (await db.execute(select(Exam).where(Exam.id == exam_id))).scalars().first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    forms = (await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))).scalars().all()
+    form_ids = [f.id for f in forms]
+    form_code_by_id = {f.id: f.code for f in forms}
+
+    # Các phần thi thực tế có trong đề của kỳ thi này (động, không hard-code 4 phần)
+    sections: List[int] = []
+    if form_ids:
+        parts_res = await db.execute(
+            select(ExamFormQuestion.part)
+            .where(ExamFormQuestion.exam_form_id.in_(form_ids))
+            .distinct()
+            .order_by(ExamFormQuestion.part)
+        )
+        sections = [p for (p,) in parts_res.all()]
+
+    query = (
+        select(ExamParticipant, User, ExamSubmission)
+        .join(User, User.id == ExamParticipant.user_id)
+        .outerjoin(ExamSubmission, ExamSubmission.exam_participant_id == ExamParticipant.id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+
+    if form_code:
+        target_form_id = next((fid for fid, code in form_code_by_id.items() if code == form_code), None)
+        if target_form_id is None:
+            return {"sections": sections, "total": 0, "items": []}
+        query = query.where(ExamParticipant.exam_form_id == target_form_id)
+
+    if status:
+        try:
+            status_enum = ParticipantStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid status. Valid: NOT_STARTED, IN_PROGRESS, SUBMITTED, SUSPENDED")
+        query = query.where(ExamParticipant.status == status_enum)
+
+    if search:
+        sp = f"%{search}%"
+        query = query.where(
+            (User.full_name.ilike(sp))
+            | (User.email.ilike(sp))
+            | (User.username.ilike(sp))
+            | (User.registration_number.ilike(sp))
+            | (ExamParticipant.sbd.ilike(sp))
+        )
+
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+
+    rows = (await db.execute(query.order_by(ExamParticipant.id))).all()
+
+    # Lấy toàn bộ ExamResult của các submission trong 1 query (tránh N+1)
+    submission_ids = [r.ExamSubmission.id for r in rows if r.ExamSubmission is not None]
+    results_by_submission = {}
+    if submission_ids:
+        res_rows = await db.execute(
+            select(ExamResult).where(ExamResult.exam_submission_id.in_(submission_ids))
+        )
+        for er in res_rows.scalars().all():
+            results_by_submission[er.exam_submission_id] = er
+
+    items = []
+    for r in rows:
+        p, u, sub = r.ExamParticipant, r.User, r.ExamSubmission
+        er = results_by_submission.get(sub.id) if sub is not None else None
+        items.append({
+            "participant_id": p.id,
+            "user_id": u.id,
+            "sbd": p.sbd or u.registration_number,
+            "full_name": u.full_name,
+            "email": u.email,
+            "username": u.username,
+            "form_code": form_code_by_id.get(p.exam_form_id),
+            "status": p.status.value if hasattr(p.status, "value") else p.status,
+            "is_banned": p.is_banned,
+            "start_time": p.start_time,
+            "submit_time": p.submit_time or (sub.submit_time if sub is not None else None),
+            "score_method": er.score_method if er else None,
+            "ctt_scores": {
+                f"part{i}": (getattr(er, f"ctt_score_part{i}", None) if er else None)
+                for i in sections
+            },
+            "irt_scores": {
+                f"part{i}": (getattr(er, f"irt_score_part{i}", None) if er else None)
+                for i in sections
+            },
+            "raw_total": er.raw_total_score if er else None,
+            "total_score": er.total_score if er else None,
+        })
+
+    return {"sections": sections, "total": total, "items": items}
+
 
 @router.post("/exams/{exam_id}/participants/{user_id}/ban", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def ban_participant(exam_id: int, user_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -401,20 +512,26 @@ async def get_audit_logs(
         ]
     }
 
-from app.models.feedback import Feedback
+from app.models.feedback import Feedback, FeedbackCategory, FeedbackStatus
 from app.schemas.feedback import FeedbackStatusUpdate
 
 @router.get("/feedbacks", dependencies=[Depends(RequireRole(["ADMIN"]))])
 async def get_all_feedbacks(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    status: Optional[str] = None,
+    status: Optional[FeedbackStatus] = None,
+    category: Optional[FeedbackCategory] = None,
+    search: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     query = select(Feedback).options(selectinload(Feedback.user)).order_by(Feedback.id.desc())
     
     if status:
         query = query.where(Feedback.status == status)
+    if category:
+        query = query.where(Feedback.category == category)
+    if search:
+        query = query.where(Feedback.content.ilike(f"%{search}%"))
         
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_q)).scalar() or 0
@@ -427,6 +544,36 @@ async def get_all_feedbacks(
         "total": total,
         "items": feedbacks
     }
+
+@router.get("/feedbacks/stats", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_feedback_stats(db: AsyncSession = Depends(get_db)):
+    total = (await db.execute(select(func.count()).select_from(Feedback))).scalar() or 0
+    pending = (await db.execute(select(func.count()).select_from(Feedback).where(Feedback.status == FeedbackStatus.PENDING))).scalar() or 0
+    resolved = (await db.execute(select(func.count()).select_from(Feedback).where(Feedback.status == FeedbackStatus.RESOLVED))).scalar() or 0
+    ignored = (await db.execute(select(func.count()).select_from(Feedback).where(Feedback.status == FeedbackStatus.IGNORED))).scalar() or 0
+    
+    by_category = {}
+    for cat in FeedbackCategory:
+        count = (await db.execute(select(func.count()).select_from(Feedback).where(Feedback.category == cat))).scalar() or 0
+        by_category[cat.value] = count
+    
+    return {
+        "total": total,
+        "by_status": {"PENDING": pending, "RESOLVED": resolved, "IGNORED": ignored},
+        "by_category": by_category
+    }
+
+@router.get("/feedbacks/{feedback_id}", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_feedback_detail(feedback_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Feedback).options(selectinload(Feedback.user)).where(Feedback.id == feedback_id)
+    )
+    feedback = result.scalars().first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    return feedback
 
 @router.put("/feedbacks/{feedback_id}/status", dependencies=[Depends(RequireRole(["ADMIN"]))])
 async def update_feedback_status(
@@ -447,3 +594,22 @@ async def update_feedback_status(
     await log_audit(db, current_user.id, AuditAction.OTHER, "Feedback", feedback.id, f"Updated feedback status to {req.status}")
     
     return {"message": "Feedback status updated", "status": req.status}
+
+@router.delete("/feedbacks/{feedback_id}", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def delete_feedback(
+    feedback_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Feedback).where(Feedback.id == feedback_id))
+    feedback = result.scalars().first()
+    
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    await db.delete(feedback)
+    await db.commit()
+    
+    await log_audit(db, current_user.id, AuditAction.OTHER, "Feedback", feedback_id, "Deleted feedback")
+    
+    return {"message": "Feedback deleted"}

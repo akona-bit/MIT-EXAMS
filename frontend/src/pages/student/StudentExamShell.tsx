@@ -6,9 +6,10 @@ import QuestionRenderer from "../../components/student/QuestionRenderer";
 import QuestionNavStrip from "../../components/student/QuestionNavGrid";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
-import LoadingSpinner from "../../components/ui/LoadingSpinner";
+
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
 import { MessageSquare } from "lucide-react";
+import { toast } from '../../components/ui/Toast';
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -255,7 +256,7 @@ export default function StudentExamShell() {
       await api.post(`/api/v1/exams/${id}/submit`);
       navigate(`/student/exam/${id}/result`);
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi nộp bài");
+      toast.error(err.response?.data?.detail || "Lỗi khi nộp bài");
     }
   };
 

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from app.api.dependencies import RequireRole
 import pandas as pd
 import os
 import json
 import numpy as np
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "data")
 

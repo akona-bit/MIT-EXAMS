@@ -43,10 +43,14 @@ export interface KnowledgeNode {
   id: number;
   name: string;
   description?: string | null;
-  level?: string; // TOPIC | CONCEPT | SKILL | NOTE
+  node_type?: string; // TOPIC | CONCEPT | SKILL | SUB_SKILL
+  subject?: string;
+  short_code?: string;
+  level?: string;
   parent_id: number | null;
   path?: string;
   question_count?: number;
+  is_leaf?: boolean;
   children?: KnowledgeNode[];
 }
 
@@ -104,12 +108,13 @@ export interface Question {
   type: string;
   status: string; // DRAFT | PENDING | APPROVED | REJECTED
   reject_reason?: string | null;
-  knowledge_node_id: number;
+  primary_knowledge_node_id: number;
+  secondary_knowledge_node_ids: number[];
   parent_question_id?: number | null;
   passage_id?: number | null;
   source_author?: string | null;
   source_title?: string | null;
-  knowledge_node?: KnowledgeNode;
+  primary_knowledge_node?: KnowledgeNode;
   passage?: Passage;
   answers: Answer[];
   usage_count?: number;
@@ -128,7 +133,8 @@ export interface QuestionCreate {
   content: string;
   level: number;
   type: string;
-  knowledge_node_id: number;
+  primary_knowledge_node_id: number;
+  secondary_knowledge_node_ids: number[];
   passage_id?: number | null;
   source_author?: string | null;
   source_title?: string | null;

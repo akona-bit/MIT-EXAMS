@@ -92,13 +92,11 @@ export default function StudentExamResultPage() {
 
   if (isLoading) {
     return (
-      <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-        <div className="flex min-h-screen flex-col items-center justify-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            Đang tải kết quả của bạn...
-          </p>
-        </div>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+          Đang tải kết quả của bạn...
+        </p>
       </div>
     );
   }
@@ -152,24 +150,6 @@ function ResultContent({
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-50 glass-header border-b-transparent">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 lg:px-8">
-          <Link
-            to="/student"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-primary-600 dark:text-slate-400 dark:hover:text-primary-400"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Trang chủ
-          </Link>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-indigo-600 text-sm font-bold text-white">
-              M
-            </div>
-            <p className="font-bold tracking-tight">MIT EXAMS</p>
-          </div>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-6 lg:px-8">
         <motion.div variants={containerAnim} initial="hidden" animate="show">
           {/* Tiêu đề + trạng thái */}

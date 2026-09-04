@@ -1,70 +1,39 @@
 services:
-  # 1. API Web Service
+  # 1. FastAPI Web Service
   - type: web
-    name: mit-exams-backend
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
+    name: mit-exams-api
+    env: docker
     dockerContext: ./backend
-    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    plan: free # or starter/standard
     envVars:
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
-        sync: false
-      - key: SECRET_KEY
         sync: false
       - key: SUPABASE_JWT_SECRET
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_KEY
-        sync: false
-      - key: BREVO_API_KEY
-        sync: false
-      - key: BREVO_FROM_EMAIL
-        value: "minhducle629@gmail.com"
-      - key: FRONTEND_URL
-        sync: false
-      - key: POSTHOG_PROJECT_TOKEN
-        sync: false
-      - key: POSTHOG_HOST
-        sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: DEBUG
-        value: "false"
+      - key: SECRET_KEY
+        sync: false
 
   # 2. Celery Worker Service
   - type: worker
-    name: mit-exams-celery-worker
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
+    name: mit-exams-celery
+    env: docker
     dockerContext: ./backend
-    dockerCommand: "celery -A app.worker.celery_app worker --loglevel=info"
+    dockerfilePath: ./backend/Dockerfile
+    dockerCommand: celery -A app.core.celery_app worker --loglevel=info
     plan: free
     envVars:
       - key: DATABASE_URL
-        fromService:
-          type: web
-          name: mit-exams-backend
-          envVarKey: DATABASE_URL
+        sync: false
       - key: REDIS_URL
-        fromService:
-          type: web
-          name: mit-exams-backend
-          envVarKey: REDIS_URL
-      - key: BREVO_API_KEY
-        fromService:
-          type: web
-          name: mit-exams-backend
-          envVarKey: BREVO_API_KEY
-      - key: BREVO_FROM_EMAIL
-        fromService:
-          type: web
-          name: mit-exams-backend
-          envVarKey: BREVO_FROM_EMAIL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
       - key: GEMINI_API_KEY
-        fromService:
-          type: web
-          name: mit-exams-backend
-          envVarKey: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        sync: false

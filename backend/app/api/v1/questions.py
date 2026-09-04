@@ -73,6 +73,57 @@ async def get_questions(
     return {"items": items, "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
 
 
+@router.get("/ai-review-queue")
+async def get_ai_review_queue(
+    review_status: str = "AI_SUGGESTED",
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    List AI analysis cache entries filtered by review_status (default: AI_SUGGESTED).
+    Used by the "Duyệt phân tích AI" admin page to review AI suggestions in bulk.
+    NOTE: must be declared before /{question_id} to avoid path shadowing.
+    """
+    if current_user.role_id not in [1, 2]:  # 1: Admin, 2: Teacher
+        raise HTTPException(status_code=403, detail="Only teachers and admins can view AI review queue")
+
+    try:
+        status_enum = AiReviewStatus(review_status)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid review_status. Valid: AI_SUGGESTED, HUMAN_EDITED, HUMAN_CONFIRMED, HUMAN_REJECTED")
+
+    count_stmt = select(func.count()).select_from(AiAnalysisCache).where(AiAnalysisCache.review_status == status_enum)
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    result = await db.execute(
+        select(AiAnalysisCache)
+        .options(selectinload(AiAnalysisCache.question))
+        .where(AiAnalysisCache.review_status == status_enum)
+        .order_by(AiAnalysisCache.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    caches = result.scalars().all()
+
+    items = []
+    for c in caches:
+        items.append({
+            "id": c.id,
+            "source_question_id": c.source_question_id,
+            "question_content": c.question.content if c.question else None,
+            "analysis_result": c.analysis_result,
+            "confidence": c.confidence,
+            "ai_model_used": c.ai_model_used,
+            "review_status": c.review_status.value if hasattr(c.review_status, "value") else c.review_status,
+            "reviewed_by": c.reviewed_by,
+            "reviewed_at": c.reviewed_at,
+            "created_at": c.created_at,
+        })
+    return {"items": items, "total": total}
+
+
 @router.get("/{question_id}", response_model=QuestionResponse)
 async def get_question(question_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -202,6 +253,10 @@ async def create_question(
         raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào chủ đề kiến thức dạng Kỹ năng (SKILL).")
     if not await KnowledgeService.is_leaf(db, q_in.primary_knowledge_node_id):
         raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
+        
+    for sec_id in q_in.secondary_knowledge_node_ids:
+        if not await KnowledgeService.is_leaf(db, sec_id):
+            raise HTTPException(status_code=400, detail=f"Kỹ năng phụ (ID: {sec_id}) không phải là node lá.")
 
     # Resolve knowledge node path for public_code
     kn_path = await KnowledgeService.calculate_path_code(db, q_in.primary_knowledge_node_id)
@@ -307,6 +362,12 @@ async def update_question(
         if q_in.primary_knowledge_node_id is not None:
             primary_id = q_in.primary_knowledge_node_id
             secondary_ids = q_in.secondary_knowledge_node_ids or []
+            
+            if not await KnowledgeService.is_leaf(db, primary_id):
+                raise HTTPException(status_code=400, detail="Câu hỏi chỉ được gắn vào node lá (node không có con).")
+            for sec_id in secondary_ids:
+                if not await KnowledgeService.is_leaf(db, sec_id):
+                    raise HTTPException(status_code=400, detail=f"Kỹ năng phụ (ID: {sec_id}) không phải là node lá.")
         else:
             primary_tag = next((t for t in existing_q.skill_tags if t.is_primary), None)
             primary_id = primary_tag.knowledge_node_id if primary_tag else None
@@ -388,6 +449,10 @@ async def update_question(
             # Add new tags
             primary_id = q_in.primary_knowledge_node_id
             secondary_ids = q_in.secondary_knowledge_node_ids or []
+            for sec_id in secondary_ids:
+                if not await KnowledgeService.is_leaf(db, sec_id):
+                    raise HTTPException(status_code=400, detail=f"Kỹ năng phụ (ID: {sec_id}) không phải là node lá.")
+                    
             db.add(QuestionSkillTag(question_id=existing_q.id, knowledge_node_id=primary_id, is_primary=True))
             for sec_id in secondary_ids:
                 if sec_id != primary_id:

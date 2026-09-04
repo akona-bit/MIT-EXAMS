@@ -13,7 +13,7 @@ from app.models.grading import ItemAnalysisResult, ExamResult, IrtTask
 from app.models.exam import ExamParticipant, ExamSubmission, ExamFormQuestion, ExamForm
 from app.api.dependencies import RequireRole
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 
 @router.get("/status")
 async def get_analysis_status(exam_id: int, db: AsyncSession = Depends(get_db)):

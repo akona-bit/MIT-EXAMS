@@ -10,6 +10,8 @@ class KnowledgeNodeBase(BaseModel):
     note: Optional[str] = None
     parent_id: Optional[int] = None
     node_type: Optional[KnowledgeNodeType] = None
+    subject: Optional[str] = None
+    short_code: Optional[str] = None
 
 class KnowledgeNodeCreate(KnowledgeNodeBase):
     pass
@@ -20,6 +22,8 @@ class KnowledgeNodeUpdate(BaseModel):
     note: Optional[str] = None
     parent_id: Optional[int] = None
     node_type: Optional[KnowledgeNodeType] = None
+    subject: Optional[str] = None
+    short_code: Optional[str] = None
 
 class KnowledgeNodeResponse(KnowledgeNodeBase):
     id: int
@@ -51,12 +55,12 @@ class ResourceCreate(ResourceBase):
     pass
 
 class ResourceResponse(ResourceBase):
-    id: int
-    uploader_id: int
+    id: str
     original_name: str
     mime_type: Optional[str] = None
     size_bytes: int
     created_at: datetime
+    bucket: Optional[str] = None  # Supabase bucket name
     model_config = ConfigDict(from_attributes=True)
 
 # --- Answer Schemas ---
@@ -146,3 +150,24 @@ class QuestionSimilarityResponse(BaseModel):
     similarity_score: float
     content: str
     status: str
+
+
+# --- AI Suggest Tags Schemas ---
+class AiSuggestTagsRequest(BaseModel):
+    content: str
+    answers: Optional[List[str]] = None  # ["A. Nội dung đáp án A", ...]
+    sub_items: Optional[List[str]] = None  # ["a. Nội dung ý con", ...]
+
+class AiSuggestedNode(BaseModel):
+    name: str
+    node_id: Optional[int] = None
+    node_type: str  # "TOPIC", "CONCEPT", "SKILL"
+    confidence: float  # 0.0 - 1.0
+    reasoning: Optional[str] = None
+
+class AiSuggestTagsResponse(BaseModel):
+    primary_suggestion: AiSuggestedNode
+    secondary_suggestions: List[AiSuggestedNode] = []
+    cognitive_level: Optional[int] = None  # 1-4
+    tags: List[str] = []
+    ai_model: str = "gemini-1.5-flash"

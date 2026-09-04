@@ -84,25 +84,27 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 - Rate limiting theo IP + theo user tại các endpoint nộp bài (dùng `slowapi` hoặc middleware tương tự).
 - Tất cả traffic qua HTTPS; cookie httpOnly cho refresh token.
 
-## Phụ lục — Đối chiếu tên bảng ERD gốc (tiếng Việt) ↔ tên bảng thật (tiếng Anh)
+## 8. Phụ lục — Đối chiếu tên bảng ERD gốc (tiếng Việt) ↔ tên bảng thật (tiếng Anh - Officially Confirmed)
 
-> Agent cập nhật bảng này khi đặt tên chính thức cho model SQLAlchemy — tránh mỗi người dùng một tên khác nhau cho cùng 1 khái niệm.
+> Agent cập nhật bảng này khi đặt tên chính thức cho model SQLAlchemy — tránh mỗi người dùng một tên khác nhau cho cùng 1 khái niệm. Đã chốt dùng tiếng Anh 100% trong code.
 
-| Tên ERD gốc | Tên bảng thật (đề xuất) | Ghi chú |
+| Tên ERD gốc | Tên bảng thật (đã chốt) | Ghi chú |
 |---|---|---|
 | PhanThi | `Section` | Tiếng Việt/Tiếng Anh/Toán/TDKH |
 | KienThuc | `KnowledgeNode` | Cây phân cấp qua `parent_id` |
-| NguLieu | `Resource` | Ảnh/PDF/link |
+| NguLieu | `Passage` / `Resource` | Ảnh/PDF/đoạn văn |
 | CauHoi | `Question` | |
 | DapAn | `Answer` | |
 | User | `User` | |
 | VaiTro | `Role` | Mới thêm theo yêu cầu phân quyền |
 | KyThi | `Exam` | |
-| MaTran | `Matrix` | |
-| DeThi | `ExamForm` | 1 đề gốc, chưa xáo |
+| MaTran | `Matrix`, `MatrixRule`, `MatrixRuleGroup` | |
+| DeThi | `ExamForm` | 1 đề mã hoá |
 | CauHoiDeThi | `ExamFormQuestion` | Mapping vị trí→câu gốc theo mã đề |
 | DapAnDeThi | `ExamFormAnswer` | Mapping vị trí đáp án theo mã đề |
-| ThiSinh | `Candidate` | |
-| BaiLam | `Submission` | |
-| DuLieuBaiLam | `SubmissionData` | |
-| ItemAnalysis | `ItemAnalysis` | Giữ nguyên |
+| ThiSinh | `ExamParticipant` | |
+| BaiLam | `ExamSubmission` | |
+| DuLieuBaiLam | `ExamSubmissionAnswer` | |
+| ItemAnalysis | `ItemAnalysisResult` | Giữ nguyên |
+| ChamDiem | `ExamResult` | Điểm bài thi (CTT/IRT) |
+| OMR | `OmrSession`, `OmrRecord` | Chấm thi OMR |

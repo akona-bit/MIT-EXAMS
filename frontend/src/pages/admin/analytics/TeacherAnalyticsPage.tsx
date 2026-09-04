@@ -5,6 +5,7 @@ import { Badge } from "../../../components/ui/Badge";
 import { Skeleton } from "../../../components/ui/Skeleton";
 import DataTable from "../../../components/ui/DataTable";
 import { motion } from "framer-motion";
+import client from "../../../api/client";
 
 export default function TeacherAnalyticsPage() {
   const [classSummary, setClassSummary] = useState<any>(null);
@@ -19,11 +20,11 @@ export default function TeacherAnalyticsPage() {
     setIsLoading(true);
     try {
       const [resSummary, resItems] = await Promise.all([
-        fetch("http://localhost:8000/api/v1/analytics/class-summary"),
-        fetch("http://localhost:8000/api/v1/analytics/item-analysis"),
+        client.get("/api/v1/analytics/class-summary"),
+        client.get("/api/v1/analytics/item-analysis"),
       ]);
-      const summary = await resSummary.json();
-      const items = await resItems.json();
+      const summary = resSummary.data;
+      const items = resItems.data;
       setClassSummary(summary);
       setItemAnalysis(items.items || []);
     } catch (e) {

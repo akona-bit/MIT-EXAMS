@@ -86,3 +86,57 @@ export async function reviewAiAnalysis(id: number, payload: import('../types').A
   const response = await client.post<import('../types').AiAnalysisResponse>(`/api/v1/questions/${id}/ai-analysis/review`, payload);
   return response.data;
 }
+
+export interface AiReviewQueueItem {
+  id: number;
+  source_question_id: number | null;
+  question_content: string | null;
+  analysis_result: import('../types').AiAnalysisResult | null;
+  confidence: number | null;
+  ai_model_used: string | null;
+  review_status: string;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export async function getAiReviewQueue(
+  reviewStatus: string = 'AI_SUGGESTED',
+  skip: number = 0,
+  limit: number = 50
+): Promise<{ items: AiReviewQueueItem[]; total: number }> {
+  const response = await client.get<{ items: AiReviewQueueItem[]; total: number }>(
+    '/api/v1/questions/ai-review-queue',
+    { params: { review_status: reviewStatus, skip, limit } }
+  );
+  return response.data;
+}
+
+// --- AI Suggest Tags ---
+export interface AiSuggestedNode {
+  name: string;
+  node_id?: number;
+  node_type: string;
+  confidence: number;
+  reasoning?: string;
+}
+
+export interface AiSuggestTagsResponse {
+  primary_suggestion: AiSuggestedNode;
+  secondary_suggestions: AiSuggestedNode[];
+  cognitive_level?: number;
+  tags: string[];
+  ai_model: string;
+}
+
+export async function suggestQuestionTags(payload: {
+  content: string;
+  answers?: string[];
+  sub_items?: string[];
+}): Promise<AiSuggestTagsResponse> {
+  const response = await client.post<AiSuggestTagsResponse>(
+    '/api/v1/questions/ai-suggest-tags',
+    payload
+  );
+  return response.data;
+}

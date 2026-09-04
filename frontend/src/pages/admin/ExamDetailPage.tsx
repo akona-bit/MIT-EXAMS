@@ -6,6 +6,7 @@ import { getExamOverview, getExamItemsAnalysis, type ExamOverview, type ExamItem
 import type { Exam } from '../../types';
 import Button from '../../components/ui/Button';
 import GenerateExamModal from '../../components/admin/GenerateExamModal';
+import { toast } from '../../components/ui/Toast';
 
 export default function ExamDetailPage() {
   const { id } = useParams();
@@ -66,10 +67,10 @@ export default function ExamDetailPage() {
         if (res.status === 'SUCCESS' || res.status === 'FAILED') {
           clearInterval(interval);
           if (res.status === 'SUCCESS') {
-            alert('Chấm điểm IRT hoàn tất!');
+            toast.success('Chấm điểm IRT hoàn tất!');
             fetchExamData();
           } else {
-            alert('Chấm điểm IRT thất bại!');
+            toast.error('Chấm điểm IRT thất bại!');
           }
         }
       } catch (error) {
@@ -82,7 +83,7 @@ export default function ExamDetailPage() {
 
   const handleGenerate = () => {
     if (!exam?.matrix_id) {
-      alert("Kỳ thi này chưa được gắn ma trận đặc tả. Hãy chọn ma trận trước khi sinh đề.");
+      toast.warning("Kỳ thi này chưa được gắn ma trận đặc tả. Hãy chọn ma trận trước khi sinh đề.");
       return;
     }
     setIsGenerateModalOpen(true);
@@ -93,10 +94,10 @@ export default function ExamDetailPage() {
     if (confirm('Xuất bản kỳ thi? Học sinh sẽ có thể tham gia thi.')) {
       try {
         await publishExam(parseInt(id));
-        alert('Đã xuất bản!');
+        toast.success('Đã xuất bản!');
         fetchExamData();
       } catch (error) {
-        alert('Lỗi xuất bản');
+        toast.error('Lỗi xuất bản');
       }
     }
   };
@@ -109,7 +110,7 @@ export default function ExamDetailPage() {
         setIrtTaskId(res.task_id);
         setIrtStatus('PENDING');
       } catch (error) {
-        alert('Lỗi chạy IRT');
+        toast.error('Lỗi chạy IRT');
       }
     }
   };

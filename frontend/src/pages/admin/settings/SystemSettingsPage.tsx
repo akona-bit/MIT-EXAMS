@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getSystemSettings, updateSystemSetting, type SystemSetting } from "../../../api/admin";
+import { Settings } from "lucide-react";
 
 export default function SystemSettingsPage() {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
@@ -55,9 +56,10 @@ export default function SystemSettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient pb-1">
+          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+            <Settings className="w-8 h-8 text-primary-500" />
             Cài đặt hệ thống
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">

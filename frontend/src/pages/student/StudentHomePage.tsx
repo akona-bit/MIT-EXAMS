@@ -4,11 +4,12 @@ import { getExams } from "../../api/exams";
 import client from "../../api/client";
 import type { Exam } from "../../types";
 import { motion } from "framer-motion";
-import { Clock, CheckCircle2, AlertCircle, MessageSquare } from "lucide-react";
+import { Clock, CheckCircle2, AlertCircle, MessageSquare, FileText } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
+import { PageTransition } from "../../components/ui/PageTransition";
 
 function formatExamWindow(startTime: string | null, endTime: string | null) {
   if (!startTime && !endTime) return "Thời gian linh hoạt";
@@ -28,7 +29,7 @@ function formatExamWindow(startTime: string | null, endTime: string | null) {
 }
 
 export default function StudentHomePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -110,46 +111,18 @@ export default function StudentHomePage() {
   }
 
   return (
-    <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="sticky top-0 z-50 glass-header border-b-transparent">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 text-lg font-bold text-white shadow-lg shadow-primary-500/25">
-              M
-            </div>
-            <div>
-              <p className="font-extrabold tracking-tight">MIT EXAMS</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Khu vực thí sinh</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsFeedbackOpen(true)}
-              className="hidden sm:flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
-            >
-              <MessageSquare className="w-4 h-4" />
-              Góp ý
-            </button>
-            <div className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200/60 bg-white/60 dark:bg-slate-900/60 dark:border-slate-800/60 px-4 py-1.5 shadow-sm backdrop-blur-md">
-              <div className="h-6 w-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xs font-bold text-primary-600 dark:text-primary-400">
-                {user?.username?.[0]?.toUpperCase() || "S"}
-              </div>
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                {user?.username || user?.email}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              Đăng xuất
-            </button>
-          </div>
-        </div>
-      </header>
+    <>
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => setIsFeedbackOpen(true)}
+          className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-primary-600 to-indigo-600 shadow-lg shadow-primary-500/30 hover:shadow-primary-500/50 hover:-translate-y-0.5 transition-all"
+        >
+          <MessageSquare className="w-4 h-4" />
+          Góp ý
+        </button>
+      </div>
 
-      <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 lg:px-8 lg:py-10">
+      <PageTransition className="mx-auto max-w-6xl space-y-8 px-4 py-8 lg:px-8 lg:py-10">
         <section className="mb-8 border-b border-slate-200 dark:border-slate-800 pb-8">
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">
             Bảng điều khiển thí sinh
@@ -193,15 +166,42 @@ export default function StudentHomePage() {
           </div>
 
           {isLoading && (
-            <div className="rounded-3xl border border-slate-200/60 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 p-12 text-center backdrop-blur-xl">
-              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-              <p className="mt-4 text-sm font-medium text-slate-500">Đang tải kỳ thi...</p>
+            <div className="grid gap-6 md:grid-cols-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-3xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-6 backdrop-blur-xl"
+                >
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="space-y-3 flex-1">
+                      <div className="h-5 w-20 rounded-full bg-slate-200 dark:bg-slate-700" />
+                      <div className="h-6 w-3/4 rounded-lg bg-slate-200 dark:bg-slate-700" />
+                    </div>
+                    <div className="space-y-2 items-end flex flex-col">
+                      <div className="h-8 w-10 rounded-lg bg-slate-200 dark:bg-slate-700" />
+                      <div className="h-3 w-8 rounded bg-slate-200 dark:bg-slate-700" />
+                    </div>
+                  </div>
+                  <div className="space-y-2 mb-6">
+                    <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                  <div className="h-10 w-full rounded-xl bg-slate-200 dark:bg-slate-700 mb-6" />
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-5">
+                    <div className="h-3 w-12 rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="h-10 w-28 rounded-xl bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
           
           {error && (
             <div className="flex flex-col items-center gap-4 rounded-3xl border border-danger-500/20 bg-danger-500/10 p-12 text-center backdrop-blur-xl">
               <AlertCircle className="h-10 w-10 text-danger-500" />
+              <p className="text-lg font-bold text-slate-900 dark:text-white">
+                Không thể tải kỳ thi
+              </p>
               <p className="text-sm font-medium text-danger-600 dark:text-danger-400">{error}</p>
               <Button onClick={() => setRetryKey((key) => key + 1)} variant="destructive">
                 Thử lại
@@ -212,13 +212,13 @@ export default function StudentHomePage() {
           {!isLoading && !error && exams.length === 0 && (
             <div className="rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 p-16 text-center backdrop-blur-xl">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                <CheckCircle2 className="h-8 w-8 text-slate-400" />
+                <FileText className="h-8 w-8 text-slate-400" />
               </div>
               <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                Chưa có kỳ thi đang mở
+                Chưa có kỳ thi nào
               </p>
               <p className="text-sm text-slate-500">
-                Kỳ thi được phân công sẽ hiển thị ở đây.
+                Các kỳ thi được mở cho bạn sẽ xuất hiện tại đây.
               </p>
             </div>
           )}
@@ -288,12 +288,12 @@ export default function StudentHomePage() {
             ))}
           </motion.div>
         </section>
-      </main>
+      </PageTransition>
 
       <StudentFeedbackModal
         isOpen={isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}
       />
-    </div>
+    </>
   );
 }

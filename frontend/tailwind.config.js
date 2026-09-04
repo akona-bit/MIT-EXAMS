@@ -60,8 +60,16 @@ export default {
         info: { 500: '#2D9BFF' },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        serif: ['Times New Roman', 'Noto Serif', 'serif'],
+        sans: ['"Inter"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        serif: ['"Times New Roman"', 'Noto Serif', 'serif'],
+      },
+      zIndex: {
+        'sidebar': '40',
+        'header': '30',
+        'dropdown': '50',
+        'modal': '60',
+        'command': '70',
+        'toast': '80',
       },
     },
   },

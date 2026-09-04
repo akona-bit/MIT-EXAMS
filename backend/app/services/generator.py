@@ -78,10 +78,13 @@ async def generate_shuffled_forms(db: AsyncSession, original_form: ExamForm, num
     result = await db.execute(stmt)
     orig_questions = result.scalars().all()
     
-    # Group by part
-    parts = {1: [], 2: [], 3: [], 4: []}
+    # Group by part (dynamic, not hardcoded)
+    from collections import defaultdict
+    parts: dict[int, list] = defaultdict(list)
     for oq in orig_questions:
         parts[oq.part].append(oq)
+    
+    sorted_parts = sorted(parts.keys())
         
     for i in range(number_of_forms):
         new_code = str(101 + i)
@@ -93,13 +96,13 @@ async def generate_shuffled_forms(db: AsyncSession, original_form: ExamForm, num
         db.add(new_form)
         await db.flush()
         
-        for part_num in [1, 2, 3, 4]:
+        current_pos = 1
+        for part_num in sorted_parts:
             part_questions = list(parts[part_num])
             random.shuffle(part_questions)
             
-            start_pos = (part_num - 1) * 30 + 1
             for j, oq in enumerate(part_questions):
-                new_pos = start_pos + j
+                new_pos = current_pos + j
                 
                 new_form_q = ExamFormQuestion(
                     exam_form_id=new_form.id,
@@ -120,5 +123,6 @@ async def generate_shuffled_forms(db: AsyncSession, original_form: ExamForm, num
                         new_position=k + 1
                     )
                     db.add(new_form_a)
+            current_pos += len(part_questions)
                     
     await db.commit()

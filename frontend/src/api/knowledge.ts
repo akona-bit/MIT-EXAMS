@@ -42,6 +42,8 @@ export async function createKnowledgeNode(data: {
   description?: string;
   parent_id?: number;
   node_type?: string;
+  subject?: string;
+  short_code?: string;
 }): Promise<KnowledgeNode> {
   const response = await client.post<KnowledgeNode>("/api/v1/knowledge/", data);
   return response.data;
@@ -55,6 +57,8 @@ export async function updateKnowledgeNode(
     note?: string | null;
     parent_id?: number | null;
     node_type?: string;
+    subject?: string;
+    short_code?: string;
   }
 ): Promise<KnowledgeNode> {
   const response = await client.patch<KnowledgeNode>(`/api/v1/knowledge/${id}`, data);

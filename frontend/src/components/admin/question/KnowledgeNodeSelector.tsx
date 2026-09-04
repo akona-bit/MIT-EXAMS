@@ -1,157 +1,178 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getKnowledgeTree, getKnowledgeNodeContext } from '../../../api/knowledge';
 import type { KnowledgeNode } from '../../../types';
-import { ChevronRight, Info, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Info, AlertTriangle, Plus, X, Search } from 'lucide-react';
 import { Badge } from '../../ui/Badge';
 
 interface KnowledgeNodeSelectorProps {
-  value: string;
-  onChange: (nodeId: string) => void;
+  primaryValue: number | null;
+  onPrimaryChange: (nodeId: number | null) => void;
+  secondaryValues: number[];
+  onSecondaryChange: (nodeIds: number[]) => void;
   subject?: string;
   error?: string;
 }
 
-export default function KnowledgeNodeSelector({ value, onChange, subject, error }: KnowledgeNodeSelectorProps) {
-  const [tree, setTree] = useState<KnowledgeNode[]>([]);
+// Helper to flatten the tree
+function flattenTree(nodes: any[], result: any[] = []) {
+  for (const node of nodes) {
+    result.push({ ...node });
+    if (node.children && node.children.length > 0) {
+      flattenTree(node.children, result);
+    }
+  }
+  return result;
+}
+
+export default function KnowledgeNodeSelector({ 
+  primaryValue, 
+  onPrimaryChange, 
+  secondaryValues, 
+  onSecondaryChange, 
+  subject, 
+  error 
+}: KnowledgeNodeSelectorProps) {
+  const [tree, setTree] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Selections at each level
-  const [selectedTopic, setSelectedTopic] = useState<number | null>(null);
-  const [selectedConcept, setSelectedConcept] = useState<number | null>(null);
-  const [selectedSkill, setSelectedSkill] = useState<number | null>(null);
-  
-  // Context for the selected skill
+  // Context for the selected primary skill
   const [contextData, setContextData] = useState<any>(null);
   const [loadingContext, setLoadingContext] = useState(false);
 
+  // Search state for primary
+  const [primarySearch, setPrimarySearch] = useState('');
+  const [isPrimaryDropdownOpen, setIsPrimaryDropdownOpen] = useState(false);
+  const primaryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Search state for secondary
+  const [addingSecondary, setAddingSecondary] = useState(false);
+  const [secondarySearch, setSecondarySearch] = useState('');
+  const secondaryDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    setLoading(true);
     getKnowledgeTree(subject).then(data => {
       setTree(data);
       setLoading(false);
-      
-      // Auto-restore selections if value is present
-      if (value) {
-        const valId = parseInt(value, 10);
-        setSelectedSkill(valId);
-        
-        // Find path
-        for (const topic of data) {
-          if (topic.children) {
-            for (const concept of topic.children) {
-              if (concept.children) {
-                for (const skill of concept.children) {
-                  if (skill.id === valId) {
-                    setSelectedTopic(topic.id);
-                    setSelectedConcept(concept.id);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
     }).catch(err => {
       console.error(err);
       setLoading(false);
     });
-  }, [subject, value]);
+  }, [subject]);
 
   useEffect(() => {
-    if (selectedSkill) {
+    if (primaryValue) {
       setLoadingContext(true);
-      getKnowledgeNodeContext(selectedSkill).then(data => {
+      getKnowledgeNodeContext(primaryValue).then(data => {
         setContextData(data);
         setLoadingContext(false);
       }).catch(() => setLoadingContext(false));
-      onChange(selectedSkill.toString());
     } else {
       setContextData(null);
     }
-  }, [selectedSkill]);
+  }, [primaryValue]);
 
-  const topics = tree;
-  const concepts = topics.find(t => t.id === selectedTopic)?.children || [];
-  const skills = concepts.find(c => c.id === selectedConcept)?.children || [];
+  // Click outside to close dropdowns
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (primaryDropdownRef.current && !primaryDropdownRef.current.contains(event.target as Node)) {
+        setIsPrimaryDropdownOpen(false);
+      }
+      if (secondaryDropdownRef.current && !secondaryDropdownRef.current.contains(event.target as Node)) {
+        setAddingSecondary(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const allNodes = useMemo(() => flattenTree(tree), [tree]);
+  const leafNodes = useMemo(() => allNodes.filter(n => n.is_leaf === true), [allNodes]);
+  
+  const selectedPrimaryNode = allNodes.find(n => n.id === primaryValue);
+  
+  const filteredPrimaryNodes = useMemo(() => {
+    if (!primarySearch.trim()) return leafNodes.slice(0, 50); // limit initial render
+    const lower = primarySearch.toLowerCase();
+    return leafNodes.filter(n => (n.path || '').toLowerCase().includes(lower) || n.name.toLowerCase().includes(lower)).slice(0, 50);
+  }, [leafNodes, primarySearch]);
+
+  const filteredSecondaryNodes = useMemo(() => {
+    const lower = secondarySearch.toLowerCase();
+    // Exclude primary and already selected secondary
+    const availableLeaves = leafNodes.filter(n => n.id !== primaryValue && !secondaryValues.includes(n.id));
+    if (!secondarySearch.trim()) return availableLeaves.slice(0, 50);
+    return availableLeaves.filter(n => (n.path || '').toLowerCase().includes(lower) || n.name.toLowerCase().includes(lower)).slice(0, 50);
+  }, [leafNodes, secondarySearch, primaryValue, secondaryValues]);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Level 1: Topic */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Chủ đề (Topic)
-          </label>
-          <select
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-            value={selectedTopic || ""}
+      {/* Primary Skill Selection */}
+      <div className="relative" ref={primaryDropdownRef}>
+        <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
+          Kỹ năng (Skill) chính <span className="text-red-500">*</span>
+        </label>
+        
+        <div 
+          className={`w-full rounded-xl border flex items-center bg-white px-3 py-2 cursor-text ${
+            error ? 'border-red-500' : 'border-slate-300 dark:border-slate-600 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500'
+          } dark:bg-slate-800`}
+          onClick={() => setIsPrimaryDropdownOpen(true)}
+        >
+          <Search className="w-4 h-4 text-slate-400 mr-2" />
+          <input
+            type="text"
+            className="flex-1 bg-transparent border-none focus:outline-none text-sm dark:text-white"
+            placeholder={selectedPrimaryNode ? selectedPrimaryNode.path || selectedPrimaryNode.name : "-- Tìm kiếm và chọn kỹ năng chính --"}
+            value={primarySearch}
             onChange={(e) => {
-              const id = e.target.value ? parseInt(e.target.value, 10) : null;
-              setSelectedTopic(id);
-              setSelectedConcept(null);
-              setSelectedSkill(null);
-              onChange("");
+              setPrimarySearch(e.target.value);
+              setIsPrimaryDropdownOpen(true);
             }}
             disabled={loading}
-          >
-            <option value="">-- Chọn Chủ đề --</option>
-            {topics.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+          />
+          {selectedPrimaryNode && (
+            <button 
+              type="button"
+              className="ml-2 text-slate-400 hover:text-slate-600"
+              onClick={(e) => { e.stopPropagation(); onPrimaryChange(null); setPrimarySearch(''); }}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-
-        {/* Level 2: Concept */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Khái niệm (Concept)
-          </label>
-          <select
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white disabled:opacity-50"
-            value={selectedConcept || ""}
-            onChange={(e) => {
-              const id = e.target.value ? parseInt(e.target.value, 10) : null;
-              setSelectedConcept(id);
-              setSelectedSkill(null);
-              onChange("");
-            }}
-            disabled={!selectedTopic || concepts.length === 0}
-          >
-            <option value="">-- Chọn Khái niệm --</option>
-            {concepts.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Level 3: Skill */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Kỹ năng (Skill) <span className="text-red-500">*</span>
-          </label>
-          <select
-            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white dark:bg-slate-800 dark:text-white disabled:opacity-50 ${
-              error ? 'border-red-500' : 'border-slate-300 dark:border-slate-600 focus:border-primary-500'
-            }`}
-            value={selectedSkill || ""}
-            onChange={(e) => {
-              const id = e.target.value ? parseInt(e.target.value, 10) : null;
-              setSelectedSkill(id);
-            }}
-            disabled={!selectedConcept || skills.length === 0}
-          >
-            <option value="">-- Chọn Kỹ năng --</option>
-            {skills.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-        </div>
+        {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        
+        {/* Dropdown */}
+        {isPrimaryDropdownOpen && (
+          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-auto">
+            {filteredPrimaryNodes.length === 0 ? (
+              <div className="p-3 text-sm text-slate-500 text-center">Không tìm thấy kỹ năng phù hợp</div>
+            ) : (
+              <ul className="py-1">
+                {filteredPrimaryNodes.map(node => (
+                  <li 
+                    key={node.id} 
+                    className="px-3 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer"
+                    onClick={() => {
+                      onPrimaryChange(node.id);
+                      setPrimarySearch('');
+                      setIsPrimaryDropdownOpen(false);
+                    }}
+                  >
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{node.name}</div>
+                    <div className="text-xs text-slate-500">{node.path}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Context Panel */}
-      {selectedSkill && (
-        <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-4 dark:border-primary-900/30 dark:bg-primary-900/10">
+      {/* Context Panel for Primary Skill */}
+      {primaryValue && (
+        <div className="rounded-xl border border-primary-200 bg-primary-50/50 p-4 dark:border-primary-900/30 dark:bg-primary-900/10">
           {loadingContext ? (
             <div className="text-sm text-slate-500">Đang tải ngữ cảnh...</div>
           ) : contextData ? (
@@ -190,27 +211,90 @@ export default function KnowledgeNodeSelector({ value, onChange, subject, error 
                   )}
                 </div>
               </div>
-
-              {/* Siblings */}
-              {contextData.siblings && contextData.siblings.length > 0 && (
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-medium text-slate-500 mb-2 uppercase">Các kỹ năng cùng nhóm:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {contextData.siblings.map((sib: any) => (
-                      <div key={sib.id} className="text-xs px-2 py-1 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                        <span className="truncate max-w-[150px]" title={sib.name}>{sib.name}</span>
-                        <span className="text-slate-400">({sib.question_count})</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="text-sm text-red-500">Không thể tải ngữ cảnh node</div>
           )}
         </div>
       )}
+
+      {/* Secondary Skills */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Kỹ năng phụ (tuỳ chọn)
+        </label>
+        
+        <div className="flex flex-wrap gap-2">
+          {secondaryValues.map(secId => {
+            const secNode = allNodes.find(n => n.id === secId);
+            return (
+              <div key={secId} className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 text-sm px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600">
+                <span className="text-slate-800 dark:text-slate-200" title={secNode?.path}>{secNode?.name || `ID: ${secId}`}</span>
+                <button 
+                  type="button" 
+                  onClick={() => onSecondaryChange(secondaryValues.filter(id => id !== secId))}
+                  className="text-slate-400 hover:text-red-500 ml-1"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
+          
+          <div className="relative" ref={secondaryDropdownRef}>
+            {!addingSecondary ? (
+              <button
+                type="button"
+                onClick={() => setAddingSecondary(true)}
+                className="flex items-center gap-1 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm text-primary-600 dark:text-primary-400 border border-dashed border-primary-300 dark:border-primary-700 px-3 py-1.5 rounded-full transition-colors"
+                disabled={!primaryValue}
+                title={!primaryValue ? "Vui lòng chọn kỹ năng chính trước" : ""}
+              >
+                <Plus className="w-4 h-4" /> Thêm kỹ năng liên quan
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="relative w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    autoFocus
+                    className="w-full text-sm rounded-full border border-primary-500 bg-white dark:bg-slate-800 pl-9 pr-3 py-1.5 focus:outline-none"
+                    placeholder="Tìm kỹ năng phụ..."
+                    value={secondarySearch}
+                    onChange={(e) => setSecondarySearch(e.target.value)}
+                  />
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-auto left-0">
+                    {filteredSecondaryNodes.length === 0 ? (
+                      <div className="p-3 text-sm text-slate-500 text-center">Không tìm thấy</div>
+                    ) : (
+                      <ul className="py-1">
+                        {filteredSecondaryNodes.map(node => (
+                          <li 
+                            key={node.id} 
+                            className="px-3 py-2 text-sm hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer"
+                            onClick={() => {
+                              onSecondaryChange([...secondaryValues, node.id]);
+                              setSecondarySearch('');
+                              setAddingSecondary(false);
+                            }}
+                          >
+                            <div className="font-medium text-slate-900 dark:text-slate-100">{node.name}</div>
+                            <div className="text-xs text-slate-500 truncate">{node.path}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setAddingSecondary(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

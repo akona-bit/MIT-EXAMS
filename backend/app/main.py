@@ -156,6 +156,7 @@ from app.api.v1 import passages
 from app.api.v1 import vector
 from app.api.v1 import system
 from app.api.v1 import feedbacks
+from app.api.v1 import notifications
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -197,6 +198,7 @@ app.include_router(advanced_analytics.router, prefix="/api/v1/advanced-analytics
 app.include_router(vector.router, prefix="/api/v1/vector", tags=["Vector / Semantic Search"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 app.include_router(feedbacks.router, prefix="/api/v1/feedbacks", tags=["Feedbacks"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)

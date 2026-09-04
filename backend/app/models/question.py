@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Enum, Float, JSON, text
+from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Enum, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -7,6 +7,14 @@ from typing import List, Optional
 
 from .base import Base
 from .user import User
+
+class Resource(Base):
+    """Stub model for Supabase Storage metadata. Files are in Supabase Storage, not in this table."""
+    __tablename__ = "resource"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 class QuestionType(str, enum.Enum):
     SINGLE_CHOICE = "SINGLE_CHOICE"
@@ -22,9 +30,11 @@ class QuestionStatus(str, enum.Enum):
     REJECTED = "REJECTED"
 
 class ResourceType(str, enum.Enum):
-    IMAGE = "IMAGE"
-    PDF = "PDF"
-    TEXT = "TEXT"
+    TEXT = "TEXT"           # bucket: van-ban
+    IMAGE = "IMAGE"        # bucket: hinh-anh
+    PDF = "PDF"            # bucket: pdf
+    HANDWRITING = "HANDWRITING"  # bucket: viet-tay
+    CHART = "CHART"        # bucket: bang-bieu
 
 class KnowledgeNodeType(str, enum.Enum):
     TOPIC = "TOPIC"
@@ -48,7 +58,8 @@ class KnowledgeNode(Base):
     questions: Mapped[List["Question"]] = relationship(
         "Question",
         secondary="question_skill_tag",
-        back_populates="knowledge_nodes"
+        back_populates="knowledge_nodes",
+        overlaps="skill_tags"
     )
 
 class KnowledgeNodeParent(Base):
@@ -69,8 +80,8 @@ class QuestionSkillTag(Base):
     knowledge_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    question: Mapped["Question"] = relationship("Question", back_populates="skill_tags")
-    knowledge_node: Mapped["KnowledgeNode"] = relationship("KnowledgeNode")
+    question: Mapped["Question"] = relationship("Question", back_populates="skill_tags", overlaps="questions")
+    knowledge_node: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", overlaps="questions")
 
 class KnowledgeNodeLink(Base):
     """Manual link between two knowledge nodes (non-hierarchical)"""
@@ -97,15 +108,6 @@ class QuestionEmbedding(Base):
 
     question: Mapped["Question"] = relationship("Question", foreign_keys=[question_id])
 
-class Resource(Base):
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    type: Mapped[ResourceType] = mapped_column(Enum(ResourceType))
-    content_url: Mapped[str] = mapped_column(String(500))
-    uploader_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
-    original_name: Mapped[str] = mapped_column(String(255), default="resource")
-    mime_type: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
-    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 class Question(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -143,12 +145,14 @@ class Question(Base):
         "KnowledgeNode",
         secondary="question_skill_tag",
         back_populates="questions",
-        viewonly=True
+        viewonly=True,
+        overlaps="skill_tags"
     )
     skill_tags: Mapped[List["QuestionSkillTag"]] = relationship(
         "QuestionSkillTag",
         back_populates="question",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        overlaps="knowledge_nodes"
     )
     passage: Mapped[Optional["Passage"]] = relationship("Passage", back_populates="questions")
     answers: Mapped[List["Answer"]] = relationship(back_populates="question", cascade="all, delete-orphan")
@@ -198,29 +202,5 @@ class Answer(Base):
     # Vẫn giữ relationship "question" mặc định trỏ về Question gốc
     question: Mapped["Question"] = relationship(back_populates="answers", foreign_keys=[question_id])
 
-# SQLAlchemy event listeners to automatically update is_leaf
-from sqlalchemy import event
 
-@event.listens_for(KnowledgeNodeParent, 'after_insert')
-def after_knowledge_node_parent_insert(mapper, connection, target):
-    # Whenever a new child is added to a parent, the parent is no longer a leaf
-    connection.execute(
-        text("UPDATE knowledge_node SET is_leaf = false WHERE id = :parent_id"),
-        {"parent_id": target.parent_id}
-    )
-
-@event.listens_for(KnowledgeNodeParent, 'after_delete')
-def after_knowledge_node_parent_delete(mapper, connection, target):
-    # Whenever a child is removed from a parent, check if the parent still has children
-    # If not, it becomes a leaf again
-    result = connection.execute(
-        text("SELECT COUNT(*) FROM knowledge_node_parent WHERE parent_id = :parent_id"),
-        {"parent_id": target.parent_id}
-    ).scalar()
-    
-    if result == 0:
-        connection.execute(
-            text("UPDATE knowledge_node SET is_leaf = true WHERE id = :parent_id"),
-            {"parent_id": target.parent_id}
-        )
 

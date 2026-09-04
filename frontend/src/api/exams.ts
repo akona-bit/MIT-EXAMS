@@ -67,6 +67,20 @@ export async function publishExam(id: number): Promise<Exam> {
   return response.data;
 }
 
+export async function updateExam(id: number, data: Partial<Exam>): Promise<Exam> {
+  const response = await client.put<Exam>(`/api/v1/exams/${id}`, data);
+  return response.data;
+}
+
+export async function deleteExam(id: number): Promise<void> {
+  await client.delete(`/api/v1/exams/${id}`);
+}
+
+export async function completeExam(id: number): Promise<Exam> {
+  const response = await client.post<Exam>(`/api/v1/exams/${id}/complete`);
+  return response.data;
+}
+
 export async function assignParticipants(
   id: number,
   userIds: number[],

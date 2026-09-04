@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "../../../components/ui/Card";
 import Plot from "react-plotly.js";
 import { useTheme } from "../../../stores/themeStore";
-import { Users, TrendingUp, AlertTriangle, Target } from "lucide-react";
+import { Users, TrendingUp, AlertTriangle, Target, BarChart3 } from "lucide-react";
 
 export default function AdvancedAnalyticsPage() {
   const [data, setData] = useState<any>(null);
@@ -273,7 +273,10 @@ export default function AdvancedAnalyticsPage() {
   return (
     <div className="space-y-6">
       <div className="mb-8 border-b pb-4 border-slate-200 dark:border-slate-800">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Báo Cáo Phân Tích Dữ Liệu (DS111)</h1>
+        <h1 className="text-3xl font-extrabold text-gradient tracking-tight flex items-center gap-3 pb-1">
+          <BarChart3 className="w-8 h-8 text-primary-500" />
+          Báo Cáo Phân Tích Dữ Liệu (DS111)
+        </h1>
         <p className="text-base text-slate-500 dark:text-slate-400 mt-2 max-w-3xl">
           Hệ thống đánh giá chuyên sâu sử dụng Item Response Theory (IRT) và Kernel Density Estimation (KDE). Các biểu đồ được thiết kế chuẩn khoa học.
         </p>
