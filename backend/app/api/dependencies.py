@@ -52,7 +52,7 @@ async def get_current_user(
             secret_key = settings.SUPABASE_JWT_SECRET
             
         payload = jwt.decode(
-            token, key=secret_key, algorithms=["HS256", "RS256", "ES256"], options={"verify_aud": False, "verify_signature": False}
+            token, key=secret_key, algorithms=["HS256", "RS256", "ES256"], options={"verify_aud": False}
         )
         supabase_id = payload.get("sub")
         if not supabase_id:

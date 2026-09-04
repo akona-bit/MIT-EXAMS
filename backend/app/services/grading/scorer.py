@@ -345,7 +345,7 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                     try:
                         pos = int(pos_str)
                         if 1 <= pos <= J:
-                            U[i, pos - 1] = int(score) if score != -1 else -1
+                            U[i, pos - 1] = 1 if score > 0 else 0
                     except ValueError:
                         pass
             
@@ -436,6 +436,12 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             try:
                 # Calculate CTT
                 U_df = pd.DataFrame(U, columns=cau_names)
+                # Add columns expected by cal_diff/cal_disc
+                U_df['SBD'] = range(1, N + 1)
+                U_df['Raw'] = U.sum(axis=1)
+                U_df['Null'] = (U == -1).sum(axis=1)
+                U_df['MaDe'] = 'default'
+                U_df['Gioi'] = 0
                 ctt_diff = cal_diff(U_df)
                 ctt_disc = cal_disc(U_df)
                 

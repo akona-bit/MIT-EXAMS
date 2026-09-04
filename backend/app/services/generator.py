@@ -26,6 +26,7 @@ async def generate_original_exam(db: AsyncSession, matrix: Matrix, exam_name: st
     await db.flush()
     
     current_positions = {1: 1, 2: 31, 3: 61, 4: 91}
+    used_question_ids: set = set()
     
     for rule in matrix.rules:
         # Fetch matching questions
@@ -43,7 +44,7 @@ async def generate_original_exam(db: AsyncSession, matrix: Matrix, exam_name: st
             Question.status == QuestionStatus.APPROVED
         )
         result = await db.execute(stmt)
-        available_questions = result.scalars().all()
+        available_questions = [q for q in result.scalars().all() if q.id not in used_question_ids]
         
         if len(available_questions) < rule.count:
             raise HTTPException(
@@ -52,6 +53,7 @@ async def generate_original_exam(db: AsyncSession, matrix: Matrix, exam_name: st
             )
             
         selected_questions = random.sample(available_questions, rule.count)
+        used_question_ids.update(q.id for q in selected_questions)
         
         for q in selected_questions:
             pos = current_positions[rule.part]

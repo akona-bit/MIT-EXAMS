@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
-import random
+import secrets
 import string
 
 from app.core import security
@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models.user import User, Role
 from app.models.otp import OTPToken
+from pydantic import Field, EmailStr
 from app.schemas.user import UserCreate, UserResponse, Token
 from app.api.dependencies import get_current_active_user
 from app.core.analytics import capture
@@ -45,13 +46,13 @@ class VerifyOTPRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str
-    new_password: str
+    new_password: str = Field(min_length=8)
 
 router = APIRouter()
 
 
 def _generate_otp_code(length: int = 6) -> str:
-    return ''.join(random.choices(string.digits, k=length))
+    return ''.join(secrets.choice(string.digits) for _ in range(length))
 
 
 @router.get("/me", response_model=UserResponse)
@@ -73,7 +74,10 @@ async def resolve_sbd(req: ResolveSBDRequest, db: AsyncSession = Depends(get_db)
     if not user:
         raise HTTPException(status_code=404, detail="Số báo danh không tồn tại")
     
-    return {"email": user.email}
+    # Mask email: show only first 2 chars + domain
+    email = user.email
+    masked = email[:2] + "***@" + email.split("@")[1] if "@" in email else "***"
+    return {"email": masked}
 
 @router.put("/me", response_model=UserResponse)
 async def update_current_user(
