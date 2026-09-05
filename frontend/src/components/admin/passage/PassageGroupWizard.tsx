@@ -7,6 +7,7 @@ import PassageGroupPreview from "./PassageGroupPreview";
 import { passageApi } from "../../../api/passages";
 import { useNavigate } from "react-router-dom";
 import { toast } from "../../ui/Toast";
+import ConfirmDialog from "../../ui/ConfirmDialog";
 
 export default function PassageGroupWizard() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export default function PassageGroupWizard() {
   const { draft, updateDraft, clearDraft } = usePassageGroupDraft(draftId);
 
   const [submitting, setSubmitting] = useState(false);
+  const [confirmNoQuestions, setConfirmNoQuestions] = useState(false);
 
   // Navigation between steps
   const nextStep = () => updateDraft({ currentStep: draft.currentStep + 1 });
@@ -23,21 +25,21 @@ export default function PassageGroupWizard() {
 
   const handleSave = async () => {
     if (!draft.passageContent.trim()) {
-      alert("Vui lòng nhập nội dung ngữ liệu!");
+      toast.warning("Vui lòng nhập nội dung ngữ liệu!");
       return;
     }
 
-    // Check questions
+    // Check questions — dùng ConfirmDialog thay window.confirm
     if (draft.questions.length === 0) {
-      if (
-        !window.confirm(
-          "Nhóm này chưa có câu hỏi nào. Bạn có chắc muốn lưu chỉ mỗi ngữ liệu không?",
-        )
-      ) {
-        return;
-      }
+      setConfirmNoQuestions(true);
+      return;
     }
 
+    await doSave();
+  };
+
+  const doSave = async () => {
+    setConfirmNoQuestions(false);
     setSubmitting(true);
     try {
       let code = draft.public_code;
@@ -70,7 +72,7 @@ export default function PassageGroupWizard() {
       navigate("/admin/questions");
     } catch (e: any) {
       console.error(e);
-      alert("Lỗi khi lưu dữ liệu: " + (e.response?.data?.detail || e.message));
+      toast.error("Lỗi khi lưu dữ liệu", e.response?.data?.detail || e.message);
     } finally {
       setSubmitting(false);
     }
@@ -188,6 +190,15 @@ export default function PassageGroupWizard() {
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmNoQuestions}
+        title="Nhóm chưa có câu hỏi nào"
+        message="Bạn có chắc muốn lưu chỉ mỗi ngữ liệu, không kèm câu hỏi con không?"
+        confirmText="Vẫn lưu"
+        onConfirm={doSave}
+        onCancel={() => setConfirmNoQuestions(false)}
+      />
     </div>
   );
 }

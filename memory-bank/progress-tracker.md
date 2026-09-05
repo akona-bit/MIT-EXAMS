@@ -92,6 +92,13 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-05` — **UI/UX sweep: xoá sạch alert()/confirm() thô còn sót trên toàn web**:
+  - [x] Audit: 9 chỗ `alert()` + 6 chỗ `window.confirm()` còn sót sau đợt UI redesign 2026-09-04. Xác nhận `AdvancedAnalyticsPage` đã dùng axios client chuẩn (grep "fetch(" là false positive do `safeFetch`).
+  - [x] Thay 9 `alert()` → `toast.success/error/warning/info`: GenerateExamModal (×2), AiReviewModal (×2 + thêm success toast khi lưu duyệt), QuestionBlock, PassageSelectStep, PassageGroupWizard (×2), SmartMatrixWizard (đã được cập nhật toast từ phiên khác — chỉ dọn import trùng).
+  - [x] Thay 6 `confirm()` → `<ConfirmDialog>`: **StudentExamShell — xác nhận nộp bài** (quan trọng nhất: hiển thị số câu đã trả lời, không thể hoàn tác), ExamDetailPage (xuất bản + chạy IRT, gộp 1 dialog 2 trạng thái), AdminFeedbacksPage (xoá feedback), PassageGroupWizard (lưu chỉ ngữ liệu), QuestionListStep (xoá câu hỏi trong nhóm).
+  - [x] `npm run build` pass sau thay đổi.
+
+
 - `2026-09-05` — **Hoàn thiện phụ lục ERD → bảng chuẩn đầy đủ 100%**:
   - [x] Bổ sung 14 model có trong code nhưng thiếu trong bảng đối chiếu: QuestionSubItem, QuestionEmbedding, ExamGenerationRun, ExamTrackingLog, IrtTask, AuditLog, AiAnalysisCache, AiRequestLog, Notification, Feedback, OTPToken, SystemSetting, ObsidianSyncRun, ObsidianFile — mỗi dòng kèm mô tả + cột chính (đối chiếu trực tiếp từ `backend/app/models/*.py`).
   - [x] Cập nhật dòng `Section` (PhanThi): ghi rõ chưa có bảng riêng — phần thi đang là cột `part` (1-4) trên `MatrixRule`/`ExamFormQuestion` + `ctt_score_part*`/`irt_score_part*` trên `ExamResult`; tên `Section` được reserve cho bảng tương lai.

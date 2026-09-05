@@ -4,7 +4,6 @@ import { getSmartLeaves, proposeSmartDistribution, confirmSmartMatrix } from "..
 import { toast } from "../ui/Toast";
 import type { KnowledgeNode } from "../../types";
 import Button from "../ui/Button";
-import { toast } from "../ui/Toast";
 import Input from "../ui/Input";
 import Modal from "../ui/Modal";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";

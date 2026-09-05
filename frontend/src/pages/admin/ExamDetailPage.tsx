@@ -6,6 +6,7 @@ import { getExamOverview, getExamItemsAnalysis, type ExamOverview, type ExamItem
 import type { Exam } from '../../types';
 import Button from '../../components/ui/Button';
 import GenerateExamModal from '../../components/admin/GenerateExamModal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { toast } from '../../components/ui/Toast';
 
 export default function ExamDetailPage() {
@@ -23,6 +24,7 @@ export default function ExamDetailPage() {
   const [activeTab, setActiveTab] = useState<'info' | 'irt'>('info');
 
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'publish' | 'irt' | null>(null);
 
   const fetchExamData = async () => {
     if (!id) return;
@@ -89,29 +91,30 @@ export default function ExamDetailPage() {
     setIsGenerateModalOpen(true);
   };
 
-  const handlePublish = async () => {
-    if (!id) return;
-    if (confirm('Xuất bản kỳ thi? Học sinh sẽ có thể tham gia thi.')) {
-      try {
+  const handlePublish = () => {
+    setConfirmAction('publish');
+  };
+
+  const handleRunIrt = () => {
+    setConfirmAction('irt');
+  };
+
+  const confirmActionExecute = async () => {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (!id || !action) return;
+    try {
+      if (action === 'publish') {
         await publishExam(parseInt(id));
         toast.success('Đã xuất bản!');
         fetchExamData();
-      } catch (error) {
-        toast.error('Lỗi xuất bản');
-      }
-    }
-  };
-
-  const handleRunIrt = async () => {
-    if (!id) return;
-    if (confirm('Khởi chạy tiến trình phân tích IRT và quy đổi điểm chuẩn?')) {
-      try {
+      } else {
         const res = await runIrtCalibration(parseInt(id));
         setIrtTaskId(res.task_id);
         setIrtStatus('PENDING');
-      } catch (error) {
-        toast.error('Lỗi chạy IRT');
       }
+    } catch (error) {
+      toast.error(action === 'publish' ? 'Lỗi xuất bản' : 'Lỗi chạy IRT');
     }
   };
 
@@ -271,6 +274,19 @@ export default function ExamDetailPage() {
         matrixId={exam.matrix_id}
         hasExistingForms={hasExistingForms}
         onSuccess={fetchExamData}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmAction !== null}
+        title={confirmAction === 'irt' ? 'Chạy phân tích IRT?' : 'Xuất bản kỳ thi?'}
+        message={
+          confirmAction === 'irt'
+            ? 'Hệ thống sẽ khởi chạy tiến trình phân tích IRT và quy đổi điểm chuẩn. Quá trình chạy nền (Celery) và có thể mất vài phút.'
+            : 'Học sinh sẽ có thể tham gia kỳ thi này sau khi xuất bản.'
+        }
+        confirmText={confirmAction === 'irt' ? 'Chạy IRT' : 'Xuất bản'}
+        onConfirm={confirmActionExecute}
+        onCancel={() => setConfirmAction(null)}
       />
     </div>
   );

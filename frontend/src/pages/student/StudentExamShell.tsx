@@ -10,6 +10,7 @@ import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
 import { MessageSquare } from "lucide-react";
 import { toast } from '../../components/ui/Toast';
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { sanitizeHtml } from '../../utils/sanitize';
 
 // ─── Anti-cheat: blocked keys ───
@@ -43,6 +44,8 @@ export default function StudentExamShell() {
 
   // Passage cache
   const [passageCache, setPassageCache] = useState<Record<number, any>>({});
+  // Submit confirmation dialog
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [loadingPassage, setLoadingPassage] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceStatus | null>(null);
 
@@ -248,14 +251,7 @@ export default function StudentExamShell() {
   }, [sessionInfo?.participant_status, timeLeft]);
 
   const handleManualSubmit = async () => {
-    const answered = Object.keys(savedAnswers).length;
-    const total = sessionInfo?.questions?.length || 0;
-    if (
-      !confirm(
-        `Bạn đã trả lời ${answered}/${total} câu.\nBạn có chắc chắn muốn nộp bài? Hành động này không thể hoàn tác.`
-      )
-    )
-      return;
+    setShowSubmitConfirm(false);
     try {
       await api.post(`/api/v1/exams/${id}/submit`);
       navigate(`/student/exam/${id}/result`);
@@ -716,6 +712,15 @@ export default function StudentExamShell() {
           />
         </div>
       </footer>
+
+      <ConfirmDialog
+        isOpen={showSubmitConfirm}
+        title="Nộp bài thi?"
+        message={`Bạn đã trả lời ${answeredCount}/${totalQuestions} câu. Hãy kiểm tra kỹ trước khi nộp — hành động này không thể hoàn tác.`}
+        confirmText="Nộp bài"
+        onConfirm={handleManualSubmit}
+        onCancel={() => setShowSubmitConfirm(false)}
+      />
 
       <StudentFeedbackModal
         isOpen={isFeedbackOpen}

@@ -6,6 +6,7 @@ import Select from '../../components/ui/Select';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { MessageSquare, ExternalLink, CheckCircle, Clock, XCircle, Inbox, Trash2, Eye, BarChart3 } from 'lucide-react';
 import { toast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 export default function AdminFeedbacksPage() {
   const [feedbacks, setFeedbacks] = useState<AdminFeedback[]>([]);
@@ -19,6 +20,7 @@ export default function AdminFeedbacksPage() {
   const [stats, setStats] = useState<FeedbackStats | null>(null);
   const [selectedFeedback, setSelectedFeedback] = useState<AdminFeedback | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const fetchFeedbacks = async () => {
     setIsLoading(true);
@@ -65,8 +67,14 @@ export default function AdminFeedbacksPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa feedback này?')) return;
+  const handleDelete = (id: number) => {
+    setPendingDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
+    if (id === null) return;
     try {
       await adminFeedbacksApi.delete(id);
       setFeedbacks((prev) => prev.filter((fb) => fb.id !== id));
@@ -325,6 +333,16 @@ export default function AdminFeedbacksPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteId !== null}
+        title="Xoá feedback?"
+        message="Feedback này sẽ bị xoá vĩnh viễn và không thể khôi phục."
+        confirmText="Xoá"
+        isDestructive
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import QuestionBlock from './QuestionBlock';
 import { PassageDraftState } from '../../../hooks/usePassageGroupDraft';
 import { QuestionBulkUpdateItem } from '../../../api/passages';
+import { useState } from 'react';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 
 interface QuestionListStepProps {
   draft: PassageDraftState;
@@ -8,6 +10,7 @@ interface QuestionListStepProps {
 }
 
 export default function QuestionListStep({ draft, updateDraft }: QuestionListStepProps) {
+  const [pendingRemoveIndex, setPendingRemoveIndex] = useState<number | null>(null);
   
   const handleAddQuestion = () => {
     const newQuestion: QuestionBulkUpdateItem = {
@@ -33,10 +36,15 @@ export default function QuestionListStep({ draft, updateDraft }: QuestionListSte
   };
   
   const handleRemoveQuestion = (index: number) => {
-    if (window.confirm('Bạn có chắc muốn xoá câu hỏi này? Nếu lưu, câu hỏi này sẽ bị xoá vĩnh viễn.')) {
-      const newQuestions = draft.questions.filter((_, idx) => idx !== index);
+    setPendingRemoveIndex(index);
+  };
+
+  const confirmRemoveQuestion = () => {
+    if (pendingRemoveIndex !== null) {
+      const newQuestions = draft.questions.filter((_, idx) => idx !== pendingRemoveIndex);
       updateDraft({ questions: newQuestions });
     }
+    setPendingRemoveIndex(null);
   };
 
   return (
@@ -75,6 +83,16 @@ export default function QuestionListStep({ draft, updateDraft }: QuestionListSte
           Thêm câu hỏi mới
         </button>
       </div>
+
+      <ConfirmDialog
+        isOpen={pendingRemoveIndex !== null}
+        title="Xoá câu hỏi này?"
+        message="Câu hỏi sẽ bị xoá khỏi nhóm khi bạn bấm 'Lưu tất cả'. Hành động này không thể hoàn tác."
+        confirmText="Xoá"
+        isDestructive
+        onConfirm={confirmRemoveQuestion}
+        onCancel={() => setPendingRemoveIndex(null)}
+      />
     </div>
   );
 }
