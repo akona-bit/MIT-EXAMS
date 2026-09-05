@@ -39,7 +39,7 @@ export default function PassageFormPage() {
     } catch (error) {
       console.error('Failed to load passage', error);
       toast.error('Không thể tải dữ liệu ngữ liệu.');
-      navigate('/admin/passages');
+      navigate('/admin/resources');
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function PassageFormPage() {
           source_author: formData.source_author,
         });
       }
-      navigate('/admin/passages');
+      navigate('/admin/resources');
     } catch (error) {
       console.error('Failed to save passage', error);
       toast.error('Lưu ngữ liệu thất bại.');

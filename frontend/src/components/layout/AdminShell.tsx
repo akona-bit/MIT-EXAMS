@@ -61,7 +61,6 @@ const navSections: NavSection[] = [
     icon: <Library className="h-4 w-4" />,
     items: [
       { label: "Ngân hàng Câu hỏi", path: "/admin/questions", icon: <Library className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Ngữ liệu (Passages)", path: "/admin/passages", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Quản lý Tri thức", path: "/admin/knowledge", icon: <Share2 className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Kho Học liệu", path: "/admin/resources", icon: <BookMarked className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Ma trận Đặc tả", path: "/admin/matrix", icon: <Network className="h-5 w-5" strokeWidth={1.8} /> },

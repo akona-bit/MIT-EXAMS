@@ -15,7 +15,6 @@ const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const GuestPage = lazy(() => import("./pages/auth/GuestPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
 const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
-const PassagesPage = lazy(() => import("./pages/admin/PassagesPage"));
 const PassageFormPage = lazy(() => import("./pages/admin/PassageFormPage"));
 const QuestionsPage = lazy(() => import("./pages/admin/QuestionsPage"));
 const QuestionFormPage = lazy(() => import("./pages/admin/QuestionFormPage"));
@@ -123,7 +122,6 @@ function AppRoutes() {
           }
         >
           <Route index element={<DashboardPage />} />
-          <Route path="passages" element={<PassagesPage />} />
           <Route path="passages/new" element={<PassageFormPage />} />
           <Route path="passages/:id/edit" element={<PassageFormPage />} />
           <Route path="questions" element={<QuestionsPage />} />
