@@ -92,6 +92,14 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-05` — **Code splitting toàn app + sửa lỗi vite config bị đè**:
+  - [x] Tìm ra nguyên nhân `manualChunks` không bao giờ có hiệu lực: file `vite.config.js` (artifact cũ compiled 8/25, không có manualChunks) **đè lên** `vite.config.ts` vì Vite ưu tiên `.js`. Đã xoá `vite.config.js` + `vite.config.d.ts`.
+  - [x] Sửa `vite.config.ts`: bỏ `'@tiptap/pm'` khỏi `vendor-editor` (package không có entry ".", đưa vào manualChunks object làm build fail) + thêm comment cảnh báo.
+  - [x] **Route-level code splitting trong `App.tsx`**: 29 pages chuyển sang `React.lazy` + `<Suspense fallback={RouteFallback}>` (fallback khớp design system). Layout shell (AdminShell/StudentShell) giữ eager.
+  - [x] Kết quả build: index entry **7.0MB → ~230KB** (giảm ~97% initial payload); `vendor-plotly` 4.2MB / `vendor-editor` 716KB / `vendor-charts` 409KB giờ chỉ tải on-demand khi route tương ứng được mở. 79 chunks tổng.
+  - [x] Lưu ý: build chậm hơn (~5-6 phút) do 79 entry points — chấp nhận được cho trade-off runtime.
+
+
 - `2026-09-05` — **UI/UX sweep: xoá sạch alert()/confirm() thô còn sót trên toàn web**:
   - [x] Audit: 9 chỗ `alert()` + 6 chỗ `window.confirm()` còn sót sau đợt UI redesign 2026-09-04. Xác nhận `AdvancedAnalyticsPage` đã dùng axios client chuẩn (grep "fetch(" là false positive do `safeFetch`).
   - [x] Thay 9 `alert()` → `toast.success/error/warning/info`: GenerateExamModal (×2), AiReviewModal (×2 + thêm success toast khi lưu duyệt), QuestionBlock, PassageSelectStep, PassageGroupWizard (×2), SmartMatrixWizard (đã được cập nhật toast từ phiên khác — chỉ dọn import trùng).

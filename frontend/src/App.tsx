@@ -1,45 +1,56 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./stores/authStore";
 import { ThemeProvider } from "./stores/themeStore";
 import { NotificationProvider } from "./stores/notificationStore";
 import { ToastProvider } from "./components/ui/Toast";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
-// Layouts
+// Layouts (nhỏ, giữ eager)
 import AdminShell from "./components/layout/AdminShell";
 import StudentShell from "./components/layout/StudentShell";
 
-// Pages
-import LoginPage from "./pages/auth/LoginPage";
-import GuestPage from "./pages/auth/GuestPage";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
-import DashboardPage from "./pages/admin/DashboardPage";
-import PassagesPage from "./pages/admin/PassagesPage";
-import PassageFormPage from "./pages/admin/PassageFormPage";
-import QuestionsPage from "./pages/admin/QuestionsPage";
-import QuestionFormPage from "./pages/admin/QuestionFormPage";
-import PassageGroupWizard from "./components/admin/passage/PassageGroupWizard";
-import MatrixPage from "./pages/admin/MatrixPage";
-import MatrixFormPage from "./pages/admin/MatrixFormPage";
-import MatrixDetailPage from "./pages/admin/MatrixDetailPage";
-import ExamsPage from "./pages/admin/ExamsPage";
-import ExamDetailPage from "./pages/admin/ExamDetailPage";
-import ExamFormPage from "./pages/admin/ExamFormPage";
-import StudentHomePage from "./pages/student/StudentHomePage";
-import StudentExamShell from "./pages/student/StudentExamShell";
-import StudentExamResultPage from "./pages/student/StudentExamResultPage";
-import StudentDetailPage from "./pages/student/StudentDetailPage";
-import StudentComparePage from "./pages/student/StudentComparePage";
+// Pages — lazy-load theo route (code splitting): thí sinh không phải tải
+// bundle admin nặng (plotly, recharts, tiptap...) và ngược lại.
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
+const GuestPage = lazy(() => import("./pages/auth/GuestPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
+const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
+const PassagesPage = lazy(() => import("./pages/admin/PassagesPage"));
+const PassageFormPage = lazy(() => import("./pages/admin/PassageFormPage"));
+const QuestionsPage = lazy(() => import("./pages/admin/QuestionsPage"));
+const QuestionFormPage = lazy(() => import("./pages/admin/QuestionFormPage"));
+const PassageGroupWizard = lazy(() => import("./components/admin/passage/PassageGroupWizard"));
+const MatrixPage = lazy(() => import("./pages/admin/MatrixPage"));
+const MatrixFormPage = lazy(() => import("./pages/admin/MatrixFormPage"));
+const MatrixDetailPage = lazy(() => import("./pages/admin/MatrixDetailPage"));
+const ExamsPage = lazy(() => import("./pages/admin/ExamsPage"));
+const ExamDetailPage = lazy(() => import("./pages/admin/ExamDetailPage"));
+const ExamFormPage = lazy(() => import("./pages/admin/ExamFormPage"));
+const StudentHomePage = lazy(() => import("./pages/student/StudentHomePage"));
+const StudentExamShell = lazy(() => import("./pages/student/StudentExamShell"));
+const StudentExamResultPage = lazy(() => import("./pages/student/StudentExamResultPage"));
+const StudentDetailPage = lazy(() => import("./pages/student/StudentDetailPage"));
+const StudentComparePage = lazy(() => import("./pages/student/StudentComparePage"));
 
-import KnowledgePage from "./pages/admin/KnowledgePage";
-import ResourcesPage from "./pages/admin/ResourcesPage";
-import AccessControlPage from "./pages/admin/AccessControlPage";
-import OmrPage from "./pages/admin/OmrPage";
+const KnowledgePage = lazy(() => import("./pages/admin/KnowledgePage"));
+const ResourcesPage = lazy(() => import("./pages/admin/ResourcesPage"));
+const AccessControlPage = lazy(() => import("./pages/admin/AccessControlPage"));
+const OmrPage = lazy(() => import("./pages/admin/OmrPage"));
 
-import StudentManagementPage from "./pages/admin/analytics/StudentManagementPage";
-import AdvancedAnalyticsPage from "./pages/admin/analytics/AdvancedAnalyticsPage";
-import SystemSettingsPage from "./pages/admin/settings/SystemSettingsPage";
-import AdminFeedbacksPage from "./pages/admin/AdminFeedbacksPage";
-import AdminNotificationsPage from "./pages/admin/AdminNotificationsPage";
+const StudentManagementPage = lazy(() => import("./pages/admin/analytics/StudentManagementPage"));
+const AdvancedAnalyticsPage = lazy(() => import("./pages/admin/analytics/AdvancedAnalyticsPage"));
+const SystemSettingsPage = lazy(() => import("./pages/admin/settings/SystemSettingsPage"));
+const AdminFeedbacksPage = lazy(() => import("./pages/admin/AdminFeedbacksPage"));
+const AdminNotificationsPage = lazy(() => import("./pages/admin/AdminNotificationsPage"));
+
+// Fallback khi đang tải chunk của route (khớp design system, không flash trắng)
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+    </div>
+  );
+}
 
 // --- Route Guards ---
 
@@ -91,6 +102,7 @@ function PublicRoute() {
 
 function AppRoutes() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Routes>
       {/* Public Routes */}
       <Route element={<PublicRoute />}>
@@ -163,6 +175,7 @@ function AppRoutes() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 

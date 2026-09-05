@@ -13,7 +13,8 @@ export default defineConfig({
           'vendor-editor': [
             '@tiptap/react',
             '@tiptap/starter-kit',
-            '@tiptap/pm',
+            // Lưu ý: KHÔNG list '@tiptap/pm' — package không có entry "."
+            // (chỉ dùng qua subpath), đưa vào manualChunks object sẽ fail build.
             '@tiptap/extension-image',
             '@tiptap/extension-table',
             '@tiptap/extension-table-cell',
