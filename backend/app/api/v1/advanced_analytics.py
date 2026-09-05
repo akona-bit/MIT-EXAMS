@@ -133,7 +133,7 @@ async def get_distributions(exam_id: int, db: AsyncSession = Depends(get_db)):
             x = np.linspace(min_val, max_val, 100)
             y = kde(x) * len(data) * (max_val - min_val) / 30
             return x.tolist(), y.tolist()
-        except:
+        except Exception:
             return [], []
 
     math_irt_kde_x, math_irt_kde_y = calculate_kde(math_irt, 0, 300)
@@ -178,7 +178,7 @@ async def get_gam_curve(exam_id: int, db: AsyncSession = Depends(get_db)):
             x_grid = np.linspace(-3, 3, 100).reshape(-1, 1)
             y_pred = gam.predict(x_grid)
             return x_grid.flatten().tolist(), y_pred.flatten().tolist()
-        except:
+        except Exception:
             return [], []
 
     math_gam_x, math_gam_y = fit_gam(math_theta, math_raw)

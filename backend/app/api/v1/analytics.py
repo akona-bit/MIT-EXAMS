@@ -14,7 +14,7 @@ def safe_float(val):
         if pd.isna(val) or val == "":
             return None
         return float(val)
-    except:
+    except (TypeError, ValueError):
         return None
 
 def read_raw_students():
@@ -169,7 +169,7 @@ async def get_student_responses(name_or_email: str):
                         status = "correct"
                     else:
                         status = "wrong"
-                except:
+                except (TypeError, ValueError):
                     status = "wrong"
             responses[q] = status
             

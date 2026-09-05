@@ -92,7 +92,7 @@ async def get_ai_review_queue(
     Used by the "Duyệt phân tích AI" admin page to review AI suggestions in bulk.
     NOTE: must be declared before /{question_id} to avoid path shadowing.
     """
-    if current_user.role_id not in [1, 2]:  # 1: Admin, 2: Teacher
+    if current_user.role.name not in ("ADMIN", "TEACHER"):
         raise HTTPException(status_code=403, detail="Only teachers and admins can view AI review queue")
 
     try:
@@ -523,7 +523,8 @@ async def update_question(
             emb = await generate_embedding(existing_q.content)
             await upsert_embedding(db, existing_q.id, existing_q.content, emb)
         except Exception as e:
-            print(f"Warning: Failed to generate embedding for question {existing_q.id}: {e}")
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to generate embedding for question {existing_q.id}: {e}")
             
         res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.skill_tags)).where(Question.id == existing_q.id))
         return res.scalars().first()
@@ -535,12 +536,11 @@ async def delete_question(question_id: int, db: AsyncSession = Depends(get_db), 
     question = result.scalars().first()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
-    if question.creator_id != current_user.id and not current_user.role_id in [1, 2, 3]: # ADMIN, TEACHER, MODERATOR
+    if question.creator_id != current_user.id and current_user.role.name not in ("ADMIN", "TEACHER", "MODERATOR"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     await db.delete(question)
     await db.commit()
-    return {"status": "success"}
 
 from app.schemas.ai import AiAnalysisResponse
 from app.services.ai_analysis import (
@@ -562,7 +562,7 @@ async def analyze_question(
     Trigger AI analysis for a specific question.
     Only Teachers and Admins can perform this action.
     """
-    if current_user.role_id not in [1, 2]: # Assuming 1: Admin, 2: Teacher
+    if current_user.role.name not in ("ADMIN", "TEACHER"):
         raise HTTPException(status_code=403, detail="Only teachers and admins can analyze questions")
         
     question = await get_fully_loaded_question(db, question_id)
@@ -630,7 +630,7 @@ async def review_ai_analysis(
     Accept, edit, or reject the AI analysis result.
     If confirmed/edited, the concepts and skills are saved as non-primary QuestionSkillTags.
     """
-    if current_user.role_id not in [1, 2]:
+    if current_user.role.name not in ("ADMIN", "TEACHER"):
         raise HTTPException(status_code=403, detail="Only teachers and admins can review AI analysis")
         
     question = await get_fully_loaded_question(db, question_id)

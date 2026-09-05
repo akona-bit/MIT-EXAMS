@@ -17,6 +17,14 @@ services:
         sync: false
       - key: SECRET_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
 
   # 2. Celery Worker Service
   - type: worker
@@ -36,4 +44,12 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: SECRET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
         sync: false

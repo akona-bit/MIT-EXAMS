@@ -3,6 +3,7 @@ import { Card } from "../../../components/ui/Card";
 import Plot from "react-plotly.js";
 import { useTheme } from "../../../stores/themeStore";
 import { Users, TrendingUp, AlertTriangle, Target, BarChart3 } from "lucide-react";
+import client from "../../../api/client";
 
 export default function AdvancedAnalyticsPage() {
   const [data, setData] = useState<any>(null);
@@ -20,9 +21,8 @@ export default function AdvancedAnalyticsPage() {
       const base = "/api/v1/advanced-analytics";
       const safeFetch = async (path: string) => {
         try {
-          const res = await fetch(path);
-          if (!res.ok) return null;
-          return await res.json();
+          const res = await client.get(path);
+          return res.data;
         } catch { return null; }
       };
       const [dist, params, gam, box, penalty, leaderboard, stats, flagged] = await Promise.all([

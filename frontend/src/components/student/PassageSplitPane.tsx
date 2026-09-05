@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "../../api/client";
 import QuestionRenderer from "./QuestionRenderer";
+import { sanitizeHtml } from "../../utils/sanitize";
 
 interface PassageSplitPaneProps {
   question: any;
@@ -36,7 +37,7 @@ export default function PassageSplitPane({
         {passage ? (
           <div
             className="prose max-w-none text-gray-800"
-            dangerouslySetInnerHTML={{ __html: passage.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(passage.content) }}
           />
         ) : (
           <div className="animate-pulse flex flex-col gap-4">

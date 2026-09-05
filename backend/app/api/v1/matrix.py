@@ -336,10 +336,7 @@ async def check_matrix_feasibility_local(req: FeasibilityCheckRequest, db: Async
         cell = s.cell
         label = f"Nhóm '{cell.group_label}'" if cell.group_label else f"Ô node#{cell.matrix_rule_id}"
         if cell.level is not None:
-            level_name = LEVEL_NAMES.get(
-                {"NB": 1, "TH": 2, "VD": 3, "VDC": 4}.get(cell.level, 0),
-                cell.level
-            )
+            level_name = LEVEL_NAMES.get(cell.level, cell.level)
             shortages.append(f"{label}: thiếu {s.shortage} câu (mức {level_name})")
         else:
             shortages.append(f"{label}: thiếu {s.shortage} câu")
@@ -396,10 +393,7 @@ async def check_matrix_feasibility(matrix_id: int, db: AsyncSession = Depends(ge
         cell = s.cell
         label = f"Nhóm '{cell.group_label}'" if cell.group_label else f"Ô node#{cell.matrix_rule_id}"
         if cell.level is not None:
-            level_name = LEVEL_NAMES.get(
-                {"NB": 1, "TH": 2, "VD": 3, "VDC": 4}.get(cell.level, 0),
-                cell.level
-            )
+            level_name = LEVEL_NAMES.get(cell.level, cell.level)
             shortages.append(f"{label}: thiếu {s.shortage} câu (mức {level_name})")
         else:
             shortages.append(f"{label}: thiếu {s.shortage} câu")
@@ -577,12 +571,12 @@ async def preview_vision_import(
         level_ratios_dict = json.loads(level_ratios)
         # convert keys to int
         level_ratios_dict = {int(k): float(v) for k, v in level_ratios_dict.items()}
-    except:
+    except (json.JSONDecodeError, ValueError, TypeError):
         level_ratios_dict = {}
         
     try:
         type_ratios_dict = json.loads(type_ratios)
-    except:
+    except (json.JSONDecodeError, ValueError, TypeError):
         type_ratios_dict = {"SINGLE_CHOICE": 1.0}
 
     preview = await MatrixImportService.preview_import(

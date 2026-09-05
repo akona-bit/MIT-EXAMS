@@ -99,8 +99,13 @@ CREATE POLICY "Staff can manage kn parents" ON public.knowledge_node_parent FOR 
 CREATE POLICY "Staff can manage skill tags" ON public.question_skill_tag FOR ALL TO authenticated USING (public.is_teacher_or_admin());
 
 -- Nhóm Nội dung thi (Question, Answer, Sub Item, Passage): Admin/Teacher CRUD
-CREATE POLICY "Staff can manage questions" ON public.question FOR ALL TO authenticated USING (public.is_teacher_or_admin());
-CREATE POLICY "Staff can manage answers" ON public.answer FOR ALL TO authenticated USING (public.is_teacher_or_admin());
+-- Dùng INSERT, UPDATE, DELETE (không dùng FOR ALL) để status-based SELECT policy hoạt động đúng
+CREATE POLICY "Staff can manage questions" ON public.question FOR INSERT TO authenticated WITH CHECK (public.is_teacher_or_admin());
+CREATE POLICY "Staff can update questions" ON public.question FOR UPDATE TO authenticated USING (public.is_teacher_or_admin());
+CREATE POLICY "Staff can delete questions" ON public.question FOR DELETE TO authenticated USING (public.is_teacher_or_admin());
+CREATE POLICY "Staff can manage answers" ON public.answer FOR INSERT TO authenticated WITH CHECK (public.is_teacher_or_admin());
+CREATE POLICY "Staff can update answers" ON public.answer FOR UPDATE TO authenticated USING (public.is_teacher_or_admin());
+CREATE POLICY "Staff can delete answers" ON public.answer FOR DELETE TO authenticated USING (public.is_teacher_or_admin());
 CREATE POLICY "Staff can manage sub items" ON public.question_sub_item FOR ALL TO authenticated USING (public.is_teacher_or_admin());
 CREATE POLICY "Staff can manage passages" ON public.passage FOR ALL TO authenticated USING (public.is_teacher_or_admin());
 
@@ -346,5 +351,82 @@ WITH CHECK (public.is_teacher_or_admin());
 -- Request log chỉ Admin xem/quản lý
 CREATE POLICY "Admin manages AI request logs"
 ON public.ai_request_log FOR ALL TO authenticated
+USING (public.is_admin());
+
+-- ==========================================
+-- NHÓM F - Các bảng thiếu RLS
+-- ==========================================
+
+-- OTP Token: chỉ service role truy cập (Admin không cần xem OTP code)
+ALTER TABLE public.otp_token ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role only for OTP tokens"
+ON public.otp_token FOR ALL TO authenticated
+USING (false);
+
+-- Audit Log: chỉ Admin xem
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admin manages audit logs"
+ON public.audit_log FOR ALL TO authenticated
+USING (public.is_admin());
+
+-- OMR Session & Sheet: Admin/Teacher quản lý
+ALTER TABLE public.omr_job ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.omr_sheet ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Staff can manage OMR jobs"
+ON public.omr_job FOR ALL TO authenticated
+USING (public.is_teacher_or_admin());
+CREATE POLICY "Staff can manage OMR sheets"
+ON public.omr_sheet FOR ALL TO authenticated
+USING (public.is_teacher_or_admin());
+
+-- Exam Form Answer: Admin xem (chứa đáp án đúng - nhạy cảm)
+ALTER TABLE public.exam_form_answer ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admin manages exam form answers"
+ON public.exam_form_answer FOR ALL TO authenticated
+USING (public.is_admin());
+
+-- Exam Tracking Log: Admin xem, thí sinh KHÔNG thấy
+ALTER TABLE public.exam_tracking_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admin manages exam tracking logs"
+ON public.exam_tracking_log FOR ALL TO authenticated
+USING (public.is_admin());
+
+-- Exam Generation Run: Admin/Teacher xem
+ALTER TABLE public.exam_generation_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Staff can view exam generation runs"
+ON public.exam_generation_run FOR SELECT TO authenticated
+USING (public.is_teacher_or_admin());
+CREATE POLICY "Staff can create exam generation runs"
+ON public.exam_generation_run FOR INSERT TO authenticated
+WITH CHECK (public.is_teacher_or_admin());
+
+-- Item Analysis Result: Admin/Teacher xem
+ALTER TABLE public.item_analysis_result ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Staff can view item analysis results"
+ON public.item_analysis_result FOR SELECT TO authenticated
+USING (public.is_teacher_or_admin());
+CREATE POLICY "Admin manages item analysis results"
+ON public.item_analysis_result FOR INSERT, UPDATE, DELETE TO authenticated
+USING (public.is_admin());
+
+-- Notification: thí sinh thấy thông báo của mình, Admin gửi
+ALTER TABLE public.notification ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view their own notifications"
+ON public.notification FOR SELECT TO authenticated
+USING (user_id = public.current_user_id() OR public.is_admin());
+CREATE POLICY "Admin can create notifications"
+ON public.notification FOR INSERT TO authenticated
+WITH CHECK (public.is_admin());
+
+-- Feedback: thí sinh gửi, Admin xem
+ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can insert their own feedback"
+ON public.feedback FOR INSERT TO authenticated
+WITH CHECK (user_id = public.current_user_id());
+CREATE POLICY "Users can view their own feedback or Admin views all"
+ON public.feedback FOR SELECT TO authenticated
+USING (user_id = public.current_user_id() OR public.is_admin());
+CREATE POLICY "Admin manages feedback"
+ON public.feedback FOR UPDATE, DELETE TO authenticated
 USING (public.is_admin());
 

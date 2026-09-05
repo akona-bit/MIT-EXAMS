@@ -88,7 +88,6 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 - **Local:** `task_always_eager=True` khi `REDIS_URL=localhost` — chạy sync, không cần worker riêng
 - **Production:** `render.yaml` define worker service chạy `celery -A app.worker.celery_app worker`
 - **Task modules:** `app.services.grading.scorer` (IRT calibration), `app.services.omr.tasks` (OMR processing), `app.services.email_tasks` (OTP emails)
-- **⚠️ Known bug:** `render.yaml` line 27 ghi `app.core.celery_app` — SAI, phải là `app.worker.celery_app`. Chưa sửa.
 
 ## Analytics
 
@@ -98,11 +97,8 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 
 ## Trạng thái `item_plot.py`
 
-- File: `backend/app/services/grading/item_plot.py` — **đã commit** (3 commits), nằm trong repo.
-- Chứa `chamDiem()`, `tach_phan()`, `ketQuaCham()` + 6 hàm visualization.
-- **Backend KHÔNG import file này.** `scorer.py` đã reimplement `score_question_answer()` (hỗ trợ nhiều loại câu hỏi hơn) và logic `tach_phan` inline (scorer.py:411-419).
-- `library-docs.md` nói "bọc trong `irt_engine/service.py`" nhưng chưa làm — và scorer.py đã thay thế hầu hết logic.
-- **Rủi ro:** Format CSV `STT_gốc-Đáp_án` trong `chamDiem()` (item_plot.py:67-85) không có tương đương trong `scorer.py`. Nếu cần import CSV cũ, phải port riêng hàm parse đó.
+- File: `backend/app/services/grading/item_plot.py` — **đã xóa khỏi repo**.
+- Logic cũ (`chamDiem()`, `tach_phan()`) đã được `scorer.py` thay thế hoàn toàn.
 
 ## Bảo mật tổng quan
 

@@ -165,8 +165,12 @@ async def export_exam_results(exam_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/exams/{exam_id}/overview", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):
-    # Lấy tổng số lượng nộp bài
-    result = await db.execute(select(ExamSubmission).where(ExamSubmission.exam_id == exam_id))
+    # Lấy tổng số lượng nộp bài (join qua ExamParticipant vì ExamSubmission không có exam_id)
+    result = await db.execute(
+        select(ExamSubmission)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
     submissions = result.scalars().all()
     
     if not submissions:

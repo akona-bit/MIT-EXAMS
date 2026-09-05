@@ -26,7 +26,7 @@ async def create_feedback(
     )
     latest_feedback = latest_feedback_result.scalars().first()
     
-    if latest_feedback and (datetime.now(timezone.utc) - latest_feedback.created_at.replace(tzinfo=timezone.utc)).total_seconds() < 60:
+    if latest_feedback and (datetime.now(timezone.utc) - latest_feedback.created_at.astimezone(timezone.utc)).total_seconds() < 60:
         raise HTTPException(status_code=429, detail="Bạn thao tác quá nhanh. Vui lòng đợi 1 phút trước khi gửi góp ý tiếp theo.")
         
     feedback = Feedback(

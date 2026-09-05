@@ -10,7 +10,6 @@ from app.core.config import settings
 from app.core import security
 from app.db.database import get_db
 from app.models.user import User, Role
-from app.models.user import User, Role
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
 

@@ -193,6 +193,7 @@ export default function AdminShell({ children }: AdminShellProps) {
   }, []);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     let frameCount = 0;
     let lastTime = performance.now();
     let animationFrameId: number;

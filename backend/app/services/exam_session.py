@@ -152,11 +152,11 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
         # Nếu exam.end_time có giá trị, giới hạn thời gian nộp bài tại end_time
         end_time_limit = exam.end_time if exam.end_time else None
         
-        elapsed = (now - participant.start_time.replace(tzinfo=timezone.utc)).total_seconds()
+        elapsed = (now - participant.start_time.astimezone(timezone.utc)).total_seconds()
         remaining = (exam.duration_minutes * 60) - elapsed
         
         if end_time_limit:
-            time_to_deadline = (end_time_limit.replace(tzinfo=timezone.utc) - now).total_seconds()
+            time_to_deadline = (end_time_limit.astimezone(timezone.utc) - now).total_seconds()
             remaining = min(remaining, time_to_deadline)
             
         remaining_seconds = max(0, int(remaining))

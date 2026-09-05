@@ -10,6 +10,7 @@ import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
 import { MessageSquare } from "lucide-react";
 import { toast } from '../../components/ui/Toast';
+import { sanitizeHtml } from '../../utils/sanitize';
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -198,23 +199,6 @@ export default function StudentExamShell() {
     };
   }, [sessionInfo?.participant_status, reportViolation]);
 
-  // ─── Timer ───
-  useEffect(() => {
-    if (sessionInfo?.participant_status !== "IN_PROGRESS" || timeLeft <= 0)
-      return;
-    const timerId = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerId);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerId);
-  }, [sessionInfo?.participant_status, timeLeft]);
-
   // ─── Actions ───
   const handleAnswerChange = async (
     exam_form_question_id: number,
@@ -242,6 +226,26 @@ export default function StudentExamShell() {
       /* */
     }
   };
+
+  // ─── Timer (uses ref to avoid stale closure) ───
+  const handleAutoSubmitRef = useRef(handleAutoSubmit);
+  handleAutoSubmitRef.current = handleAutoSubmit;
+
+  useEffect(() => {
+    if (sessionInfo?.participant_status !== "IN_PROGRESS" || timeLeft <= 0)
+      return;
+    const timerId = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerId);
+          handleAutoSubmitRef.current();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, [sessionInfo?.participant_status, timeLeft]);
 
   const handleManualSubmit = async () => {
     const answered = Object.keys(savedAnswers).length;
@@ -576,7 +580,7 @@ export default function StudentExamShell() {
               ) : currentPassage ? (
                 <div
                   className="prose prose-sm max-w-none text-slate-800 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: currentPassage.content }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentPassage.content) }}
                 />
               ) : (
                 <p className="text-slate-400 italic">

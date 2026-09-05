@@ -134,7 +134,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         
     return JSONResponse(
         status_code=500, 
-        content={"detail": f"Internal server error: {str(exc)}", "type": str(type(exc))},
+        content={"detail": "Internal server error"},
         headers=headers
     )
 
@@ -174,7 +174,7 @@ CORS_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_origin_regex=r"https://.*\.vercel\.app|http://192\.168\.\d+\.\d+:\d+|http://10\.\d+\.\d+\.\d+:\d+",
+    allow_origin_regex=r"https://.*\.mit-2143\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

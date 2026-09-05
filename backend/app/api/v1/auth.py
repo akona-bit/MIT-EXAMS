@@ -18,7 +18,6 @@ from app.schemas.user import UserCreate, UserResponse, Token
 from app.api.dependencies import get_current_active_user
 from app.core.analytics import capture
 from app.services.email import send_otp_email, send_password_reset_email
-from app.core.config import settings
 import os
 
 # On local (no Redis), call email functions directly
@@ -27,7 +26,7 @@ _use_celery = os.getenv("REDIS_URL", "redis://localhost:6379/0") != "redis://loc
 
 if _use_celery:
     from app.services.email_tasks import send_otp_email_task, send_password_reset_email_task
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class ResolveSBDRequest(BaseModel):

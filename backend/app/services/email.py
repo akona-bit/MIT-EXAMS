@@ -78,9 +78,9 @@ def _base_wrapper(body_content: str) -> str:
 
 def send_otp_email(to_email: str, code: str) -> dict:
     """Send OTP code via Brevo."""
-    print(f"\n==========================================")
-    print(f"🔑 [DEV MODE] MÃ OTP ĐĂNG NHẬP: {code} 🔑")
-    print(f"==========================================\n")
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Sending OTP login email to %s", to_email)
     body = f"""
       <div style="font-size:24px;font-weight:700;color:#000000;margin-bottom:16px;letter-spacing:-0.5px;">Xác nhận Đăng nhập</div>
       <div style="font-size:16px;color:#444444;line-height:1.6;margin-bottom:32px;">
@@ -98,9 +98,9 @@ def send_otp_email(to_email: str, code: str) -> dict:
 
 def send_password_reset_email(to_email: str, code: str) -> dict:
     """Send password reset OTP via Brevo."""
-    print(f"\n==========================================")
-    print(f"🔑 [DEV MODE] MÃ OTP KHÔI PHỤC MẬT KHẨU: {code} 🔑")
-    print(f"==========================================\n")
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Sending password reset email to %s", to_email)
     body = f"""
       <div style="font-size:24px;font-weight:700;color:#000000;margin-bottom:16px;letter-spacing:-0.5px;">Đặt lại Mật khẩu</div>
       <div style="font-size:16px;color:#444444;line-height:1.6;margin-bottom:32px;">

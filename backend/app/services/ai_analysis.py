@@ -263,8 +263,10 @@ Quy tắc:
 async def generate_matrix_rules(prompt: str, existing_nodes: list[dict]):
     from google import genai
     from google.genai import types
-    from app.core.config import settings
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured")
+    client = genai.Client(api_key=api_key)
     
     nodes_context = "Các chủ đề hiện có trong hệ thống (nên ưu tiên sử dụng tên y hệt để dễ khớp):\n"
     for n in existing_nodes[:500]:  # Limit to avoid huge prompt
