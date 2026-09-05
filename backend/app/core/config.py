@@ -57,6 +57,13 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+if not settings.SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "SECRET_KEY is empty! JWT signing will fail. Set SECRET_KEY in your .env or environment.",
+        stacklevel=2,
+    )
+
 
 @lru_cache()
 def get_settings() -> Settings:

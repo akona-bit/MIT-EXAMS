@@ -25,15 +25,16 @@ async def get_current_user(
     try:
         # First, try to decode as our custom OTP JWT
         try:
-            custom_payload = jwt.decode(token, key=settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            user_id_str = custom_payload.get("sub")
-            if user_id_str and user_id_str.isdigit():
-                user_id = int(user_id_str)
-                result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user_id))
-                user = result.scalars().first()
-                if user:
-                    return user
-        except JWTError:
+            if settings.SECRET_KEY:
+                custom_payload = jwt.decode(token, key=settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                user_id_str = custom_payload.get("sub")
+                if user_id_str and user_id_str.isdigit():
+                    user_id = int(user_id_str)
+                    result = await db.execute(select(User).options(selectinload(User.role)).where(User.id == user_id))
+                    user = result.scalars().first()
+                    if user:
+                        return user
+        except Exception:
             pass # Fall back to Supabase token logic
 
         import base64
@@ -49,6 +50,9 @@ async def get_current_user(
             secret_key = base64.b64decode(settings.SUPABASE_JWT_SECRET)
         except Exception:
             secret_key = settings.SUPABASE_JWT_SECRET
+
+        if not secret_key:
+            raise credentials_exception
             
         payload = jwt.decode(
             token, key=secret_key, algorithms=["HS256", "RS256", "ES256"], options={"verify_aud": False}
@@ -56,9 +60,9 @@ async def get_current_user(
         supabase_id = payload.get("sub")
         if not supabase_id:
             raise credentials_exception
-    except JWTError as e:
+    except Exception as e:
         import logging
-        logging.error(f"JWTError: {e}")
+        logging.error(f"Auth error: {type(e).__name__}: {e}")
         raise credentials_exception
         
     result = await db.execute(select(User).options(selectinload(User.role)).where(User.supabase_id == supabase_id))
