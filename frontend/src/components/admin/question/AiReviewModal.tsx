@@ -3,6 +3,7 @@ import { AiAnalysisResponse, AiReviewStatus, AiAnalysisResult } from "../../../t
 import { analyzeQuestion, reviewAiAnalysis } from "../../../api/questions";
 import { Button } from "../../ui/Button";
 import Input from "../../ui/Input";
+import { toast } from "../../ui/Toast";
 import { Sparkles, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 interface AiReviewModalProps {
@@ -42,7 +43,7 @@ export default function AiReviewModal({ isOpen, onClose, questionId }: AiReviewM
       }
     } catch (error) {
       console.error(error);
-      alert("Không thể phân tích hoặc tải kết quả AI.");
+      toast.error("Không thể phân tích hoặc tải kết quả AI.");
       onClose();
     } finally {
       setIsLoading(false);
@@ -64,10 +65,11 @@ export default function AiReviewModal({ isOpen, onClose, questionId }: AiReviewM
         review_status: status,
         updated_analysis_result: status === AiReviewStatus.HUMAN_EDITED ? updatedResult : undefined,
       });
+      toast.success("Đã lưu kết quả duyệt!");
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Lỗi khi lưu kết quả duyệt.");
+      toast.error("Lỗi khi lưu kết quả duyệt.");
     } finally {
       setIsSubmitting(false);
     }

@@ -1,6 +1,7 @@
 import MarkdownEditor from '../../editor/MarkdownEditor';
 import { QuestionBulkUpdateItem } from '../../../api/passages';
 import KnowledgeNodeSelector from '../question/KnowledgeNodeSelector';
+import { toast } from '../../ui/Toast';
 
 interface QuestionBlockProps {
   question: QuestionBulkUpdateItem;
@@ -46,7 +47,7 @@ export default function QuestionBlock({ question, index, onChange, onRemove }: Q
     } else if (newType === "FILL_IN_BLANK") {
       newAnswers = [{ content: "", is_correct: true, position: 1 }];
     } else if (newType === "COMPOSITE") {
-      alert("Dạng câu hỏi chùm (COMPOSITE) đang phát triển.");
+      toast.info("Dạng câu hỏi chùm (COMPOSITE) đang phát triển.");
       return;
     }
     onChange(index, { ...question, type: newType, answers: newAnswers, sub_items: undefined });

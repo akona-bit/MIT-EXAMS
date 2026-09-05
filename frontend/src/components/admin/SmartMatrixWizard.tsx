@@ -1,13 +1,14 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { getKnowledgeTree } from "../../api/knowledge";
 import { getSmartLeaves, proposeSmartDistribution, confirmSmartMatrix } from "../../api/matrix";
+import { toast } from "../ui/Toast";
 import type { KnowledgeNode } from "../../types";
 import Button from "../ui/Button";
+import { toast } from "../ui/Toast";
 import Input from "../ui/Input";
 import Modal from "../ui/Modal";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { ArrowRight, ArrowLeft, AlertTriangle, CheckCircle2, FileText, Target, PieChart, CheckSquare, Layers, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, AlertTriangle, CheckCircle2, FileText, Target, PieChart, CheckSquare, Layers, Sparkles, Search, X, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SmartMatrixWizardProps {
@@ -38,24 +39,27 @@ interface SkillAllocation {
 type Step = "scope" | "propose" | "confirm";
 
 export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizardProps) {
-  const navigate = useNavigate();
   const [step, setStep] = useState<Step>("scope");
   const [isLoading, setIsLoading] = useState(false);
+  const [isProposing, setIsProposing] = useState(false);
 
   // Step 1: Scope
   const [nodes, setNodes] = useState<KnowledgeNode[]>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<number>>(new Set());
   const [leaves, setLeaves] = useState<LeafNode[]>([]);
+  const [treeSearch, setTreeSearch] = useState("");
 
   // Step 2: Propose
   const [totalQuestions, setTotalQuestions] = useState(120);
   const [allocations, setAllocations] = useState<SkillAllocation[]>([]);
   const [totalInBank, setTotalInBank] = useState(0);
+  const [levelRatios, setLevelRatios] = useState<Record<number, number>>({ 1: 0.2, 2: 0.3, 3: 0.3, 4: 0.2 });
 
   // Step 3: Confirm
   const [matrixName, setMatrixName] = useState("");
   const [matrixDescription, setMatrixDescription] = useState("");
-  const [levelRatios, setLevelRatios] = useState<Record<number, number>>({ 1: 0.2, 2: 0.3, 3: 0.3, 4: 0.2 });
+
+  const proposedRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +70,10 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
       setAllocations([]);
       setMatrixName("");
       setMatrixDescription("");
+      setTreeSearch("");
+      setTotalQuestions(120);
+      setLevelRatios({ 1: 0.2, 2: 0.3, 3: 0.3, 4: 0.2 });
+      proposedRef.current = false;
     }
   }, [isOpen]);
 
@@ -77,9 +85,30 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
   };
 
   const selectAllTopics = () => {
-    const topicIds = nodes.filter((n) => n.level === "TOPIC").map((n) => n.id);
+    const topicIds = filteredTree.filter((n) => n.level === "TOPIC").map((n) => n.id);
     setSelectedNodeIds(new Set(topicIds));
   };
+
+  const runPropose = useCallback(async (nodeIds: Set<number>, questions: number, ratios: Record<number, number>) => {
+    setIsProposing(true);
+    try {
+      const res = await proposeSmartDistribution({
+        node_ids: Array.from(nodeIds),
+        total_questions: questions,
+        level_ratios: ratios,
+        type_ratios: { SINGLE_CHOICE: 1.0 },
+      });
+      setAllocations(res.skills.map((s: SkillAllocation) => ({
+        ...s,
+        has_warning: s.proposed_count > s.question_count,
+      })));
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể phân bổ tự động");
+    } finally {
+      setIsProposing(false);
+    }
+  }, []);
 
   const handleScopeNext = async () => {
     if (selectedNodeIds.size === 0) return;
@@ -89,37 +118,34 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
       setLeaves(res.leaves);
       setTotalInBank(res.total_questions_in_bank);
       setStep("propose");
+      proposedRef.current = false;
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra khi tải danh sách skill lá");
+      toast.error("Lỗi tải danh sách skill");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleProposeNext = async () => {
-    if (totalQuestions <= 0) return;
-    setIsLoading(true);
-    try {
-      const res = await proposeSmartDistribution({
-        node_ids: Array.from(selectedNodeIds),
-        total_questions: totalQuestions,
-        level_ratios: levelRatios,
-        type_ratios: { SINGLE_CHOICE: 1.0 },
-      });
-      setAllocations(res.skills);
-      setStep("confirm");
-    } catch (error) {
-      console.error(error);
-      alert("Có lỗi xảy ra khi đề xuất phân bổ");
-    } finally {
-      setIsLoading(false);
+  // Auto-propose when entering Step 2
+  useEffect(() => {
+    if (step === "propose" && !proposedRef.current && leaves.length > 0) {
+      proposedRef.current = true;
+      runPropose(selectedNodeIds, totalQuestions, levelRatios);
     }
+  }, [step, leaves, selectedNodeIds, totalQuestions, levelRatios, runPropose]);
+
+  const handleRatioChange = (levelId: number, value: number) => {
+    const next = { ...levelRatios, [levelId]: value / 100 || 0 };
+    setLevelRatios(next);
   };
+
+  const levelRatioSum = useMemo(() => Object.values(levelRatios).reduce((s, v) => s + v, 0), [levelRatios]);
+  const levelRatioSumPct = Math.round(levelRatioSum * 100);
 
   const handleConfirm = async () => {
     if (!matrixName.trim()) {
-      alert("Tên ma trận không được để trống");
+      toast.error("Tên ma trận không được để trống");
       return;
     }
     setIsLoading(true);
@@ -132,11 +158,11 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
         level_ratios: levelRatios,
         type_ratios: { SINGLE_CHOICE: 1.0 },
       });
+      toast.success("Tạo ma trận thành công!");
       onClose();
-      navigate("/admin/matrix");
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra khi tạo ma trận");
+      toast.error("Lỗi tạo ma trận");
     } finally {
       setIsLoading(false);
     }
@@ -147,11 +173,7 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
       prev.map((a) => {
         if (a.node_id !== nodeId) return a;
         const newCount = Math.max(0, count);
-        return {
-          ...a,
-          proposed_count: newCount,
-          has_warning: newCount > a.question_count,
-        };
+        return { ...a, proposed_count: newCount, has_warning: newCount > a.question_count };
       })
     );
   };
@@ -167,6 +189,24 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
       })),
     [allocations]
   );
+
+  // Tree filtering
+  const filterTree = useCallback((ns: KnowledgeNode[], query: string): KnowledgeNode[] => {
+    if (!query.trim()) return ns;
+    const q = query.toLowerCase();
+    return ns
+      .map((n) => {
+        const nameMatch = n.name.toLowerCase().includes(q);
+        const children = n.children ? filterTree(n.children, query) : [];
+        if (nameMatch || children.length > 0) {
+          return { ...n, children: nameMatch ? n.children : children };
+        }
+        return null;
+      })
+      .filter(Boolean) as KnowledgeNode[];
+  }, []);
+
+  const filteredTree = useMemo(() => filterTree(nodes, treeSearch), [nodes, treeSearch, filterTree]);
 
   const renderNodeTree = (ns: KnowledgeNode[], depth = 0): React.ReactNode[] => {
     const items: React.ReactNode[] = [];
@@ -212,17 +252,14 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
     <Modal isOpen={isOpen} onClose={onClose} title="Smart Builder" maxWidth="max-w-5xl">
       <div className="flex flex-col h-[85vh] max-h-[800px] overflow-hidden bg-slate-50/50 dark:bg-slate-950/50 rounded-b-2xl">
         
-        {/* Modern Stepper Header */}
+        {/* Stepper Header */}
         <div className="shrink-0 px-8 py-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 z-10 shadow-sm">
            <div className="flex items-center justify-between max-w-3xl mx-auto relative">
-              {/* Connecting line */}
               <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0" />
-              
               {steps.map((s, idx) => {
                 const isActive = step === s.id;
                 const isPast = steps.findIndex(x => x.id === step) > idx;
                 const Icon = s.icon;
-                
                 return (
                   <div key={s.id} className="relative z-10 flex flex-col items-center gap-2">
                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-500 ${
@@ -245,6 +282,7 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-8 custom-scrollbar relative">
           <AnimatePresence mode="wait">
+            {/* ═══════════════ STEP 1: SCOPE ═══════════════ */}
             {step === "scope" && (
               <motion.div 
                 key="scope"
@@ -265,6 +303,23 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
                   </div>
                 </div>
 
+                {/* Search bar */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm chủ đề..."
+                    value={treeSearch}
+                    onChange={(e) => setTreeSearch(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+                  />
+                  {treeSearch && (
+                    <button onClick={() => setTreeSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
                 <div className="flex justify-between items-end pb-2 border-b border-slate-200 dark:border-slate-800">
                   <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
                     Đã chọn <span className="text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 px-2 py-0.5 rounded-full">{selectedNodeIds.size}</span> chủ đề
@@ -274,19 +329,25 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
                   </Button>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-4 shadow-sm min-h-[300px]">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-4 shadow-sm min-h-[300px] max-h-[400px] overflow-y-auto">
                   {nodes.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-48 text-slate-400 space-y-4">
                        <div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-primary-500 animate-spin" />
                        <p className="text-sm font-medium">Đang tải cấu trúc tri thức...</p>
                     </div>
+                  ) : filteredTree.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+                       <Search className="w-10 h-10 mb-2 text-slate-300" />
+                       <p className="text-sm font-medium">Không tìm thấy "{treeSearch}"</p>
+                    </div>
                   ) : (
-                    <div className="space-y-1">{renderNodeTree(nodes)}</div>
+                    <div className="space-y-1">{renderNodeTree(filteredTree)}</div>
                   )}
                 </div>
               </motion.div>
             )}
 
+            {/* ═══════════════ STEP 2: PROPOSE ═══════════════ */}
             {step === "propose" && (
               <motion.div 
                 key="propose"
@@ -319,7 +380,12 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
                               />
                            </div>
                            <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-indigo-100 uppercase tracking-wider">Tỷ lệ độ khó (%)</label>
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-indigo-100 uppercase tracking-wider">Tỷ lệ độ khó (%)</label>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${levelRatioSumPct === 100 ? 'bg-green-400/20 text-green-200' : 'bg-red-400/20 text-red-200'}`}>
+                                  {levelRatioSumPct}%
+                                </span>
+                              </div>
                               <div className="grid grid-cols-4 gap-2">
                                 {[
                                   { id: 1, label: "NB" },
@@ -331,18 +397,53 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
                                     <input
                                       type="number"
                                       step="5"
+                                      min="0"
+                                      max="100"
                                       className="w-full px-1 py-1.5 text-sm font-bold text-center bg-white/20 border border-white/30 rounded-lg outline-none focus:ring-2 focus:ring-white/50 text-white"
                                       value={Math.round((levelRatios[l.id] || 0) * 100)}
-                                      onChange={(e) =>
-                                        setLevelRatios({ ...levelRatios, [l.id]: parseInt(e.target.value) / 100 || 0 })
-                                      }
+                                      onChange={(e) => handleRatioChange(l.id, parseInt(e.target.value))}
                                     />
                                     <div className="text-[10px] text-indigo-200 font-bold">{l.label}</div>
                                   </div>
                                 ))}
                               </div>
+                              {levelRatioSumPct !== 100 && (
+                                <p className="text-[10px] text-red-200 font-semibold mt-1">Tổng phải bằng 100% (hiện tại {levelRatioSumPct}%)</p>
+                              )}
                            </div>
+
+                           {/* Quick re-propose button */}
+                           <button
+                             onClick={() => runPropose(selectedNodeIds, totalQuestions, levelRatios)}
+                             disabled={isProposing}
+                             className="w-full py-2 text-xs font-bold bg-white/20 hover:bg-white/30 border border-white/30 rounded-xl transition-colors flex items-center justify-center gap-2"
+                           >
+                             {isProposing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                             Phân bổ lại
+                           </button>
                         </div>
+                     </div>
+
+                     {/* Summary card */}
+                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-4 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Tổng phân bổ</span>
+                          <span className={`text-sm font-black ${totalProposed === totalQuestions ? 'text-green-600' : totalProposed > totalQuestions ? 'text-red-600' : 'text-amber-600'}`}>
+                            {totalProposed}/{totalQuestions}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${totalProposed > totalQuestions ? 'bg-red-500' : totalProposed === totalQuestions ? 'bg-green-500' : 'bg-amber-500'}`}
+                            style={{ width: `${Math.min((totalProposed / totalQuestions) * 100, 100)}%` }}
+                          />
+                        </div>
+                        {warnings.length > 0 && (
+                          <div className="mt-2 flex items-center gap-1.5 text-amber-600">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold">{warnings.length} skill thiếu câu</span>
+                          </div>
+                        )}
                      </div>
                   </div>
 
@@ -350,47 +451,82 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
                   <div className="w-full lg:w-2/3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[500px]">
                      <div className="p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center shrink-0">
                         <h4 className="font-bold text-slate-800 dark:text-slate-100">Bảng phân bổ chi tiết</h4>
+                        {isProposing && (
+                          <span className="flex items-center gap-2 text-xs text-indigo-600 font-semibold">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang phân bổ...
+                          </span>
+                        )}
                      </div>
                      <div className="flex-1 overflow-y-auto">
-                        <table className="w-full text-left text-sm">
-                           <thead className="bg-white dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
-                             <tr>
-                               <th className="px-4 py-3 font-bold text-slate-500 uppercase text-xs tracking-wider">Kỹ năng (Skill)</th>
-                               <th className="px-4 py-3 font-bold text-slate-500 uppercase text-xs tracking-wider text-center">Có sẵn</th>
-                               <th className="px-4 py-3 font-bold text-primary-600 uppercase text-xs tracking-wider text-center">Đề xuất</th>
-                             </tr>
-                           </thead>
-                           <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                             {leaves.map((leaf) => (
-                               <tr key={leaf.node_id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
-                                 <td className="px-4 py-3">
-                                   <div className="font-semibold text-slate-800 dark:text-slate-200">{leaf.name}</div>
-                                   <div className="text-[10px] text-slate-400 mt-0.5 truncate max-w-xs">{leaf.path}</div>
-                                 </td>
-                                 <td className="px-4 py-3 text-center">
-                                    <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs text-slate-600 dark:text-slate-300">
-                                       {leaf.question_count}
-                                    </span>
-                                 </td>
-                                 <td className="px-4 py-3 text-center">
-                                   <input
-                                     type="number"
-                                     min={0}
-                                     className="w-16 px-2 py-1.5 text-sm font-bold text-center bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
-                                     value={allocations.find(a => a.node_id === leaf.node_id)?.proposed_count || 0}
-                                     onChange={(e) => updateAllocation(leaf.node_id, parseInt(e.target.value) || 0)}
-                                   />
-                                 </td>
-                               </tr>
-                             ))}
-                           </tbody>
-                        </table>
+                        {isProposing && allocations.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
+                            <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-t-indigo-500 animate-spin" />
+                            <p className="text-sm font-medium">AI đang phân bổ câu hỏi...</p>
+                          </div>
+                        ) : (
+                          <table className="w-full text-left text-sm">
+                            <thead className="bg-white dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
+                              <tr>
+                                <th className="px-4 py-3 font-bold text-slate-500 uppercase text-xs tracking-wider">Kỹ năng (Skill)</th>
+                                <th className="px-4 py-3 font-bold text-slate-500 uppercase text-xs tracking-wider text-center">Có sẵn</th>
+                                <th className="px-4 py-3 font-bold text-primary-600 uppercase text-xs tracking-wider text-center">Đề xuất</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                              {allocations.map((a) => (
+                                <tr key={a.node_id} className={`transition-colors group ${a.has_warning ? 'bg-amber-50/50 dark:bg-amber-900/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                                  <td className="px-4 py-3">
+                                    <div className="font-semibold text-slate-800 dark:text-slate-200">{a.name}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5 truncate max-w-xs">{a.path}</div>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                     <span className="inline-block px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs text-slate-600 dark:text-slate-300">
+                                        {a.question_count}
+                                     </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        className={`w-16 px-2 py-1.5 text-sm font-bold text-center bg-white dark:bg-slate-950 border rounded-lg outline-none focus:ring-2 focus:ring-primary-500 shadow-sm ${
+                                          a.has_warning
+                                            ? 'border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-400'
+                                            : 'border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200'
+                                        }`}
+                                        value={a.proposed_count}
+                                        onChange={(e) => updateAllocation(a.node_id, parseInt(e.target.value) || 0)}
+                                      />
+                                      {a.has_warning && (
+                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Total row */}
+                              <tr className="bg-slate-50 dark:bg-slate-800/50 font-bold">
+                                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">TỔNG</td>
+                                <td className="px-4 py-3 text-center font-mono text-slate-600 dark:text-slate-300">
+                                  {allocations.reduce((s, a) => s + a.question_count, 0)}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`font-mono ${totalProposed === totalQuestions ? 'text-green-600' : 'text-primary-600'}`}>
+                                    {totalProposed}
+                                  </span>
+                                  <span className="text-slate-400 font-mono">/{totalQuestions}</span>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        )}
                      </div>
                   </div>
                 </div>
               </motion.div>
             )}
 
+            {/* ═══════════════ STEP 3: CONFIRM ═══════════════ */}
             {step === "confirm" && (
               <motion.div 
                 key="confirm"
@@ -451,8 +587,12 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
                          <h4 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
                             <PieChart className="w-5 h-5 text-indigo-500" /> Trực quan hoá
                          </h4>
-                         <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold text-sm rounded-full">
-                            TỔNG: {totalProposed} / {totalQuestions}
+                         <span className={`px-3 py-1 font-bold text-sm rounded-full ${
+                           totalProposed === totalQuestions
+                             ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                             : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                         }`}>
+                           TỔNG: {totalProposed} / {totalQuestions}
                          </span>
                       </div>
                       <div className="flex-1 min-h-[250px]">
@@ -491,7 +631,12 @@ export default function SmartMatrixWizard({ isOpen, onClose }: SmartMatrixWizard
             </Button>
           )}
           {step === "propose" && (
-            <Button onClick={handleProposeNext} isLoading={isLoading} size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-500/30 rounded-xl px-8">
+            <Button
+              onClick={() => setStep("confirm")}
+              disabled={isProposing || totalProposed === 0}
+              size="lg"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-500/30 rounded-xl px-8"
+            >
               Xác nhận kết quả <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           )}

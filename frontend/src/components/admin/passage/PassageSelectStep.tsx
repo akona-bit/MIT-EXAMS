@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { passageApi, PassageSearchResponse } from '../../../api/passages';
 import { PassageDraftState } from '../../../hooks/usePassageGroupDraft';
+import { toast } from '../../../ui/Toast';
 
 interface PassageSelectStepProps {
   draft: PassageDraftState;
@@ -61,7 +62,7 @@ export default function PassageSelectStep({ updateDraft, onNext }: PassageSelect
       onNext();
     } catch (e) {
       console.error(e);
-      alert('Lỗi tải dữ liệu ngữ liệu');
+      toast.error('Lỗi tải dữ liệu ngữ liệu');
     }
   };
 

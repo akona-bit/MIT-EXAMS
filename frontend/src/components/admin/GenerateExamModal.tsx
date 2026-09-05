@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { generateExamFromMatrix } from '../../api/exams';
 import Button from '../ui/Button';
+import { toast } from '../ui/Toast';
 import { X, AlertTriangle, FileText, Settings, Layers } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -46,14 +47,14 @@ export default function GenerateExamModal({
         number_of_forms: numForms,
         distinct_questions: distinctQuestions
       });
-      alert('Tạo mã đề thành công!');
+      toast.success('Tạo mã đề thành công!');
       onSuccess();
       onClose();
     } catch (error: any) {
       if (error.response?.status === 422 && error.response.data?.detail?.shortages) {
         setErrorShortages(error.response.data.detail.shortages);
       } else {
-        alert(error.response?.data?.detail?.message || 'Có lỗi xảy ra khi tạo mã đề.');
+        toast.error('Không thể tạo mã đề', error.response?.data?.detail?.message || 'Có lỗi xảy ra khi tạo mã đề.');
       }
     } finally {
       setIsGenerating(false);
