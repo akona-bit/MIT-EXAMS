@@ -92,6 +92,17 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-05` — **Hoàn thiện phụ lục ERD → bảng chuẩn đầy đủ 100%**:
+  - [x] Bổ sung 14 model có trong code nhưng thiếu trong bảng đối chiếu: QuestionSubItem, QuestionEmbedding, ExamGenerationRun, ExamTrackingLog, IrtTask, AuditLog, AiAnalysisCache, AiRequestLog, Notification, Feedback, OTPToken, SystemSetting, ObsidianSyncRun, ObsidianFile — mỗi dòng kèm mô tả + cột chính (đối chiếu trực tiếp từ `backend/app/models/*.py`).
+  - [x] Cập nhật dòng `Section` (PhanThi): ghi rõ chưa có bảng riêng — phần thi đang là cột `part` (1-4) trên `MatrixRule`/`ExamFormQuestion` + `ctt_score_part*`/`irt_score_part*` trên `ExamResult`; tên `Section` được reserve cho bảng tương lai.
+  - [x] Không đổi bất kỳ code/model nào — chỉ cập nhật tài liệu chuẩn tên bảng.
+
+
+- `2026-09-05` — **Chốt chuẩn tên bảng tiếng Anh (phụ lục ERD trong architecture.md)**:
+  - [x] Đối chiếu bảng đối chiếu ERD gốc ↔ tên bảng thật (architecture.md §8) với code thực tế `backend/app/models/*.py`: 18/20 dòng khớp.
+  - [x] User xác nhận chốt theo code hiện tại. Sửa dòng OMR: `OmrSession`/`OmrRecord` → `OmrJob`/`OmrSheet` (khớp `models/omr.py`), có ghi chú ngày đối chiếu.
+  - [x] Ghi nhận 2 gap chưa xử lý: (1) `Section` (PhanThi) chưa có model trong code — phần thi đang xử lý động; (2) 14 model trong code chưa có trong bảng (ExamGenerationRun, ExamTrackingLog, IrtTask, QuestionSubItem, QuestionEmbedding, AiAnalysisCache, AiRequestLog, AuditLog, Notification, Feedback, OTPToken, SystemSetting, ObsidianSyncRun, ObsidianFile) — cân nhắc bổ sung ở phiên sau.
+
 - `2026-09-05` — **Kiểm tra chạy local toàn hệ thống (build + tests) & Fix 4 test fails**:
   - [x] Frontend: `npm run build` thành công (3m25s, 4432 modules). Lưu ý: chunk chính `index-*.js` ~7.1MB (gzip 2.2MB) vượt 500kB — nên cân nhắc code-split (`manualChunks` cho plotly.js/recharts) ở phiên sau.
   - [x] Fix httpx 0.28.1 phá vỡ TestClient (`TypeError: Client.__init__() got an unexpected keyword argument 'app'`) → hạ httpx về 0.27.2, pin `httpx>=0.25.0,<0.28` trong requirements.txt.

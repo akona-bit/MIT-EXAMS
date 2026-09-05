@@ -54,16 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: data.password,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[AUTH] Supabase signInWithPassword failed:", error.message, error.status);
+        throw error;
+      }
 
       const jwtToken = authData.session.access_token;
       localStorage.setItem('access_token', jwtToken);
       setToken(jwtToken);
 
-      const u = await getMe();
-      setUser(u);
-      setIsLoading(false);
-      return u;
+      try {
+        const u = await getMe();
+        setUser(u);
+        setIsLoading(false);
+        return u;
+      } catch (meError: any) {
+        console.error("[AUTH] /me failed after login. Status:", meError?.response?.status, "Token prefix:", jwtToken?.substring(0, 30));
+        throw meError;
+      }
     } catch (e) {
       setIsLoading(false);
       throw e;

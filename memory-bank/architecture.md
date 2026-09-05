@@ -121,7 +121,7 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 
 | Tên ERD gốc | Tên bảng thật (đã chốt) | Ghi chú |
 |---|---|---|
-| PhanThi | `Section` | Tiếng Việt/Tiếng Anh/Toán/TDKH |
+| PhanThi | `Section` | **Chưa có bảng riêng.** Hiện phần thi biểu diễn qua cột `part` (1=TV, 2=TA, 3=Toan, 4=TDKH) trên `MatrixRule`/`ExamFormQuestion` và các cột `ctt_score_part*`/`irt_score_part*` trên `ExamResult`. Tên `Section` được reserve — nếu sau này cần bảng riêng (vd. phần thi động per-exam) phải dùng đúng tên này |
 | KienThuc | `KnowledgeNode` | DAG đa-cha qua `knowledge_node_parent` (không còn `parent_id` đơn) |
 | NguLieu | `Passage` / `Resource` | Ảnh/PDF/đoạn văn |
 | CauHoi | `Question` | |
@@ -138,7 +138,21 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 | DuLieuBaiLam | `ExamSubmissionAnswer` | |
 | ItemAnalysis | `ItemAnalysisResult` | Giữ nguyên |
 | ChamDiem | `ExamResult` | Điểm bài thi (CTT/IRT) |
-| OMR | `OmrSession`, `OmrRecord` | Chấm thi OMR |
+| OMR | `OmrJob`, `OmrSheet` | Chấm thi OMR. *Đã đối chiếu code 2026-09-05: khớp `models/omr.py` (bản gốc ghi `OmrSession`/`OmrRecord` đã sửa lại theo code)* |
 | — | `KnowledgeNodeParent` | DAG parent-child (multi-parent, 1 primary). Bảng mới thay `parent_id` đơn |
 | — | `QuestionSkillTag` | Multi-skill per question (thay `knowledge_node_id` đơn). Cols: `question_id`, `knowledge_node_id`, `is_primary` |
 | — | `KnowledgeNodeLink` | Manual cross-link giữa 2 node (non-hierarchical). Cols: `source_id`, `target_id`, `label` |
+| — | `QuestionSubItem` | Ý con của câu TRUE_FALSE/COMPOSITE. Cols: `question_id`, `label`, `prompt`, `position`, `point_weight`, `kind` (`tf`/`single`/`multi`). SINGLE/MULTIPLE_CHOICE không dùng |
+| — | `QuestionEmbedding` | Vector embedding câu hỏi cho semantic search. Cols: `question_id` (unique), `content`, `embedding` (JSON string / pgvector), `model_name` |
+| — | `ExamGenerationRun` | Log 1 lần sinh đề theo ma trận. Cols: `matrix_id`, `num_forms`, `distinct_questions`, `status`, `error_details` |
+| — | `ExamTrackingLog` | Log giám sát thí sinh thi online. Cols: `exam_participant_id`, `action_type` (TAB_CHANGED, BLUR_WINDOW...), `timestamp` |
+| — | `IrtTask` | Theo dõi Celery task chạy MMLE-IRT cho 1 kỳ thi (bắt buộc async, client poll `task_id`). Cols: `exam_id`, `celery_task_id`, `status`, `error_details` |
+| — | `AuditLog` | Nhật ký thao tác admin (RBAC). Cols: `user_id`, `action` (CREATE/UPDATE/DELETE/BAN_STUDENT/RUN_IRT...), `target_type`, `target_id`, `details` |
+| — | `AiAnalysisCache` | Cache kết quả phân tích AI cho câu hỏi, tránh gọi lại với cùng `content_hash`. Cols: `analysis_result`, `confidence`, `review_status` |
+| — | `AiRequestLog` | Log lời gọi API AI. Cols: `endpoint`, `question_id`, `token_count`, `cost_estimate` |
+| — | `Notification` | Thông báo trong hệ thống. Cols: `recipient_id`, `sender_id`, `type` (SYSTEM/EXAM/GRADING/FEEDBACK), `title`, `message`, `link`, `is_read` |
+| — | `Feedback` | Phản hồi của người dùng về hệ thống. Cols: `user_id`, `category` (BUG/EXAM_CONTENT/OTHER), `content`, `status` (PENDING/RESOLVED/IGNORED) |
+| — | `OTPToken` | Mã OTP đăng nhập/reset password qua email. Cols: `email`, `code`, `purpose`, `is_used`, `expires_at` |
+| — | `SystemSetting` | Cấu hình hệ thống key-value (PK là `key`). Cols: `key`, `value`, `description` |
+| — | `ObsidianSyncRun` | Log 1 lần đồng bộ vault Obsidian. Cols: `api_url`, `status`, `success_count`, `skipped_count`, `error_count` |
+| — | `ObsidianFile` | Trạng thái đồng bộ từng file Obsidian (1:1 với file trên vault). Cols: `file_path` (unique), `checksum`, `status`, `question_id` |
