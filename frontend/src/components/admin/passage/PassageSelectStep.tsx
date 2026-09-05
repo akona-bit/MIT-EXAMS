@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { passageApi, PassageSearchResponse } from '../../../api/passages';
 import { PassageDraftState } from '../../../hooks/usePassageGroupDraft';
-import { toast } from '../../../ui/Toast';
+import { toast } from '../../ui/Toast';
 
 interface PassageSelectStepProps {
   draft: PassageDraftState;
