@@ -34,7 +34,7 @@ export default function ExamDetailPage() {
       const forms = await getExamForms(parseInt(id));
       setHasExistingForms(forms.length > 0);
       
-      if (examData.status === 'COMPLETED' || examData.status === 'PUBLISHED') {
+      if (examData.status === 'FINISHED' || examData.status === 'PUBLISHED') {
          try {
            const [ov, items] = await Promise.all([
              getExamOverview(parseInt(id)),
@@ -243,7 +243,7 @@ export default function ExamDetailPage() {
                 <Button variant="default" onClick={handlePublish} className="w-full justify-center shadow-lg shadow-primary-500/20">Xuất bản (Publish)</Button>
               </>
             )}
-            {(exam.status === 'PUBLISHED' || exam.status === 'COMPLETED') && (
+            {(exam.status === 'PUBLISHED' || exam.status === 'FINISHED') && (
               <>
                 <Button variant="default" onClick={handleRunIrt} disabled={!!irtStatus && irtStatus !== 'SUCCESS' && irtStatus !== 'FAILED'} className="w-full justify-center shadow-lg shadow-primary-500/20">
                   {irtStatus === 'PENDING' || irtStatus === 'STARTED' ? `Đang chạy IRT... (${irtStatus})` : 'Chạy phân tích IRT'}

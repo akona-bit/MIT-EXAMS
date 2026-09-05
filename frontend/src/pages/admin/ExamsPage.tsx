@@ -124,7 +124,7 @@ export default function ExamsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link to="/admin/exams/compare">
+          <Link to="/admin/analytics/ds">
             <Button variant="outline" className="shadow-sm">
               <BarChart2 className="mr-2 h-4 w-4 text-indigo-500" />
               So sánh Kỳ thi

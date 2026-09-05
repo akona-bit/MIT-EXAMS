@@ -34,7 +34,7 @@ export async function getExamForms(id: number): Promise<ExamForm[]> {
 }
 
 export async function createExam(data: any): Promise<Exam> {
-  const response = await client.post<Exam>("/api/v1/exams/", data);
+  const response = await client.post<Exam>("/api/v1/exams/generate", data);
   return response.data;
 }
 
@@ -77,7 +77,7 @@ export async function deleteExam(id: number): Promise<void> {
 }
 
 export async function completeExam(id: number): Promise<Exam> {
-  const response = await client.post<Exam>(`/api/v1/exams/${id}/complete`);
+  const response = await client.put<Exam>(`/api/v1/exams/${id}/complete`);
   return response.data;
 }
 
@@ -99,7 +99,7 @@ export function exportExamLaTeX(examId: number, formCode?: string) {
   // Let's use fetch and trigger download
   
   return client.get(url, { responseType: 'blob' }).then(response => {
-    const blob = new Blob([response.data], { type: 'text/plain' });
+    const blob = new Blob([response.data], { type: 'application/zip' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;

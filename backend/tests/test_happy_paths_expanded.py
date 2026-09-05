@@ -90,8 +90,10 @@ async def test_generate_original_exam_happy_path_creates_form_and_questions():
     q1 = SimpleNamespace(id=11, answers=[SimpleNamespace(id=101), SimpleNamespace(id=102)])
     q2 = SimpleNamespace(id=12, answers=[SimpleNamespace(id=103), SimpleNamespace(id=104)])
 
-    # DB should return available_questions when generator queries
-    exec_results = [MockScalarResult(items=[q1, q2])]
+    # DB query order inside generate_original_exam:
+    # 1. get_all_descendant_leaves -> children of knowledge_node_id (empty => node is a leaf)
+    # 2. select(Question) with answers -> available_questions
+    exec_results = [MockScalarResult(items=[]), MockScalarResult(items=[q1, q2])]
     db = RichMockDB(execute_results=exec_results)
 
     exam = await generator.generate_original_exam(db, matrix, "Exam X", "desc")

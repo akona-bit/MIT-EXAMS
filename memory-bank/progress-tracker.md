@@ -5,7 +5,7 @@
 ## Trạng thái tổng quan
 
 **Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND) + UI REDESIGN
-**Cập nhật lần cuối:** 2026-09-04
+**Cập nhật lần cuối:** 2026-09-05
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -91,6 +91,13 @@
 - [x] Hệ thống Feedback (Góp ý/Báo lỗi)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-05` — **Kiểm tra chạy local toàn hệ thống (build + tests) & Fix 4 test fails**:
+  - [x] Frontend: `npm run build` thành công (3m25s, 4432 modules). Lưu ý: chunk chính `index-*.js` ~7.1MB (gzip 2.2MB) vượt 500kB — nên cân nhắc code-split (`manualChunks` cho plotly.js/recharts) ở phiên sau.
+  - [x] Fix httpx 0.28.1 phá vỡ TestClient (`TypeError: Client.__init__() got an unexpected keyword argument 'app'`) → hạ httpx về 0.27.2, pin `httpx>=0.25.0,<0.28` trong requirements.txt.
+  - [x] Fix xung đột google-genai 2.22.0 (bắt buộc httpx>=0.28.1) → hạ về `google-genai==1.0.0` (API `genai.Client`/`GenerateContentConfig`/`Part.from_bytes` vẫn giữ nguyên), nâng supafunc 0.3.3→0.10.2 để hết cảnh báo metadata. Pin `google-genai==1.0.0` trong requirements.txt.
+  - [x] Fix test `test_generate_original_exam_happy_path_creates_form_and_questions` (test_happy_paths_expanded.py): mock DB queue thiếu kết quả cho bước `get_all_descendant_leaves()` (được thêm từ 2026-09-04) khiến SimpleNamespace câu hỏi bị nuốt vào làm "con node tri thức" → thêm 1 kết quả rỗng vào đầu queue đúng thứ tự query.
+  - [x] Kết quả: backend pytest **74/74 pass** (8m10s), frontend build OK, `import app.main` OK với venv backend.
 
 - `2026-09-04` — **Đồng bộ Logic Ma trận & Cây Tri thức**: 
   - [x] Sửa đổi `KnowledgeService`: Tính tổng số câu hỏi gộp (inclusive) từ các node con, cháu để hiển thị chính xác tổng lượng câu hỏi cho Topic/Concept.

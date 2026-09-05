@@ -6,6 +6,7 @@ import QuestionListStep from "./QuestionListStep";
 import PassageGroupPreview from "./PassageGroupPreview";
 import { passageApi } from "../../../api/passages";
 import { useNavigate } from "react-router-dom";
+import { toast } from "../../ui/Toast";
 
 export default function PassageGroupWizard() {
   const navigate = useNavigate();
@@ -65,8 +66,8 @@ export default function PassageGroupWizard() {
       }
 
       clearDraft();
-      alert("Lưu thành công!");
-      navigate("/admin/bank"); // Navigate back to bank
+      toast.success("Lưu thành công!");
+      navigate("/admin/questions");
     } catch (e: any) {
       console.error(e);
       alert("Lỗi khi lưu dữ liệu: " + (e.response?.data?.detail || e.message));

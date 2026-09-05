@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
 from app.services.knowledge_service import KnowledgeService
+from app.models.ai import AiAnalysisCache, AiReviewStatus
 
 router = APIRouter()
 

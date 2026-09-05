@@ -4,28 +4,44 @@ import Plot from "react-plotly.js";
 import { useTheme } from "../../../stores/themeStore";
 import { Users, TrendingUp, AlertTriangle, Target, BarChart3 } from "lucide-react";
 import client from "../../../api/client";
+import { getExams } from "../../../api/exams";
 
 export default function AdvancedAnalyticsPage() {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+  const [exams, setExams] = useState<any[]>([]);
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
   useEffect(() => {
-    fetchData();
+    getExams(0, 100).then(res => {
+      const publishedOrFinished = (res.items || []).filter(
+        (e: any) => e.status === "PUBLISHED" || e.status === "FINISHED"
+      );
+      setExams(publishedOrFinished);
+      if (publishedOrFinished.length > 0) {
+        setSelectedExamId(publishedOrFinished[0].id);
+      }
+    }).catch(() => {});
   }, []);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (selectedExamId) fetchData(selectedExamId);
+  }, [selectedExamId]);
+
+  const fetchData = async (examId: number) => {
     setIsLoading(true);
     try {
       const base = "/api/v1/advanced-analytics";
       const safeFetch = async (path: string) => {
         try {
-          const res = await client.get(path);
+          const res = await client.get(path, { params: { exam_id: examId } });
           return res.data;
         } catch { return null; }
       };
-      const [dist, params, gam, box, penalty, leaderboard, stats, flagged] = await Promise.all([
+      const [statusRes, dist, params, gam, box, penalty, leaderboard, stats, flagged] = await Promise.all([
+        safeFetch(`${base}/status`),
         safeFetch(`${base}/distributions`),
         safeFetch(`${base}/item-parameters`),
         safeFetch(`${base}/gam-curve`),
@@ -37,6 +53,7 @@ export default function AdvancedAnalyticsPage() {
       ]);
       
       setData({
+        status: statusRes,
         dist,
         params: params?.items ?? null,
         gam,
@@ -56,9 +73,22 @@ export default function AdvancedAnalyticsPage() {
   if (isLoading || !data) {
     return (
       <div className="space-y-6">
+        {/* Exam selector */}
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Chọn kỳ thi:</label>
+          <select
+            value={selectedExamId ?? ""}
+            onChange={(e) => setSelectedExamId(Number(e.target.value))}
+            className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            {exams.map((ex) => (
+              <option key={ex.id} value={ex.id}>{ex.name} (ID: {ex.id})</option>
+            ))}
+          </select>
+        </div>
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center">
           <p className="text-sm text-slate-500">
-            {isLoading ? "Đang tải dữ liệu phân tích..." : "Không có dữ liệu phân tích. Hãy hoàn thành ít nhất 1 kỳ thi."}
+            {isLoading ? "Đang tải dữ liệu phân tích..." : "Không có dữ liệu phân tích cho kỳ thi này."}
           </p>
         </div>
       </div>
@@ -272,6 +302,20 @@ export default function AdvancedAnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Exam selector */}
+      <div className="flex items-center gap-4">
+        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Chọn kỳ thi:</label>
+        <select
+          value={selectedExamId ?? ""}
+          onChange={(e) => setSelectedExamId(Number(e.target.value))}
+          className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          {exams.map((ex) => (
+            <option key={ex.id} value={ex.id}>{ex.name} (ID: {ex.id})</option>
+          ))}
+        </select>
+      </div>
+
       <div className="mb-8 border-b pb-4 border-slate-200 dark:border-slate-800">
         <h1 className="text-3xl font-extrabold text-gradient tracking-tight flex items-center gap-3 pb-1">
           <BarChart3 className="w-8 h-8 text-primary-500" />

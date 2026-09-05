@@ -40,6 +40,45 @@ async def get_exams(skip: int = 0, limit: int = 100, status: str | None = None, 
     return {"items": result.scalars().all(), "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
 
 
+@router.get("/my-history", dependencies=[Depends(RequireRole(["STUDENT"]))])
+async def get_my_history(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.models.exam import ExamSubmission, ExamParticipant
+    from app.models.grading import ExamResult
+
+    stmt = (
+        select(ExamParticipant, Exam, ExamSubmission, ExamResult)
+        .join(Exam, Exam.id == ExamParticipant.exam_id)
+        .outerjoin(ExamSubmission, ExamSubmission.exam_participant_id == ExamParticipant.id)
+        .outerjoin(ExamResult, ExamResult.exam_submission_id == ExamSubmission.id)
+        .where(ExamParticipant.user_id == current_user.id)
+        .where(ExamParticipant.status.in_(["SUBMITTED", "IN_PROGRESS"]))
+        .order_by(Exam.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    history = []
+    for participant, exam, submission, exam_result in rows:
+        score = None
+        max_score = 1200
+        if exam_result and exam_result.total_score is not None:
+            score = exam_result.total_score
+        elif exam_result:
+            score = (exam_result.ctt_score_part1 or 0) + (exam_result.ctt_score_part2 or 0) + (exam_result.ctt_score_part3 or 0) + (exam_result.ctt_score_part4 or 0)
+
+        history.append({
+            "id": exam.id,
+            "name": exam.name,
+            "date": (participant.submit_time or exam.created_at).isoformat() if participant.submit_time else exam.created_at.isoformat(),
+            "score": score,
+            "max_score": max_score,
+            "time_spent": round((participant.submit_time - participant.start_time).total_seconds() / 60) if participant.submit_time and participant.start_time else 0,
+            "status": participant.status.value if participant.status else "NOT_STARTED",
+        })
+
+    return {"items": history}
+
+
 @router.post("/generate", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def generate_exam(request: Request, req: GenerateExamRequest, db: AsyncSession = Depends(get_db)):
     # 1. Lấy Ma trận

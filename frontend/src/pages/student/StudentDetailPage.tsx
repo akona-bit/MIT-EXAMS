@@ -1,23 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
-import { ArrowLeft, User, Mail, Hash, Calendar, Trophy, BarChart3, Clock, ArrowRight } from "lucide-react";
+import api from "../../api/client";
+import { ArrowLeft, User, Mail, Hash, Calendar, Trophy, BarChart3, Clock } from "lucide-react";
 import Button from "../../components/ui/Button";
 
 interface HistoryItem {
   id: number;
   name: string;
   date: string;
-  score: number;
+  score: number | null;
   max_score: number;
   time_spent: number;
+  status: string;
 }
 
 export default function StudentDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [history] = useState<HistoryItem[]>([]);
-  const [isLoading] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [avgScore, setAvgScore] = useState(0);
+
+  useEffect(() => {
+    api.get("/api/v1/exams/my-history")
+      .then((res) => {
+        const items = res.data.items || [];
+        setHistory(items);
+        const scored = items.filter((h: HistoryItem) => h.score !== null);
+        if (scored.length > 0) {
+          const total = scored.reduce((sum: number, h: HistoryItem) => sum + (h.score || 0), 0);
+          setAvgScore(Math.round(total / scored.length * 10) / 10);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -51,13 +69,13 @@ export default function StudentDetailPage() {
 
       {/* Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 flex items-center gap-4">
               <div className="p-4 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 rounded-xl">
                  <Trophy className="w-8 h-8" />
               </div>
               <div>
-                 <div className="text-3xl font-black text-slate-800 dark:text-white">85.0</div>
+                 <div className="text-3xl font-black text-slate-800 dark:text-white">{avgScore || "--"}</div>
                  <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">Điểm trung bình</div>
               </div>
            </div>
@@ -70,12 +88,6 @@ export default function StudentDetailPage() {
                  <div className="text-3xl font-black text-slate-800 dark:text-white">{history.length}</div>
                  <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">Bài thi đã làm</div>
               </div>
-           </div>
-
-           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col justify-center">
-               <Button onClick={() => navigate('/student/compare')} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-500/30">
-                  So sánh năng lực <ArrowRight className="w-5 h-5 ml-2" />
-               </Button>
            </div>
         </div>
 
@@ -108,12 +120,17 @@ export default function StudentDetailPage() {
                     
                     <div className="flex items-center gap-6">
                        <div className="text-right">
-                          <div className="text-2xl font-black text-primary-600">{item.score}<span className="text-sm text-slate-400 font-bold">/{item.max_score}</span></div>
+                          <div className="text-2xl font-black text-primary-600">
+                            {item.score !== null ? item.score : "--"}
+                            <span className="text-sm text-slate-400 font-bold">/{item.max_score}</span>
+                          </div>
                           <div className="text-xs font-bold text-slate-400 uppercase">Điểm số</div>
                        </div>
-                       <Button variant="outline" className="font-bold shrink-0" onClick={() => navigate(`/student/exam/${item.id}/result`)}>
-                          Chi tiết
-                       </Button>
+                       {item.status === "SUBMITTED" && (
+                         <Button variant="outline" className="font-bold shrink-0" onClick={() => navigate(`/student/exam/${item.id}/result`)}>
+                           Chi tiết
+                         </Button>
+                       )}
                     </div>
                  </div>
                ))}

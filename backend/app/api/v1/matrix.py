@@ -5,7 +5,7 @@ from sqlalchemy import func, select, and_
 from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
-from app.models.exam import Matrix, MatrixRule
+from app.models.exam import Matrix, MatrixRule, ExamGenerationRun, ExamGenerationStatus
 from app.models.question import KnowledgeNode, KnowledgeNodeParent, Question, QuestionStatus, KnowledgeNodeType
 from app.schemas.exam import (
     MatrixCreate, MatrixResponse, MatrixImportPreviewRequest, MatrixImportPreviewResponse,
