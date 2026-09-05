@@ -18,10 +18,10 @@ import {
   Plus,
   Trash2,
   X,
-  Copy,
   Library,
+  Layers,
 } from "lucide-react";
-import PassageEditStep from "../../components/admin/passage/PassageEditStep";
+import MarkdownEditor from "../../components/editor/MarkdownEditor";
 import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
@@ -307,16 +307,73 @@ export default function ResourcesPage() {
       {isPassageTab && (
         <Modal
           isOpen={isModalOpen}
-          onClose={() => !isSaving && setIsModalOpen(false)}
+          onClose={() => {
+            if (isSaving) return;
+            if (passageDraft.passageContent.trim()) {
+              if (!window.confirm("Bạn có thay đổi chưa lưu. Đóng sẽ mất dữ liệu.")) return;
+            }
+            setIsModalOpen(false);
+          }}
           title={modalMode === "edit" ? "Chỉnh sửa ngữ liệu" : "Thêm ngữ liệu văn bản"}
           maxWidth="max-w-5xl"
         >
-          <div className="p-6">
-            <PassageEditStep
-              draft={passageDraft as any}
-              updateDraft={(u) => setPassageDraft((p) => ({ ...p, ...u }))}
-            />
-            <div className="mt-6 flex justify-end gap-3">
+          <div className="p-6 space-y-6">
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-xl">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg shrink-0">
+                <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="text-sm text-blue-700 dark:text-blue-300">
+                <p><strong>Ngữ liệu chung:</strong> Đoạn văn, hình ảnh, hoặc bảng số liệu được dùng chung cho nhiều câu hỏi.</p>
+                <p className="mt-1">Không nhập nội dung các câu hỏi con vào đây.</p>
+              </div>
+            </div>
+
+            {/* Content field */}
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                Nội dung ngữ liệu <span className="text-red-500">*</span>
+              </label>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500 transition-shadow">
+                <MarkdownEditor
+                  value={passageDraft.passageContent}
+                  onChange={(val) => setPassageDraft((p) => ({ ...p, passageContent: val }))}
+                  placeholder="Nhập nội dung ngữ liệu chung ở đây (hỗ trợ Markdown, chèn ảnh...)"
+                />
+              </div>
+              <p className="text-xs text-slate-400">Bạn có thể sử dụng cú pháp Markdown. Để thêm ảnh: {'![Hình 1](url){width=40% align-right}'}</p>
+            </div>
+
+            {/* Source fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Nguồn (Tác giả/Tổ chức)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-shadow"
+                  placeholder="Ví dụ: Báo Thanh Niên, Bộ GD&ĐT..."
+                  value={passageDraft.sourceAuthor}
+                  onChange={(e) => setPassageDraft((p) => ({ ...p, sourceAuthor: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Tiêu đề nguồn (Tên sách/báo)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none transition-shadow"
+                  placeholder="Ví dụ: Đề tham khảo 2024..."
+                  value={passageDraft.sourceTitle}
+                  onChange={(e) => setPassageDraft((p) => ({ ...p, sourceTitle: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
               <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Hủy</Button>
               <Button onClick={handleSavePassage} isLoading={isSaving}>Lưu</Button>
             </div>
