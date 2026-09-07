@@ -7,6 +7,8 @@ export interface OmrSheet {
     form_code_raw: string | null;
     confidence_score: number | null;
     error_message?: string | null;
+    image_path?: string | null;
+    exam_submission_id?: number | null;
 }
 
 export interface OmrJob {

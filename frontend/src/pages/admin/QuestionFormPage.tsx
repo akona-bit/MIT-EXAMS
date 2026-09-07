@@ -1,13 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createQuestion,
   getQuestion,
   updateQuestion,
-  checkDuplicate,
-  suggestQuestionTags,
-  type AiSuggestTagsResponse,
-  type AiSuggestedNode,
+  checkDuplicate
 } from "../../api/questions";
 import { passageApi, PassageSearchResponse } from "../../api/passages";
 import type { QuestionCreate, QuestionSimilarityResponse } from "../../types";
@@ -16,7 +13,7 @@ import Input from "../../components/ui/Input";
 import MarkdownEditor from "../../components/editor/MarkdownEditor";
 import KnowledgeNodeSelector from "../../components/admin/question/KnowledgeNodeSelector";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
-import { AlertCircle, Search, Plus, Trash2, Sparkles, Check } from "lucide-react";
+import { AlertCircle, Search, Plus, Trash2 } from "lucide-react";
 import { toast } from "../../components/ui/Toast";
 
 export default function QuestionFormPage() {
@@ -33,7 +30,7 @@ export default function QuestionFormPage() {
   // Knowledge Node State
   const [subject, setSubject] = useState("Toán"); // Default subject
   const [primaryNodeId, setPrimaryNodeId] = useState<number | null>(null);
-  const [secondaryNodeIds, setSecondaryNodeIds] = useState<number[]>([]);
+
 
   const [sourceAuthor, setSourceAuthor] = useState("");
   const [sourceTitle, setSourceTitle] = useState("");
@@ -65,13 +62,7 @@ export default function QuestionFormPage() {
   const [passageResults, setPassageResults] = useState<PassageSearchResponse["results"]>([]);
   const [selectedPassageId, setSelectedPassageId] = useState<number | null>(null);
   const [selectedPassagePreview, setSelectedPassagePreview] = useState("");
-  const [isSearchingPassage, setIsSearchingPassage] = useState(false);
 
-  // AI Suggest Tags state
-  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestTagsResponse | null>(null);
-  const [isSuggesting, setIsSuggesting] = useState(false);
-  const [acceptedSuggestions, setAcceptedSuggestions] = useState<{primary?: boolean; secondary: number[]}>({primary: false, secondary: []});
-  const suggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
@@ -91,13 +82,7 @@ export default function QuestionFormPage() {
         setType(question.type || "SINGLE_CHOICE");
         
         // Setup nodes
-        if (question.skill_tags) {
-          const primaryTag = question.skill_tags.find((t: any) => t.is_primary);
-          if (primaryTag) setPrimaryNodeId(primaryTag.knowledge_node_id);
-          setSecondaryNodeIds(question.skill_tags.filter((t: any) => !t.is_primary).map((t: any) => t.knowledge_node_id));
-        } else if (question.primary_knowledge_node_id) { // Fallback just in case
-          setPrimaryNodeId(question.primary_knowledge_node_id);
-        } else if (question.knowledge_node_id) {
+        if (question.knowledge_node_id) {
           setPrimaryNodeId(question.knowledge_node_id);
         }
         
@@ -147,39 +132,14 @@ export default function QuestionFormPage() {
       return;
     }
     const timer = setTimeout(() => {
-      setIsSearchingPassage(true);
       passageApi.search(passageSearch, 5).then(res => {
         setPassageResults(res.results);
-      }).catch(console.error).finally(() => setIsSearchingPassage(false));
+      }).catch(console.error);
     }, 500);
     return () => clearTimeout(timer);
   }, [passageSearch]);
 
-  const analyzeWithAi = async () => {
-    if (!content.trim() || content.length < 20) {
-      toast.warning("Nội dung quá ngắn để AI phân tích. Vui lòng nhập chi tiết hơn.");
-      return;
-    }
-    
-    setIsSuggesting(true);
-    try {
-      const answerTexts = answers.map((a, i) => `${String.fromCharCode(65 + i)}. ${a.content}`).filter(a => a.length > 4);
-      const res = await suggestQuestionTags({
-        content,
-        answers: answerTexts.length > 0 ? answerTexts : undefined,
-      });
-      setAiSuggestions(res);
-      setAcceptedSuggestions({primary: false, secondary: []});
-      if (res.cognitive_level) {
-        setLevel(res.cognitive_level);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Lỗi khi gọi AI. Vui lòng thử lại sau.");
-    } finally {
-      setIsSuggesting(false);
-    }
-  };
+
   const applyTypeChange = (newType: string) => {
     setType(newType);
     if (newType === "TRUE_FALSE") {
@@ -207,25 +167,6 @@ export default function QuestionFormPage() {
     applyTypeChange(newType);
   };
 
-  const acceptAiSuggestion = (node: AiSuggestedNode, isPrimary: boolean) => {
-    if (!node.node_id) {
-      toast.warning(`Chủ đề "${node.name}" chưa có trong hệ thống. Vui lòng chọn thủ công hoặc tạo mới trước.`);
-      return;
-    }
-    
-    if (isPrimary) {
-      setPrimaryNodeId(node.node_id);
-      setAcceptedSuggestions(prev => ({...prev, primary: true}));
-    } else {
-      if (!secondaryNodeIds.includes(node.node_id)) {
-        setSecondaryNodeIds(prev => [...prev, node.node_id!]);
-      }
-      setAcceptedSuggestions(prev => ({
-        ...prev, 
-        secondary: [...prev.secondary, node.name as any]
-      }));
-    }
-  };
 
   const getNormalizedAnswers = () => {
     if (type === "FILL_IN_BLANK") {
@@ -268,8 +209,7 @@ export default function QuestionFormPage() {
         content,
         level,
         type,
-        primary_knowledge_node_id: primaryNodeId as number,
-        secondary_knowledge_node_ids: secondaryNodeIds,
+        knowledge_node_id: primaryNodeId as number,
         passage_id: selectedPassageId,
         source_author: sourceAuthor || undefined,
         source_title: sourceTitle || undefined,
@@ -398,10 +338,8 @@ export default function QuestionFormPage() {
                 
                 <div className="w-full sm:w-2/3">
                   <KnowledgeNodeSelector 
-                    primaryValue={primaryNodeId} 
-                    onPrimaryChange={setPrimaryNodeId}
-                    secondaryValues={secondaryNodeIds}
-                    onSecondaryChange={setSecondaryNodeIds}
+                    value={primaryNodeId} 
+                    onChange={setPrimaryNodeId}
                     subject={subject} 
                   />
                 </div>

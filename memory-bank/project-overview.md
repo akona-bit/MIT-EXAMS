@@ -25,6 +25,7 @@ Các trung tâm luyện thi / trường học tổ chức kỳ thi thử theo đ
   - Phần 3: Tư duy khoa học / Logic (câu 91-120)
 - Mỗi kỳ thi có nhiều **mã đề** (vd 161, 188, 202...) dùng chung ngân hàng câu hỏi gốc nhưng xáo vị trí câu + vị trí đáp án khác nhau.
 - Kết quả trả về: 4 đầu điểm theo phần (thang 0-300/phần) + tổng điểm (0-1200) + xếp hạng.
+- **Chi tiết cấu trúc ma trận:** Xem [exam-matrix-analysis.md](file:///d:/MIT/memory-bank/exam-matrix-analysis.md) để biết "khung xương" cấu trúc của từng khối câu hỏi và luật phân bố kiến thức.
 
 ## Phạm vi chức năng (14 module lõi)
 

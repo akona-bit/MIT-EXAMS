@@ -112,13 +112,18 @@ function SubItemOptionsRow({
       </div>
       <div className="space-y-2">
         {options.map((opt, i) => {
-          const isChecked = selectedIds.includes(opt.id);
+          const isSelected = selectedIds.includes(opt.id);
           const letter = String.fromCharCode(65 + i);
           return (
-            <label
+            // <button> thay cho <label> + input sr-only — fix lỗi tap trên mobile
+            <button
               key={opt.id}
-              className={`flex items-start gap-3 p-2.5 rounded-lg border-2 cursor-pointer transition-all duration-150 ${
-                isChecked
+              type="button"
+              role={kind === "multi" ? "checkbox" : "radio"}
+              aria-checked={isSelected}
+              onClick={() => handleSelect(opt.id)}
+              className={`flex items-start gap-3 p-2.5 rounded-lg border-2 cursor-pointer transition-all duration-150 select-none text-left ${
+                isSelected
                   ? "bg-blue-50 border-blue-500"
                   : "bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300"
               }`}
@@ -127,26 +132,19 @@ function SubItemOptionsRow({
                 className={`mt-0.5 flex items-center justify-center w-6 h-6 shrink-0 border-2 text-[10px] font-bold transition-colors ${
                   kind === "multi" ? "rounded-md" : "rounded-full"
                 } ${
-                  isChecked
+                  isSelected
                     ? "bg-blue-600 border-blue-600 text-white"
                     : "bg-white border-slate-300 text-slate-500"
                 }`}
               >
                 {letter}
               </div>
-              <input
-                type={kind === "multi" ? "checkbox" : "radio"}
-                name={`sub-${label}-${prompt?.slice(0, 10) || ""}`}
-                checked={isChecked}
-                onChange={() => handleSelect(opt.id)}
-                className="sr-only"
-              />
-              <div className="flex-1 prose prose-sm max-w-none text-slate-700 pt-0.5">
+              <div className="flex-1 prose prose-sm max-w-none text-slate-700 pt-0.5 pointer-events-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                   {opt.content}
                 </ReactMarkdown>
               </div>
-            </label>
+            </button>
           );
         })}
       </div>
@@ -175,9 +173,17 @@ export default function QuestionRenderer({
             const isChecked = answer?.selected_answer_id === opt.id;
             const letter = String.fromCharCode(65 + i);
             return (
-              <label
+              // Dùng <button> thay cho <label> + input sr-only: trên mobile
+              // (iOS/Android) tap vào label chứa input bị ẩn bằng clip-path
+              // thường không kích hoạt onChange — đây là nguyên nhân "không
+              // bấm được đáp án". <button> hoạt động tin cậy trên mọi thiết bị.
+              <button
                 key={opt.id}
-                className={`flex items-start gap-3 p-3.5 rounded-lg border-2 cursor-pointer transition-all duration-150 ${
+                type="button"
+                role="radio"
+                aria-checked={isChecked}
+                onClick={() => onChange({ selected_answer_id: opt.id })}
+                className={`w-full text-left flex items-start gap-3 p-3.5 rounded-lg border-2 cursor-pointer transition-all duration-150 select-none ${
                   isChecked
                     ? "bg-blue-50 border-blue-500 shadow-sm"
                     : "bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300"
@@ -192,15 +198,7 @@ export default function QuestionRenderer({
                 >
                   {letter}
                 </div>
-                <input
-                  type="radio"
-                  name={`q-${question.question_id}`}
-                  value={opt.id}
-                  checked={isChecked}
-                  onChange={() => onChange({ selected_answer_id: opt.id })}
-                  className="sr-only"
-                />
-                <div className="flex-1 prose prose-sm max-w-none text-slate-700 pt-0.5">
+                <div className="flex-1 prose prose-sm max-w-none text-slate-700 pt-0.5 pointer-events-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeRaw]}
@@ -208,7 +206,7 @@ export default function QuestionRenderer({
                     {opt.content}
                   </ReactMarkdown>
                 </div>
-              </label>
+              </button>
             );
           })}
         </div>
@@ -234,9 +232,18 @@ export default function QuestionRenderer({
             const isChecked = selectedIds.includes(opt.id);
             const letter = String.fromCharCode(65 + i);
             return (
-              <label
+              <button
                 key={opt.id}
-                className={`flex items-start gap-3 p-3.5 rounded-lg border-2 cursor-pointer transition-all duration-150 ${
+                type="button"
+                role="checkbox"
+                aria-checked={isChecked}
+                onClick={() => {
+                  const newIds = isChecked
+                    ? selectedIds.filter((sid: number) => sid !== opt.id)
+                    : [...selectedIds, opt.id];
+                  onChange({ selected_answer_ids: newIds });
+                }}
+                className={`w-full text-left flex items-start gap-3 p-3.5 rounded-lg border-2 cursor-pointer transition-all duration-150 select-none ${
                   isChecked
                     ? "bg-blue-50 border-blue-500 shadow-sm"
                     : "bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300"
@@ -251,20 +258,7 @@ export default function QuestionRenderer({
                 >
                   {isChecked ? "✓" : letter}
                 </div>
-                <input
-                  type="checkbox"
-                  name={`q-${question.question_id}-${opt.id}`}
-                  value={opt.id}
-                  checked={isChecked}
-                  onChange={(e) => {
-                    const newIds = e.target.checked
-                      ? [...selectedIds, opt.id]
-                      : selectedIds.filter((sid: number) => sid !== opt.id);
-                    onChange({ selected_answer_ids: newIds });
-                  }}
-                  className="sr-only"
-                />
-                <div className="flex-1 prose prose-sm max-w-none text-slate-700 pt-0.5">
+                <div className="flex-1 prose prose-sm max-w-none text-slate-700 pt-0.5 pointer-events-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeRaw]}
@@ -272,7 +266,7 @@ export default function QuestionRenderer({
                     {opt.content}
                   </ReactMarkdown>
                 </div>
-              </label>
+              </button>
             );
           })}
         </div>

@@ -5,7 +5,7 @@ import { motion, HTMLMotionProps } from "framer-motion"
 export interface CardProps extends Omit<HTMLMotionProps<"div">, "ref"> {}
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, ...props }, ref) => (
+  ({ className, children, ...props }, ref) => (
     <motion.div
       ref={ref}
       whileHover={{ y: -4, transition: { duration: 0.2, ease: "easeOut" } }}
@@ -17,7 +17,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     >
       {/* Premium glow effect on hover */}
       <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 dark:from-white/0 dark:via-white/5 dark:to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      {props.children}
+      {children as React.ReactNode}
     </motion.div>
   )
 )

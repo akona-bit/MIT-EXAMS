@@ -17,8 +17,7 @@ export default function QuestionListStep({ draft, updateDraft }: QuestionListSte
       content: '',
       level: 1,
       type: 'SINGLE_CHOICE',
-      primary_knowledge_node_id: 1, // Default, should let user select
-      secondary_knowledge_node_ids: [],
+      knowledge_node_id: 1, // Default, should let user select
       answers: [
         { content: '', is_correct: true, position: 0 },
         { content: '', is_correct: false, position: 1 },

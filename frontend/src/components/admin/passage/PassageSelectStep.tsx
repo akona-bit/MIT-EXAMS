@@ -43,8 +43,7 @@ export default function PassageSelectStep({ updateDraft, onNext }: PassageSelect
         content: q.content,
         level: q.level,
         type: q.type as 'SINGLE_CHOICE',
-        primary_knowledge_node_id: q.primary_knowledge_node_id,
-        secondary_knowledge_node_ids: q.secondary_knowledge_node_ids || [],
+        knowledge_node_id: q.knowledge_node_id,
         answers: q.answers.map((a: any) => ({
           content: a.content,
           is_correct: a.is_correct,

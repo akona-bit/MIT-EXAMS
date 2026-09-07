@@ -92,6 +92,48 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-07` — **UI Cleanup & Fix lỗi TypeScript**:
+  - [x] Fix lỗi `OmrSheet` type: thêm thuộc tính `image_path` và `exam_submission_id` để khớp với logic hiển thị.
+  - [x] Sửa `QuestionRenderer.tsx`: đổi `isChecked` thành `isSelected`.
+  - [x] Cập nhật `<Button>` và `<Card>` của framer-motion: cast `children as React.ReactNode` để fix lỗi type không tương thích với `MotionValue`.
+  - [x] Khắc phục Type mismatch của `NodeJS.Timeout` trong môi trường trình duyệt: thay bằng `ReturnType<typeof setTimeout>` trong `GuestPage.tsx` và `QuestionFormPage.tsx`.
+  - [x] Dọn dẹp mã nguồn diện rộng (TS6133 - Khai báo nhưng không sử dụng): xoá hàng loạt biến, custom hook, import dư thừa tại hơn 10 trang Frontend (`MatrixFormPage`, `KnowledgePage`, `AdminFeedbacksPage`, `StudentExamShell`, `StudentExamResultPage`, v.v.).
+  - [x] Cập nhật hàm `ungroupRule` xoá parameter `idx` không dùng.
+  - [x] **Kết quả**: `npm run build` (tsc --noEmit) hoàn toàn trong sạch, build thành công 100%.
+
+
+- `2026-09-07` — **Refactor Cấu trúc Mô hình Tri thức (DAG sang Hierarchical Tree)**:
+  - [x] Đơn giản hoá mô hình: xóa bỏ các bảng `KnowledgeNodeLink`, `QuestionSkillTag`, `KnowledgeNodeParent` (xoá bỏ DAG phức tạp đa-cha đa-con).
+  - [x] Thiết lập `knowledge_node_id` trực tiếp trên `Question` (1-1 mapping) và `parent_id` trực tiếp trên `KnowledgeNode`.
+  - [x] Viết migration script di chuyển dữ liệu từ cấu trúc cũ sang mới, giữ nguyên tính toàn vẹn dữ liệu hiện tại.
+  - [x] Backend: Cập nhật Models, Schemas, `knowledge_service.py` (loại bỏ BFS đệ quy phức tạp, dùng đệ quy tree-node chuẩn), và các API routers (`/knowledge`, `/questions`).
+  - [x] Frontend: Cập nhật `KnowledgePage.tsx` (xóa tính năng tạo link thủ công, nhiều parent), cập nhật `KnowledgeNodeSelector.tsx` và `QuestionFormPage.tsx` để xóa `secondaryValues` và chỉ dùng `value` (single node id). Cập nhật `MatrixFormPage.tsx` để loại bỏ syntax errors.
+  - [x] Xác minh: Compile backend Python thành công, `npm run build` frontend (tsc check) thành công không còn lỗi liên quan đến thay đổi.
+
+- `2026-09-07` — **Đồng bộ hệ thống với Blueprint ĐGNL 120 câu (fix engine + UI mới)**:
+  - [x] **Backend — service `app/services/dgnl_blueprint.py`**: mã hóa "khung xương" từ `exam-matrix-analysis.md` thành 39 ô ma trận chuẩn (TV 12+8+5+5, TA 5+5+5+7+8, Toán 9×2+4×3, TDKH 10×3), kèm cờ `order_locked` (trình tự cứng: Đại số→Mũ-Log đầu Toán; logic trước số liệu; Hóa→Lý→Sinh→XH→Sử→KT), cờ `passage`/`group` (khối chung ngữ liệu), hàm auto-match KnowledgeNode theo tên + self-check `validate_blueprint()`.
+  - [x] **Backend — 2 endpoints**: `GET /api/v1/matrix/dgnl-blueprint` (skeleton JSON cho UI + structure_errors) và `POST /api/v1/matrix/from-dgnl-blueprint` (tạo ma trận hoàn chỉnh: 39 rules + 5 MatrixRuleGroup đọc hiểu, auto-match node, trả matched/unmatched).
+  - [x] **Backend — fix bug nghiêm trọng trong `POST /matrix/{id}/generate`**: (1) `part=1` hard-code cho mọi câu → giờ lấy đúng part theo rule (chấm điểm 0-300/phần trước đây sai hoàn toàn); (2) `random.shuffle()` toàn 120 câu phá vỡ khối chung dữ kiện → thay bằng `build_form_layout()` giữ khối liền kề theo (part, position), chỉ xáo câu trong khối; (3) sort cells theo (part, position) trước khi sinh.
+  - [x] **Backend — fix engine cũ `generator.py`**: sort rules theo (part, position) bằng getattr an toàn; `generate_shuffled_forms` không còn shuffle phá khối (giữ nguyên thứ tự khối, chỉ xáo đáp án).
+  - [x] **Tests — `tests/test_dgnl_blueprint.py`** (10 test): tổng 120 câu/30 câu mỗi phần, range 1-30/31-60/61-90/91-120, khối cứng Toán, trình tự cứng TDKH, kích thước khối passage 12/5/5+7/8, match_nodes, build_form_layout giữ khối liền kề + part đúng + xáo trong khối. Full suite: **84 passed**.
+  - [x] **Frontend — `api/matrix.ts`**: thêm `getDgnlBlueprint()` + `createMatrixFromDgnlBlueprint()` + types.
+  - [x] **Frontend — component mới `components/admin/matrix/DgnlBlueprintModal.tsx`**: hiển thị trực quan khung xương 4 phần dạng block-bar theo tỉ lệ số câu (màu theo part, icon Lock = trình tự cứng, FileText = khối chung ngữ liệu, tooltip ghi chú sư phạm), summary chips, cảnh báo lỗi cấu trúc, form tên/mô tả và nút tạo ma trận 1-click → điều hướng tới trang chi tiết.
+  - [x] **Frontend — MatrixFormPage**: nút "Blueprint ĐGNL 120 câu" ở header (chỉ khi tạo mới) + gắn modal.
+  - [x] Xác minh: backend compileall OK, full pytest 84 passed; frontend `npm run build` đạt (built in 6m35s).
+  - [x] Dọn rác: xóa file artifact `app/services/matrix_import.py` + dấu backtick (tên module không hợp lệ, không được import).
+
+- `2026-09-07` — **Bổ sung bằng chứng đối chiếu chéo 3 nguồn vào `memory-bank/exam-matrix-analysis.md`**:
+  - [x] Thêm ghi chú nguồn/độ tin cậy ở đầu file: đề mẫu = bản gốc chính thức ĐHQG; 2 đề phục dựng = BaiLearn dựng từ trí nhớ thí sinh (thứ tự chi tiết có thể lệch).
+  - [x] Mục VI: thêm bảng phân tích từng câu 61-72 của đề phục dựng đợt 1 + giả thuyết (a) phục dựng sai thứ tự / (b) ghép cặp không phải luật cứng; kết luận mô hình hóa 6 ô 2-câu, thứ tự sau 2 ô đầu là soft-constraint.
+  - [x] Mục VII: thêm bảng 3 cột (Đề mẫu / Đợt 1 / Đợt 2) cho khối 73-90; nới lỏng hai kết luận cũ ("xác suất luôn vị trí 2", "hình chóp luôn cuối") — cái bất biến là tập mảng + độ dài ô, thứ tự là biến số.
+  - [x] Thêm mục VIII mới: đối chiếu Phần Tư duy khoa học (91-120) — bảng 6 lĩnh vực × 3 đề (Hóa→Lý→Sinh→XH/kinh tế→Sử→Tình huống ứng dụng bất biến tuyệt đối) + hàm ý hard-constraint trình tự cho engine sinh đề. Mục tổng kết đổi thành IX, bổ sung ghi chú hạn chế.
+  - [x] Không đổi code — chỉ cập nhật tài liệu blueprint dùng cho ma trận đặc tả/sinh đề.
+
+- `2026-09-07` — **Tích hợp phân tích chi tiết Ma trận Đề thi**:
+  - [x] Tạo file `memory-bank/exam-matrix-analysis.md` lưu trữ bản phân tích cấu trúc "khung xương" 120 câu hỏi (dựa trên đề mẫu và 2 đề phục dựng).
+  - [x] Cập nhật `memory-bank/project-overview.md` để tham chiếu đến tài liệu phân tích ma trận mới.
+  - [x] Cập nhật skill `sinh-de-tu-dong` để tham chiếu luật phân bố khối câu hỏi và lĩnh vực theo chuẩn của ĐHQG.
+
 - `2026-09-05` — **Code splitting toàn app + sửa lỗi vite config bị đè**:
   - [x] Tìm ra nguyên nhân `manualChunks` không bao giờ có hiệu lực: file `vite.config.js` (artifact cũ compiled 8/25, không có manualChunks) **đè lên** `vite.config.ts` vì Vite ưu tiên `.js`. Đã xoá `vite.config.js` + `vite.config.d.ts`.
   - [x] Sửa `vite.config.ts`: bỏ `'@tiptap/pm'` khỏi `vendor-editor` (package không có entry ".", đưa vào manualChunks object làm build fail) + thêm comment cảnh báo.

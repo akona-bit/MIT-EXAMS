@@ -68,12 +68,10 @@ export default function QuestionBlock({ question, index, onChange, onRemove }: Q
       <div className="p-4 space-y-6">
         
         {/* Knowledge Node Selector */}
-        <div className="space-y-2">
+        <div className="flex-1">
           <KnowledgeNodeSelector 
-            primaryValue={question.primary_knowledge_node_id}
-            onPrimaryChange={(val) => onChange(index, { ...question, primary_knowledge_node_id: val || 1 })}
-            secondaryValues={question.secondary_knowledge_node_ids || []}
-            onSecondaryChange={(val) => onChange(index, { ...question, secondary_knowledge_node_ids: val })}
+            value={question.knowledge_node_id}
+            onChange={(val) => onChange(index, { ...question, knowledge_node_id: val || 1 })}
           />
         </div>
 

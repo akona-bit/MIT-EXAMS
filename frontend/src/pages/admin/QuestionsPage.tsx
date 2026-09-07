@@ -178,7 +178,7 @@ export default function QuestionsPage() {
       header: "Chuyên đề",
       render: (row) => (
         <span className="text-xs text-slate-600 dark:text-slate-400">
-          {row.primary_knowledge_node?.name || `Node #${row.primary_knowledge_node_id}`}
+          {(row as any).knowledge_node?.name || `Node #${row.knowledge_node_id}`}
         </span>
       ),
     },
@@ -337,11 +337,11 @@ export default function QuestionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 pb-1">
             <Database className="w-8 h-8 text-primary-500" />
             Ngân hàng Câu hỏi
           </h1>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
             Quản lý và cập nhật câu hỏi cho các kỳ thi
           </p>
         </div>
@@ -373,7 +373,7 @@ export default function QuestionsPage() {
         <AiReviewQueueTab />
       ) : (
         <>
-          <div className="glass-card flex flex-col gap-4">
+          <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden flex flex-col gap-4 p-6 mb-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -452,13 +452,15 @@ export default function QuestionsPage() {
             </div>
           </div>
 
-          <DataTable
-            data={filteredQuestions}
-            columns={columns}
-            keyExtractor={(item) => item.id}
-            isLoading={isLoading}
-            emptyMessage={searchTerm ? "Không tìm thấy câu hỏi phù hợp." : "Chưa có câu hỏi nào trong ngân hàng."}
-          />
+          <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden p-6">
+            <DataTable
+              data={filteredQuestions}
+              columns={columns}
+              keyExtractor={(item) => item.id}
+              isLoading={isLoading}
+              emptyMessage={searchTerm ? "Không tìm thấy câu hỏi phù hợp." : "Chưa có câu hỏi nào trong ngân hàng."}
+            />
+          </div>
         </>
       )}
 

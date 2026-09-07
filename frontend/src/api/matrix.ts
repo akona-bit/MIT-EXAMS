@@ -110,3 +110,58 @@ export async function generateAiMatrix(prompt: string): Promise<AiMatrixGenerate
   const response = await client.post<AiMatrixGenerateResponse>('/api/v1/matrix/ai-generate', { prompt });
   return response.data;
 }
+
+// --- DGNL Blueprint (khung xương chuẩn 120 câu) ---
+
+export interface DgnlBlueprintSlot {
+  key: string;
+  position: number;
+  count: number;
+  label: string;
+  node_hint: string;
+  passage: boolean;
+  group: boolean;
+  order_locked: boolean;
+  note: string;
+}
+
+export interface DgnlBlueprintPart {
+  part: number;
+  name: string;
+  total: number;
+  question_range: string;
+  slots: DgnlBlueprintSlot[];
+}
+
+export interface DgnlBlueprint {
+  total_questions: number;
+  total_slots: number;
+  duration_minutes: number;
+  score_scale: string;
+  science_field_order: string[];
+  valid_block_sizes: number[];
+  parts: DgnlBlueprintPart[];
+}
+
+export interface DgnlBlueprintResponse {
+  blueprint: DgnlBlueprint;
+  structure_errors: string[];
+}
+
+export interface DgnlBlueprintCreateResult {
+  id: number;
+  matched: { slot: string; node_id: number }[];
+  unmatched: { slot: string; label: string; node_hint: string }[];
+}
+
+export async function getDgnlBlueprint(): Promise<DgnlBlueprintResponse> {
+  const response = await client.get<DgnlBlueprintResponse>('/api/v1/matrix/dgnl-blueprint');
+  return response.data;
+}
+
+export async function createMatrixFromDgnlBlueprint(
+  data: { name: string; description?: string; node_map?: Record<string, number> },
+): Promise<DgnlBlueprintCreateResult> {
+  const response = await client.post<DgnlBlueprintCreateResult>('/api/v1/matrix/from-dgnl-blueprint', data);
+  return response.data;
+}

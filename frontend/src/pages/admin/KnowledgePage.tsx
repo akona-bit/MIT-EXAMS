@@ -13,7 +13,6 @@ import {
   getKnowledgeGraph,
   deleteKnowledgeNode,
   updateKnowledgeNode,
-  deleteManualLink,
 } from "../../api/knowledge";
 import type { KnowledgeGraphEdge, KnowledgeGraphNode } from "../../types";
 import { useTheme } from "../../stores/themeStore";
@@ -23,7 +22,6 @@ import {
   FileText,
   Link as LinkIcon,
   Database,
-  CheckCircle2,
   ChevronRight,
   Plus,
   ZoomIn,
@@ -59,7 +57,6 @@ const levelColors: Record<string, string> = {
 const DEFAULT_NODE_COLOR = "#64748b"; // Slate-500 fallback
 
 const getNodeColor = (type?: string) => levelColors[type?.toUpperCase() || ""] ?? DEFAULT_NODE_COLOR;
-const getNodeLabel = (type?: string) => levelLabels[type?.toUpperCase() || ""] ?? (type ? (type.charAt(0).toUpperCase() + type.slice(1)) : "Node");
 
 function NodePill({
   node,
@@ -801,12 +798,7 @@ export default function KnowledgePage() {
     },
   });
 
-  const deleteLinkMutation = useMutation({
-    mutationFn: deleteManualLink,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["knowledgeGraph"] });
-    },
-  });
+
 
   const handleCreateNote = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -825,13 +817,13 @@ export default function KnowledgePage() {
     <div
       className={`space-y-6 transition-colors duration-300 ${isDarkMode ? "dark" : ""}`}
     >
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-gradient flex items-center gap-3 pb-1">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 pb-1">
             <Network className="w-8 h-8 text-primary-500" />
             Cấu trúc Kiến thức
           </h1>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
             Không gian trực quan để khám phá các chủ đề, liên kết và ngữ cảnh
             tri thức trong hệ thống.
           </p>
@@ -840,7 +832,7 @@ export default function KnowledgePage() {
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-12rem)]">
         {/* --- Toolbar / Sidebar Left --- */}
-        <aside className="lg:col-span-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 dark:border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto">
+        <aside className="lg:col-span-1 rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
               Danh sách Tri thức
@@ -892,7 +884,7 @@ export default function KnowledgePage() {
         </aside>
 
         {/* --- Graph Canvas Center --- */}
-        <div className="lg:col-span-2 relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 dark:border-slate-800 overflow-hidden">
+        <div className="lg:col-span-2 relative rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
           <GraphCanvas
             nodes={allNodes}
             edges={allEdges}
@@ -957,7 +949,7 @@ export default function KnowledgePage() {
         </div>
 
         {/* --- Details Sidebar Right --- */}
-        <aside className="lg:col-span-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 dark:border-slate-800 p-4 flex flex-col gap-4 overflow-y-auto">
+        <aside className="lg:col-span-1 rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
               {selectedNode ? "Chi tiết Node" : "Chi tiết"}
@@ -1151,16 +1143,7 @@ export default function KnowledgePage() {
                             />
                             {otherNode.label}
                           </button>
-                          <button
-                            onClick={() =>
-                              edge.link_id &&
-                              deleteLinkMutation.mutate(edge.link_id)
-                            }
-                            className="text-red-400 hover:text-red-600 transition-colors p-1"
-                            title="Xóa link này"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+
                         </div>
                       ) : null;
                     })}

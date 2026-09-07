@@ -115,11 +115,11 @@ export default function ExamsPage() {
     <PageTransition className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3 pb-1">
-            <FileText className="w-7 h-7 text-primary-600" />
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 pb-1">
+            <FileText className="w-8 h-8 text-primary-500" />
             Kỳ thi
           </h1>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
             Quản lý các đợt thi, theo dõi trạng thái và cấu hình
           </p>
         </div>
@@ -139,8 +139,8 @@ export default function ExamsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden dark:border-slate-800 dark:bg-slate-900">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input 
@@ -148,7 +148,7 @@ export default function ExamsPage() {
               placeholder="Tìm kiếm kỳ thi..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="h-10 w-full rounded-xl border border-slate-300 dark:border-slate-700/50 bg-slate-50 dark:bg-[#0f172a]/80 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 shadow-inner"
             />
           </div>
           <Link to="/admin/exams/new" className="shrink-0">

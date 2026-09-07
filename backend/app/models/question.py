@@ -55,44 +55,11 @@ class KnowledgeNode(Base):
     short_code: Mapped[Optional[str]] = mapped_column(String(50), index=True, nullable=True)
     path_code: Mapped[Optional[str]] = mapped_column(String(255), index=True, nullable=True)
 
-    questions: Mapped[List["Question"]] = relationship(
-        "Question",
-        secondary="question_skill_tag",
-        back_populates="knowledge_nodes",
-        overlaps="skill_tags"
-    )
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_node.id"), nullable=True, index=True)
+    parent: Mapped[Optional["KnowledgeNode"]] = relationship("KnowledgeNode", remote_side=[id], back_populates="children")
+    children: Mapped[List["KnowledgeNode"]] = relationship("KnowledgeNode", back_populates="parent", cascade="all, delete-orphan")
 
-class KnowledgeNodeParent(Base):
-    """DAG relation: 1 node can have multiple parents, 1 must be primary"""
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    child_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
-    parent_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    child: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[child_id], backref="parents")
-    parent: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[parent_id], backref="children")
-
-class QuestionSkillTag(Base):
-    """Link between a question and its skills (KnowledgeNodes). Replaces single knowledge_node_id."""
-    __tablename__ = "question_skill_tag"
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    question_id: Mapped[int] = mapped_column(ForeignKey("question.id"), index=True)
-    knowledge_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True)
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    question: Mapped["Question"] = relationship("Question", back_populates="skill_tags", overlaps="questions")
-    knowledge_node: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", overlaps="questions")
-
-class KnowledgeNodeLink(Base):
-    """Manual link between two knowledge nodes (non-hierarchical)"""
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    source_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"))
-    target_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"))
-    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    source: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[source_id])
-    target: Mapped["KnowledgeNode"] = relationship("KnowledgeNode", foreign_keys=[target_id])
 
 class QuestionEmbedding(Base):
     """Vector embedding for semantic search of questions."""
@@ -128,6 +95,8 @@ class Question(Base):
     # Versioning
     parent_question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("question.id"), nullable=True)
 
+    knowledge_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True, default=0)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -141,33 +110,8 @@ class Question(Base):
     # Ví dụ: TRUE_FALSE có thể cấu hình "0.1/0.25/0.5/1" tùy số ý đúng
     scoring_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
 
-    knowledge_nodes: Mapped[List["KnowledgeNode"]] = relationship(
-        "KnowledgeNode",
-        secondary="question_skill_tag",
-        back_populates="questions",
-        viewonly=True,
-        overlaps="skill_tags"
-    )
+    knowledge_node: Mapped["KnowledgeNode"] = relationship("KnowledgeNode")
 
-    @property
-    def primary_knowledge_node_id(self) -> int:
-        for tag in self.skill_tags:
-            if tag.is_primary:
-                return tag.knowledge_node_id
-        if self.skill_tags:
-            return self.skill_tags[0].knowledge_node_id
-        return 0
-
-    @property
-    def secondary_knowledge_node_ids(self) -> List[int]:
-        return [tag.knowledge_node_id for tag in self.skill_tags if not tag.is_primary]
-
-    skill_tags: Mapped[List["QuestionSkillTag"]] = relationship(
-        "QuestionSkillTag",
-        back_populates="question",
-        cascade="all, delete-orphan",
-        overlaps="knowledge_nodes"
-    )
     passage: Mapped[Optional["Passage"]] = relationship("Passage", back_populates="questions")
     answers: Mapped[List["Answer"]] = relationship(back_populates="question", cascade="all, delete-orphan")
     sub_items: Mapped[List["QuestionSubItem"]] = relationship(

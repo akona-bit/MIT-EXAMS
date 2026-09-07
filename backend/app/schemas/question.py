@@ -100,8 +100,7 @@ class QuestionBase(BaseModel):
     content: str
     level: int = 1
     type: QuestionType = QuestionType.SINGLE_CHOICE
-    primary_knowledge_node_id: int
-    secondary_knowledge_node_ids: List[int] = []
+    knowledge_node_id: int
     resource_id: Optional[int] = None
     passage_id: Optional[int] = None
     scoring_config: Optional[dict] = None
@@ -116,8 +115,7 @@ class QuestionUpdate(BaseModel):
     content: Optional[str] = None
     level: Optional[int] = None
     type: Optional[QuestionType] = None
-    primary_knowledge_node_id: Optional[int] = None
-    secondary_knowledge_node_ids: Optional[List[int]] = None
+    knowledge_node_id: Optional[int] = None
     resource_id: Optional[int] = None
     passage_id: Optional[int] = None
     scoring_config: Optional[dict] = None

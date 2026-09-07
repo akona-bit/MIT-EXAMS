@@ -220,7 +220,7 @@ async def grade_submission_ctt(db: AsyncSession, submission_id: int) -> ExamResu
         answer.exam_form_question_id: answer for answer in submission.answers
     }
 
-    item_scores: dict[str, float] = {str(position): -1 for position in range(1, 121)}
+    item_scores: dict[str, float] = {}
     item_subitem_scores: dict[str, float] = {}
     item_types: dict[str, str] = {}
     item_points: dict[str, float] = {}
@@ -246,7 +246,7 @@ async def grade_submission_ctt(db: AsyncSession, submission_id: int) -> ExamResu
             qtype, question, answer_rows, sa
         )
 
-        item_scores[str(original_position)] = score
+        item_scores[str(form_question.question_id)] = score
         q_key = f"q_{form_question.question_id}"
         item_types[q_key] = qtype.value
         item_points[q_key] = max_points
@@ -299,27 +299,26 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 task.status = "STARTED"
                 await db.commit()
             
-            # 2. Get original form
-            original_form_result = await db.execute(
-                select(ExamForm.id).where(
-                    ExamForm.exam_id == exam_id,
-                    ExamForm.is_original.is_(True),
-                )
+            # 2. Get ALL unique question_ids used in this exam's forms
+            form_q_result = await db.execute(
+                select(ExamFormQuestion.question_id, ExamFormQuestion.part)
+                .join(ExamForm, ExamForm.id == ExamFormQuestion.exam_form_id)
+                .where(ExamForm.exam_id == exam_id)
             )
-            original_form_id = original_form_result.scalar_one_or_none()
-            if not original_form_id:
+            all_fqs = form_q_result.all()
+            unique_qids = sorted(list(set(row.question_id for row in all_fqs)))
+            if not unique_qids:
                 if task:
                     task.status = "FAILED"
                     await db.commit()
-                return {"status": "FAILED", "reason": "No original form found"}
+                return {"status": "FAILED", "reason": "No questions found in this exam"}
+                
+            qid_to_index = {qid: i for i, qid in enumerate(unique_qids)}
+            J = len(unique_qids)
             
-            # Get original form questions to map position -> question_id
-            form_q_result = await db.execute(
-                select(ExamFormQuestion).where(ExamFormQuestion.exam_form_id == original_form_id)
-            )
-            form_questions = form_q_result.scalars().all()
-            position_to_qid = {q.position: q.question_id for q in form_questions}
-            
+            # Map question_id to part for part-score calculation later
+            qid_to_part = {row.question_id: row.part for row in all_fqs}
+
             # 3. Get all submissions and their results for this exam
             sub_res = await db.execute(
                 select(ExamResult, ExamSubmission)
@@ -335,17 +334,17 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 return {"status": "SUCCESS", "message": "No submissions found"}
                 
             N = len(records)
-            J = 120
             
-            # 4. Build response matrix U
+            # 4. Build response matrix U (N x J)
             U = np.full((N, J), -1, dtype=int)
             for i, (exam_result, submission) in enumerate(records):
                 item_scores = exam_result.item_scores or {}
-                for pos_str, score in item_scores.items():
+                for qid_str, score in item_scores.items():
                     try:
-                        pos = int(pos_str)
-                        if 1 <= pos <= J:
-                            U[i, pos - 1] = 1 if score > 0 else 0
+                        qid = int(qid_str)
+                        if qid in qid_to_index:
+                            idx = qid_to_index[qid]
+                            U[i, idx] = 1 if score > 0 else 0
                     except ValueError:
                         pass
             
@@ -366,17 +365,15 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             item_params_list = []
             question_updates = []
             for j in range(J):
-                pos = j + 1
-                qid = position_to_qid.get(pos)
+                qid = unique_qids[j]
                 a_val, b_val = float(a_est[j]), float(b_est[j])
                 item_params_list.append((a_val, b_val))
-                if qid:
-                    question_updates.append({
-                        "id": qid,
-                        "a_param": a_val,
-                        "b_param": b_val,
-                        "is_calibrated": True
-                    })
+                question_updates.append({
+                    "id": qid,
+                    "a_param": a_val,
+                    "b_param": b_val,
+                    "is_calibrated": True
+                })
             if question_updates:
                 await bulk_update(db, Question, question_updates)
             
@@ -398,7 +395,7 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 return {"status": "FAILED", "reason": f"Theta estimation failed: {str(e)}"}
             
             # 8. Calculate true scores and update ExamResult
-            cau_names = [f"Cau{i}" for i in range(1, J+1)]
+            cau_names = [f"Q_{qid}" for qid in unique_qids]
             item_params_df = pd.DataFrame(item_params_list, columns=["a", "b"], index=cau_names)
             
             exam_result_updates = []
@@ -407,17 +404,20 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 student_responses = clean_responses[i]
                 student_data = pd.Series(student_responses, index=cau_names)
                 
-                # Split into 4 parts (30 items each)
-                parts_scores = []
-                for p in range(4):
-                    start_idx = p * 30
-                    end_idx = (p + 1) * 30
-                    part_data = student_data.iloc[start_idx:end_idx]
-                    part_params = item_params_df.iloc[start_idx:end_idx]
+                # Split into 4 parts based on qid_to_part mapping
+                parts_scores = [0.0, 0.0, 0.0, 0.0]
+                for p in [1, 2, 3, 4]:
+                    part_indices = [j for j, qid in enumerate(unique_qids) if qid_to_part.get(qid) == p]
+                    if not part_indices:
+                        continue
+                        
+                    part_cau_names = [cau_names[j] for j in part_indices]
+                    part_data = student_data[part_cau_names]
+                    part_params = item_params_df.loc[part_cau_names]
                     part_raw = int(part_data.sum())
                     
                     p_score = true_score(theta, part_raw, part_data, part_params)
-                    parts_scores.append(p_score)
+                    parts_scores[p-1] = p_score
                     
                 exam_result_updates.append({
                     "id": exam_result.id,
@@ -456,20 +456,16 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 # Save into ItemAnalysisResult
                 analysis_inserts = []
                 for j in range(J):
-                    pos = j + 1
-                    qid = position_to_qid.get(pos)
-                    if not qid:
-                        continue
+                    qid = unique_qids[j]
+                    cau_name = cau_names[j]
                     
-                    cau_name = f"Cau{pos}"
-                    
-                    c_p_val = chi2_df.loc[j, "p_value"] if j < len(chi2_df) else np.nan
+                    c_p_val = chi2_df.loc[cau_name, "p_value"] if cau_name in chi2_df.index else np.nan
                     
                     analysis_inserts.append({
                         "exam_id": exam_id,
                         "question_id": qid,
-                        "ctt_difficulty": float(ctt_diff[cau_name]) if not pd.isna(ctt_diff[cau_name]) else None,
-                        "ctt_discrimination": float(ctt_disc[cau_name]) if not pd.isna(ctt_disc[cau_name]) else None,
+                        "ctt_difficulty": float(ctt_diff[cau_name]) if cau_name in ctt_diff and not pd.isna(ctt_diff[cau_name]) else None,
+                        "ctt_discrimination": float(ctt_disc[cau_name]) if cau_name in ctt_disc and not pd.isna(ctt_disc[cau_name]) else None,
                         "ctt_distractor_label": "Bình thường", # Mocking for now as full distractor calculation needs more DB queries
                         "irt_a": float(a_est[j]),
                         "irt_b": float(b_est[j]),

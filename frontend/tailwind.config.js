@@ -9,14 +9,14 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: '#EEF4FF',
-          100: '#D9E6FF',
-          300: '#7FA8FF',
-          400: '#5C90FF', // Added
-          500: '#2D6CFF',
-          600: '#2255CC', // Added
-          700: '#1B45B3',
-          900: '#0F2966',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          300: '#93c5fd',
+          400: '#3b82f6', 
+          500: '#1e40af', // Xanh dương đậm
+          600: '#1e3a8a', 
+          700: '#172554',
+          900: '#0f172a',
         },
         studentPrimary: {
           50: '#F0FDF4', // Emerald tinted

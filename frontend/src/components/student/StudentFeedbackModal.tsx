@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MessageSquare, AlertCircle, FileText, Send, Loader2 } from 'lucide-react';
+import { X, MessageSquare, AlertCircle, FileText, Send } from 'lucide-react';
 import { studentFeedbacksApi } from '../../api/studentFeedbacks';
 import { Button } from '../ui/Button';
 

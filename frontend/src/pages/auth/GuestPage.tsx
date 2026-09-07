@@ -20,7 +20,7 @@ export default function GuestPage() {
   const { loginWithToken } = useAuth();
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     if (cooldown > 0) {
       timer = setTimeout(() => setCooldown(c => c - 1), 1000);
     }

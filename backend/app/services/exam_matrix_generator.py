@@ -30,6 +30,7 @@ class MatrixCell:
     group_label: Optional[str] = None
     required_passage_id: Optional[int] = None
     group_mode: str = "ATOMIC"
+    shuffle_group: Optional[int] = None
 
 @dataclass
 class CandidateQuestion:
@@ -298,6 +299,90 @@ def generate_exam(matrix: List[MatrixCell], pool: List[CandidateQuestion], exclu
         ok=False, selected_ids=[], shortages=shortages, warnings=warnings, cell_results=best_cell_results
     )
 
+def build_form_layout(cell_results: List[CellResult]) -> List[Tuple[int, int, Optional[int]]]:
+    """
+    Sắp xếp câu hỏi của 1 đề theo khung xương ma trận (blueprint):
+    - Khối/cụm chung dữ kiện (cùng group_id, hoặc 1 ô độc lập) giữ LIỀN KỀ,
+      đúng thứ tự (part, position) của ma trận — bắt buộc cho các cụm đọc
+      hiểu 5/7/8 câu và trình tự lĩnh vực Phần Tư duy khoa học.
+    - Chỉ xáo thứ tự câu BÊN TRONG từng khối (xáo mã đề có kiểm soát).
+    - [MỚI] Xáo trộn vị trí các khối "soft-order" (như Toán 73-90) theo `shuffle_group`.
+
+    Trả về [(question_id, part, matrix_rule_id), ...] theo vị trí 1..N.
+    """
+    # Gom các ô thành "unit": ô độc lập = unit riêng; các ô cùng group_id
+    # trong cùng phần = 1 unit (cụm chung ngữ liệu phải liền kề).
+    units: Dict[Tuple[int, Optional[int]], List[CellResult]] = {}
+    unit_order: List[Tuple[int, Optional[int]]] = []
+    
+    # Gom nhóm theo (part, group_id) hoặc id(cr) nếu độc lập
+    for cr in cell_results:
+        if cr.cell.group_id is None:
+            key: Tuple[int, Optional[int]] = (cr.cell.part, id(cr))
+        else:
+            key = (cr.cell.part, cr.cell.group_id)
+        if key not in units:
+            units[key] = []
+            unit_order.append(key)
+        units[key].append(cr)
+        
+    # Tính position trung bình và lấy shuffle_group cho mỗi unit
+    # (Vì tất cả CellResult trong cùng 1 unit sẽ có chung phần và thường chung shuffle_group)
+    unit_meta = {}
+    for key in unit_order:
+        cells = units[key]
+        avg_pos = sum(c.cell.position for c in cells) / len(cells)
+        # Giả định tất cả cell trong unit có chung shuffle_group, lấy cell đầu tiên
+        shuffle_grp = cells[0].cell.shuffle_group
+        unit_meta[key] = {"avg_pos": avg_pos, "shuffle_group": shuffle_grp, "part": cells[0].cell.part}
+
+    # Gom các unit thành list theo part, rồi xử lý shuffle_group
+    units_by_part = defaultdict(list)
+    for key in unit_order:
+        units_by_part[unit_meta[key]["part"]].append(key)
+        
+    final_unit_order = []
+    
+    for part in sorted(units_by_part.keys()):
+        part_keys = units_by_part[part]
+        # Đầu tiên sort theo position mặc định
+        part_keys.sort(key=lambda k: unit_meta[k]["avg_pos"])
+        
+        # Tìm các dải có shuffle_group != None
+        shuffled_part_keys = []
+        i = 0
+        while i < len(part_keys):
+            k = part_keys[i]
+            sg = unit_meta[k]["shuffle_group"]
+            if sg is not None:
+                # Tìm tất cả unit liên tiếp có cùng shuffle_group
+                j = i
+                group_keys = []
+                while j < len(part_keys) and unit_meta[part_keys[j]]["shuffle_group"] == sg:
+                    group_keys.append(part_keys[j])
+                    j += 1
+                # Xáo trộn các unit trong group này
+                random.shuffle(group_keys)
+                shuffled_part_keys.extend(group_keys)
+                i = j
+            else:
+                shuffled_part_keys.append(k)
+                i += 1
+                
+        final_unit_order.extend(shuffled_part_keys)
+
+    layout: List[Tuple[int, int, Optional[int]]] = []
+    for key in final_unit_order:
+        # Sắp xếp các cell trong unit theo position để đảm bảo đúng thứ tự nếu là cụm chung ngữ liệu
+        cells_in_unit = sorted(units[key], key=lambda c: c.cell.position)
+        for cr in cells_in_unit:
+            ids = list(cr.selected_ids)
+            random.shuffle(ids)  # xáo trong khối — không phá khung xương
+            for qid in ids:
+                layout.append((qid, cr.cell.part, cr.cell.matrix_rule_id))
+    return layout
+
+
 def generate_multiple_versions(
     matrix: List[MatrixCell],
     pool: List[CandidateQuestion],
@@ -416,6 +501,14 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
             req_passage_id = g_info.get("required_passage_id")
             group_mode = g_info.get("group_mode", "ATOMIC")
 
+        # Map to blueprint to get shuffle_group
+        from app.services.dgnl_blueprint import BLUEPRINT_SLOTS
+        shuffle_group = None
+        for s in BLUEPRINT_SLOTS:
+            if s.part == r.part and s.position == r.position:
+                shuffle_group = getattr(s, "shuffle_group", None)
+                break
+
         cells.append(MatrixCell(
             topic=topic_name,
             concept=concept_name,
@@ -429,6 +522,7 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
             position=r.position,
             group_id=r.group_id,
             required_passage_id=req_passage_id,
-            group_mode=group_mode
+            group_mode=group_mode,
+            shuffle_group=shuffle_group
         ))
     return cells

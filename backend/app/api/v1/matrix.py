@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, and_
@@ -9,10 +9,8 @@ from app.models.exam import Matrix, MatrixRule, ExamGenerationRun, ExamGeneratio
 from app.models.question import KnowledgeNode, KnowledgeNodeParent, Question, QuestionStatus, KnowledgeNodeType
 from app.schemas.exam import (
     MatrixCreate, MatrixResponse, MatrixImportPreviewRequest, MatrixImportPreviewResponse,
-    MatrixImportExecuteRequest, SmartMatrixLeavesRequest, SmartMatrixLeavesResponse,
-    SmartMatrixLeafNode, SmartMatrixProposeRequest, SmartMatrixProposeResponse,
-    SmartMatrixProposedSkill, SmartMatrixConfirmRequest, SmartMatrixSkillAllocation,
-    MatrixRuleCreate, AiMatrixGenerateRequest, AiMatrixGenerateResponse
+    MatrixImportExecuteRequest,
+    MatrixRuleCreate
 )
 from app.services.matrix_import import MatrixImportService
 from app.services.knowledge_service import KnowledgeService
@@ -35,6 +33,104 @@ async def get_matrices(skip: int = 0, limit: int = 100, db: AsyncSession = Depen
     return {"items": result.scalars().all(), "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
 
 
+from app.services.dgnl_blueprint import get_blueprint as get_dgnl_blueprint, match_nodes, validate_blueprint
+from pydantic import BaseModel as _PydanticBaseModel
+
+
+class DgnlBlueprintCreateRequest(_PydanticBaseModel):
+    name: str
+    description: Optional[str] = None
+    # slot.key (vd "p1s1") -> knowledge_node_id. Thiếu slot nào sẽ auto-match theo node_hint.
+    node_map: Optional[Dict[str, int]] = None
+
+
+@router.get("/dgnl-blueprint")
+async def dgnl_blueprint():
+    """Blueprint ĐGNL chuẩn 120 câu (khung xương đối chiếu 3 nguồn) + self-check."""
+    blueprint = get_dgnl_blueprint()
+    return {"blueprint": blueprint, "structure_errors": validate_blueprint()}
+
+
+@router.post("/from-dgnl-blueprint", response_model=MatrixResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def create_matrix_from_dgnl_blueprint(request: Request, req: DgnlBlueprintCreateRequest, db: AsyncSession = Depends(get_db)):
+    """Tạo ma trận hoàn chỉnh theo blueprint ĐGNL 120 câu, auto-match KnowledgeNode."""
+    from app.services.dgnl_blueprint import BLUEPRINT_SLOTS, PART_NAMES
+
+    structure_errors = validate_blueprint()
+    if structure_errors:
+        raise HTTPException(status_code=500, detail={"message": "Blueprint cấu trúc không hợp lệ", "errors": structure_errors})
+
+    nodes_result = await db.execute(select(KnowledgeNode.id, KnowledgeNode.name))
+    nodes = [{"id": n.id, "name": n.name} for n in nodes_result.all()]
+    auto_map = match_nodes(nodes)
+
+    node_map: Dict[str, Optional[int]] = {}
+    for slot in BLUEPRINT_SLOTS:
+        override = (req.node_map or {}).get(slot.key)
+        node_map[slot.key] = int(override) if override else auto_map.get(slot.key)
+
+    matched = [{"slot": k, "node_id": v} for k, v in node_map.items() if v]
+    unmatched = [
+        {"slot": s.key, "label": s.label, "node_hint": s.node_hint}
+        for s in BLUEPRINT_SLOTS if not node_map.get(s.key)
+    ]
+
+    matrix = Matrix(name=req.name, description=req.description, subject="ĐGNL ĐHQG-HCM")
+    db.add(matrix)
+    await db.flush()
+
+    # Mỗi cụm đọc hiểu (passage group) là 1 MatrixRuleGroup riêng — giáo viên
+    # gắn Passage cụ thể sau khi tạo.
+    group_local_ids = []
+    for slot in BLUEPRINT_SLOTS:
+        if slot.passage and slot.key not in group_local_ids:
+            group_local_ids.append(slot.key)
+
+    slot_to_group_id: Dict[str, int] = {}
+    for g_key in group_local_ids:
+        slot = next(s for s in BLUEPRINT_SLOTS if s.key == g_key)
+        group = MatrixRuleGroup(matrix_id=matrix.id, label=slot.label)
+        db.add(group)
+        await db.flush()
+        slot_to_group_id[g_key] = group.id
+
+    for slot in BLUEPRINT_SLOTS:
+        node_id = node_map.get(slot.key)
+        if not node_id:
+            continue  # bỏ slot chưa map — báo unmatched cho client
+        db.add(MatrixRule(
+            matrix_id=matrix.id,
+            knowledge_node_id=node_id,
+            question_type=None,  # rule đơn giản — engine tự cân bằng dạng/mức độ
+            level=None,
+            count=slot.count,
+            part=slot.part,
+            position=slot.position,
+            group_id=slot_to_group_id.get(slot.key),
+        ))
+
+    await db.commit()
+    capture(request, "matrix_created_from_dgnl_blueprint", {
+        "matrix_id": matrix.id,
+        "matched_slots": len(matched),
+        "unmatched_slots": len(unmatched),
+    })
+
+    result = await db.execute(
+        select(Matrix).options(
+            selectinload(Matrix.rules).selectinload(MatrixRule.knowledge_node),
+            selectinload(Matrix.groups),
+        ).where(Matrix.id == matrix.id)
+    )
+    created = result.scalars().first()
+
+    return {
+        **MatrixResponse.model_validate(created).model_dump(mode="json"),
+        "matched": matched,
+        "unmatched": unmatched,
+    }
+
+
 @router.get("/{matrix_id}", response_model=MatrixResponse)
 async def get_matrix(matrix_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -49,33 +145,6 @@ async def get_matrix(matrix_id: int, db: AsyncSession = Depends(get_db)):
     if not matrix:
         raise HTTPException(status_code=404, detail="Matrix not found")
     return matrix
-
-from app.services.ai_analysis import generate_matrix_rules
-
-@router.post("/ai-generate", response_model=AiMatrixGenerateResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def ai_generate_matrix(request: AiMatrixGenerateRequest, db: AsyncSession = Depends(get_db)):
-    nodes_result = await db.execute(select(KnowledgeNode.id, KnowledgeNode.name, KnowledgeNode.node_type))
-    existing_nodes = [{"id": n.id, "name": n.name, "type": n.node_type.value if n.node_type else "TOPIC"} for n in nodes_result.all()]
-    
-    ai_result = await generate_matrix_rules(prompt=request.prompt, existing_nodes=existing_nodes)
-    
-    name_to_id = {n["name"].lower(): n["id"] for n in existing_nodes}
-    
-    response_rules = []
-    for raw_rule in ai_result.get("result", []):
-        node_name = raw_rule.get("node_name")
-        if not node_name: continue
-        
-        node_id = name_to_id.get(node_name.lower())
-        response_rules.append({
-            "node_id": node_id,
-            "node_name": node_name,
-            "cognitive_level": raw_rule.get("cognitive_level", 2),
-            "question_type": raw_rule.get("question_type", "SINGLE_CHOICE"),
-            "count": raw_rule.get("count", 1)
-        })
-        
-    return AiMatrixGenerateResponse(rules=response_rules)
 
 from app.models.exam import MatrixRuleGroup
 
@@ -193,7 +262,7 @@ async def delete_matrix(request: Request, matrix_id: int, db: AsyncSession = Dep
 
 from app.schemas.exam import GenerateExamFormsRequest
 from app.models.exam import ExamGenerationRun, ExamGenerationStatus, Exam, ExamForm, ExamFormQuestion, ExamStatus
-from app.services.exam_matrix_generator import load_pool_from_db, parse_matrix_rules, generate_multiple_versions, generate_exam
+from app.services.exam_matrix_generator import load_pool_from_db, parse_matrix_rules, generate_multiple_versions, generate_exam, build_form_layout
 # Level enum cho message lỗi (đồng bộ với LEVEL_MAP trong exam_matrix_generator)
 LEVEL_NAMES = {1: "Nhận biết", 2: "Thông hiểu", 3: "Vận dụng", 4: "Vận dụng cao"}
 
@@ -282,73 +351,7 @@ async def create_matrix_version(request: Request, matrix_id: int, db: AsyncSessi
     return result.scalars().first()
 
 
-from pydantic import BaseModel
-from typing import List, Optional
 
-class FeasibilityCheckRequest(BaseModel):
-    rules: List[MatrixRuleCreate]
-
-@router.post("/check-feasibility-local", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def check_matrix_feasibility_local(req: FeasibilityCheckRequest, db: AsyncSession = Depends(get_db)):
-    if not req.rules:
-        return {
-            "feasible": True, 
-            "shortages": [], 
-            "message": "Ma trận trống — không có ô nào cần kiểm tra",
-            "health_score": 100.0,
-            "total_required": 0,
-            "total_shortage": 0
-        }
-        
-    # We need to map MatrixRuleCreate to MatrixRule objects to reuse the generator logic
-    rules_obj = []
-    for i, r in enumerate(req.rules):
-        rules_obj.append(MatrixRule(
-            id=i,
-            knowledge_node_id=r.knowledge_node_id,
-            question_type=r.question_type,
-            level=r.level,
-            count=r.count,
-            part=r.part,
-            group_id=r.group_local_id # hacky but works for local check if needed
-        ))
-        
-    pool = await load_pool_from_db(db, rules_obj)
-    matrix_cells = await parse_matrix_rules(db, rules_obj)
-    report = generate_exam(matrix=matrix_cells, pool=pool)
-
-    total_required = sum(c.count for c in matrix_cells)
-    total_shortage = sum(s.shortage for s in report.shortages)
-    health_score = round((total_required - total_shortage) / total_required * 100, 1) if total_required > 0 else 100.0
-
-    if report.ok:
-        return {
-            "feasible": True, 
-            "shortages": [], 
-            "message": "Ma trận khả thi — đủ câu cho mọi ô/nhóm",
-            "health_score": health_score,
-            "total_required": total_required,
-            "total_shortage": 0
-        }
-
-    shortages = []
-    for s in report.shortages:
-        cell = s.cell
-        label = f"Nhóm '{cell.group_label}'" if cell.group_label else f"Ô node#{cell.matrix_rule_id}"
-        if cell.level is not None:
-            level_name = LEVEL_NAMES.get(cell.level, cell.level)
-            shortages.append(f"{label}: thiếu {s.shortage} câu (mức {level_name})")
-        else:
-            shortages.append(f"{label}: thiếu {s.shortage} câu")
-
-    return {
-        "feasible": False, 
-        "shortages": shortages, 
-        "message": f"Ma trận THẤT BẠI — thiếu câu cho {len(shortages)} ô/nhóm",
-        "health_score": health_score,
-        "total_required": total_required,
-        "total_shortage": total_shortage
-    }
 
 
 @router.post("/{matrix_id}/check-feasibility", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -426,8 +429,8 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamFormsReques
     # Load rules and pool
     pool = await load_pool_from_db(db, matrix.rules)
     matrix_cells = await parse_matrix_rules(db, matrix.rules)
-
-    # Generate
+    # Bất biến khung xương: ô được xử lý theo đúng thứ tự (part, position)
+    matrix_cells.sort(key=lambda c: (c.part, c.position))
     reports = generate_multiple_versions(
         matrix=matrix_cells,
         pool=pool,
@@ -488,24 +491,23 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamFormsReques
         db.add(exam_form)
         await db.flush() # To get exam_form.id
 
-        # Attach questions
-        # We need to map selected_ids back to cell results to store matrix_rule_id
+        # Gắn câu hỏi theo KHUNG XƯƠNG ma trận: part đúng theo rule,
+        # khối/cụm chung dữ kiện liền kề theo (part, position) — chỉ xáo
+        # câu bên trong khối (xáo mã đề có kiểm soát, không phá blueprint).
         question_to_rule_id = {}
         for cell_res in report.cell_results:
             for q_id in cell_res.selected_ids:
                 question_to_rule_id[q_id] = cell_res.cell.matrix_rule_id
 
-        # Shuffle questions for this form
-        shuffled_ids = list(report.selected_ids)
-        random.shuffle(shuffled_ids)
+        layout = build_form_layout(report.cell_results)
 
-        for pos, q_id in enumerate(shuffled_ids):
+        for pos, (q_id, q_part, rule_id) in enumerate(layout):
             efq = ExamFormQuestion(
                 exam_form_id=exam_form.id,
                 question_id=q_id,
                 position=pos + 1,
-                part=1, # simplified
-                matrix_rule_id=question_to_rule_id.get(q_id),
+                part=q_part,
+                matrix_rule_id=rule_id if rule_id is not None else question_to_rule_id.get(q_id),
                 exam_generation_run_id=gen_run.id
             )
             db.add(efq)
@@ -603,70 +605,4 @@ async def execute_matrix_import(matrix_id: int, req: MatrixImportExecuteRequest,
     return {"message": "Import successful", "total_questions_added": total_count}
 
 
-# ============================================================
-# SMART MATRIX BUILDER ENDPOINTS
-# ============================================================
 
-@router.post("/smart/leaves", response_model=SmartMatrixLeavesResponse)
-async def get_smart_leaves(
-    req: SmartMatrixLeavesRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    from app.services.matrix.smart_builder import SmartBuilderService
-    leaves, total_count = await SmartBuilderService.get_leaves(db, req.node_ids)
-    return SmartMatrixLeavesResponse(leaves=leaves, total_questions_in_bank=total_count)
-
-
-@router.post("/smart/propose", response_model=SmartMatrixProposeResponse)
-async def propose_smart_distribution(
-    req: SmartMatrixProposeRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    from app.services.matrix.smart_builder import SmartBuilderService
-    skills, total_proposed, total_available = await SmartBuilderService.propose_distribution(
-        db, req.node_ids, req.total_questions
-    )
-    return SmartMatrixProposeResponse(
-        skills=skills,
-        total_proposed=total_proposed,
-        total_in_bank=total_available,
-    )
-
-
-@router.post("/smart/confirm", response_model=MatrixResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def confirm_smart_matrix(
-    request: Request,
-    req: SmartMatrixConfirmRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    from app.services.matrix.smart_builder import SmartBuilderService
-    matrix = await SmartBuilderService.confirm_matrix(
-        db=db,
-        name=req.name,
-        description=req.description,
-        subject=req.subject,
-        allocations=req.allocations,
-        level_ratios=req.level_ratios,
-        type_ratios=req.type_ratios
-    )
-    
-    await db.commit()
-    
-    # Track analytics
-    capture(request, "smart_matrix_confirmed", {
-        "matrix_id": matrix.id,
-        "total_questions": req.total_questions,
-        "skill_count": len(req.allocations),
-        "name": req.name,
-    })
-    
-    # Reload with rules
-    result = await db.execute(
-        select(Matrix)
-        .options(selectinload(Matrix.rules), selectinload(Matrix.groups))
-        .where(Matrix.id == matrix.id)
-    )
-    return result.scalars().first()
-
-
-# Bỏ _distribute_by_ratios, đã chuyển sang app.services.matrix.allocator

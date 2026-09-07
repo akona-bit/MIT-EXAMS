@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { getKnowledgeTree } from '../../../api/knowledge';
-import type { KnowledgeNode } from '../../../types';
 import { Search } from 'lucide-react';
 
 interface MatrixNodeSelectorProps {

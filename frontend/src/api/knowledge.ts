@@ -68,16 +68,3 @@ export async function updateKnowledgeNode(
 export async function deleteKnowledgeNode(id: number): Promise<void> {
   await client.delete(`/api/v1/knowledge/${id}`);
 }
-
-export async function createManualLink(data: {
-  source_id: number;
-  target_id: number;
-  label?: string;
-}): Promise<{ id: number; source_id: number; target_id: number; label?: string }> {
-  const response = await client.post("/api/v1/knowledge/links", data);
-  return response.data;
-}
-
-export async function deleteManualLink(linkId: number): Promise<void> {
-  await client.delete(`/api/v1/knowledge/links/${linkId}`);
-}

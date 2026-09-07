@@ -118,8 +118,7 @@ export interface Question {
   type: string;
   status: string; // DRAFT | PENDING | APPROVED | REJECTED
   reject_reason?: string | null;
-  primary_knowledge_node_id: number;
-  secondary_knowledge_node_ids: number[];
+  knowledge_node_id: number;
   parent_question_id?: number | null;
   passage_id?: number | null;
   source_author?: string | null;
@@ -153,8 +152,7 @@ export interface QuestionCreate {
   content: string;
   level: number;
   type: string;
-  primary_knowledge_node_id: number;
-  secondary_knowledge_node_ids: number[];
+  knowledge_node_id: number;
   passage_id?: number | null;
   source_author?: string | null;
   source_title?: string | null;

@@ -105,8 +105,7 @@ export default function StudentExamShell() {
       .finally(() => setLoadingPassage(false));
   }, [currentQuestion?.passage_id]);
 
-  const [networkLatency, setNetworkLatency] = useState<number | null>(null);
-  const [networkError, setNetworkError] = useState(false);
+
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   // ═══════════════════════════════════════════
@@ -389,7 +388,7 @@ export default function StudentExamShell() {
 
   return (
     <div
-      className="h-screen flex flex-col bg-slate-100 text-slate-900 overflow-hidden"
+      className="h-screen supports-[height:100dvh]:h-[100dvh] flex flex-col bg-slate-100 text-slate-900 overflow-hidden"
       style={{ userSelect: "none" }}
     >
       {/* ── Watermark SBD (Background Pattern) ── */}
@@ -543,11 +542,11 @@ export default function StudentExamShell() {
         </div>
       </header>
 
-      {/* ══ BODY — Split Layout ══ */}
-      <main className="flex-1 flex overflow-hidden relative z-10">
+      {/* ══ BODY — Split Layout (mobile: xếp dọc; md+: chia đôi ngang) ══ */}
+      <main className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden relative z-10">
         {/* Left Pane: Passage / Question Content */}
         {hasPassage && (
-          <div className="w-1/2 border-r-2 border-slate-300 bg-white flex flex-col">
+          <div className="w-full md:w-1/2 h-[35%] md:h-auto shrink-0 border-b-2 md:border-b-0 md:border-r-2 border-slate-300 bg-white flex flex-col min-h-0">
             <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-700 flex items-center gap-2">
               <svg
                 className="w-4 h-4 text-blue-600"
@@ -589,7 +588,7 @@ export default function StudentExamShell() {
 
         {/* Right Pane: Question + Answers */}
         <div
-          className={`${hasPassage ? "w-1/2" : "w-full"} bg-white flex flex-col`}
+          className={`${hasPassage ? "w-full md:w-1/2" : "w-full"} flex-1 min-h-0 bg-white flex flex-col`}
         >
           {/* Question header */}
           <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">

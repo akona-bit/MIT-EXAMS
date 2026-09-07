@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
-  ArrowLeft,
   BookOpenCheck,
   CheckCircle2,
   Clock,

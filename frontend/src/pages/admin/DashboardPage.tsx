@@ -97,7 +97,7 @@ export default function DashboardPage() {
             Theo dõi tổng quan chất lượng bài thi và thống kê tương tác
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/60 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:border-white/10 dark:bg-slate-900/60 dark:text-slate-300 shadow-sm backdrop-blur-md">
+        <div className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/60 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:border-primary-800/50 dark:bg-[#0b1121]/60 dark:text-primary-100 shadow-[0_0_20px_-5px_rgba(30,58,138,0.2)] backdrop-blur-xl">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
@@ -123,8 +123,8 @@ export default function DashboardPage() {
           ? [1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-32 rounded-2xl" />)
           : stats.map((stat) => (
               <motion.div key={stat.label} variants={itemAnim}>
-                <Card className="group relative overflow-hidden transition-all hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none hover:-translate-y-1 glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent dark:from-white/5" />
+                <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-[0_0_30px_-5px_rgba(30,58,138,0.3)] hover:-translate-y-1 glass-card shadow-lg border border-slate-200/60 dark:border-primary-900/50 dark:bg-[#0b1121]/60 backdrop-blur-xl">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent dark:from-primary-500/5 dark:to-transparent" />
                   <CardContent className="relative p-6">
                     <div className="flex items-center justify-between">
                       <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${stat.bg} ${stat.color} ring-1 ring-inset ring-white/20 transition-transform group-hover:scale-110 group-hover:rotate-3`}>
@@ -146,7 +146,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Score Distribution Chart */}
-        <Card className="lg:col-span-2 flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
+        <Card className="lg:col-span-2 flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-primary-900/50 dark:bg-[#0b1121]/60 backdrop-blur-xl">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -186,9 +186,9 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
-                <div className="rounded-full bg-slate-100 p-3 dark:bg-slate-800 mb-3">
-                  <TrendingUp className="h-6 w-6 text-slate-400" />
+              <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-primary-800/50 dark:bg-[#0b1121]/40">
+                <div className="rounded-full bg-slate-100 p-3 dark:bg-primary-900/30 mb-3">
+                  <TrendingUp className="h-6 w-6 text-slate-400 dark:text-primary-500/70" />
                 </div>
                 <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Chưa có dữ liệu điểm</p>
                 <p className="text-xs text-slate-500 mt-1">Đợi thí sinh nộp bài để xem phổ điểm</p>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Exams */}
-        <Card className="flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
+        <Card className="flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-primary-900/50 dark:bg-[#0b1121]/60 backdrop-blur-xl">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-indigo-500" />
@@ -228,10 +228,10 @@ export default function DashboardPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.1 }}
                       key={exam.id}
-                      className="group flex items-start gap-4 rounded-xl border border-transparent p-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:border-slate-100 dark:hover:border-slate-800"
+                      className="group flex items-start gap-4 rounded-xl border border-transparent p-2 transition-colors hover:bg-slate-50 dark:hover:bg-primary-900/20 hover:border-slate-100 dark:hover:border-primary-800/50"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
-                        <FileText className="h-5 w-5 text-slate-500" />
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-primary-900/30">
+                        <FileText className="h-5 w-5 text-slate-500 dark:text-primary-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100 group-hover:text-primary-600 transition-colors">

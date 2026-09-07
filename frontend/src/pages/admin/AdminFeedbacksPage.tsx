@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { adminFeedbacksApi, type AdminFeedback, type FeedbackStats } from '../../api/adminFeedbacks';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import Select from '../../components/ui/Select';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { MessageSquare, ExternalLink, CheckCircle, Clock, XCircle, Inbox, Trash2, Eye, BarChart3 } from 'lucide-react';
+import { MessageSquare, CheckCircle, Clock, XCircle, Inbox, Trash2, Eye } from 'lucide-react';
 import { toast } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
