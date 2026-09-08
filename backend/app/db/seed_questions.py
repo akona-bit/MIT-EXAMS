@@ -25,13 +25,11 @@ async def seed():
                 level=1,
                 type=QuestionType.SINGLE_CHOICE,
                 status=QuestionStatus.APPROVED,
-                creator_id=1 # Assuming admin is 1
+                creator_id=1, # Assuming admin is 1
+                knowledge_node_id=node.id
             )
             session.add(q)
             await session.flush()
-            
-            from app.models.question import QuestionSkillTag
-            session.add(QuestionSkillTag(question_id=q.id, knowledge_node_id=node.id, is_primary=True))
             
             for j, opt in enumerate(["A", "B", "C", "D"]):
                 a = Answer(

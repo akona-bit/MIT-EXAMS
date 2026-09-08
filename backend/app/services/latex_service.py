@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.models.exam import Exam, ExamForm, ExamFormQuestion, ExamFormAnswer
-from app.models.question import Question, QuestionSkillTag
+from app.models.question import Question
 from app.models.knowledge import KnowledgeNode
 
 class LatexService:
@@ -56,7 +56,7 @@ class LatexService:
         # 3. Get Questions and Answers mapped to Form
         q_stmt = select(ExamFormQuestion).options(
             selectinload(ExamFormQuestion.original_question).selectinload(Question.passage),
-            selectinload(ExamFormQuestion.original_question).selectinload(Question.skill_tags).selectinload(QuestionSkillTag.knowledge_node)
+            selectinload(ExamFormQuestion.original_question).selectinload(Question.knowledge_node)
         ).where(ExamFormQuestion.exam_form_id == form.id).order_by(ExamFormQuestion.position)
         q_result = await db.execute(q_stmt)
         form_questions = q_result.scalars().all()
@@ -83,9 +83,8 @@ class LatexService:
             orig_q = fq.original_question
             
             folder = "other"
-            if orig_q.skill_tags:
-                primary_tag = next((t for t in orig_q.skill_tags if t.is_primary), orig_q.skill_tags[0])
-                folder = LatexService._map_subject_to_folder(primary_tag.knowledge_node.name)
+            if orig_q.knowledge_node:
+                folder = LatexService._map_subject_to_folder(orig_q.knowledge_node.name)
 
             q_content = orig_q.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
             

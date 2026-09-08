@@ -160,42 +160,7 @@ export interface QuestionCreate {
   sub_items?: QuestionSubItemCreate[];
 }
 
-// --- AI Analysis ---
-export enum AiReviewStatus {
-  PENDING = "PENDING",
-  HUMAN_CONFIRMED = "HUMAN_CONFIRMED",
-  HUMAN_REJECTED = "HUMAN_REJECTED",
-  HUMAN_EDITED = "HUMAN_EDITED",
-}
 
-export interface AiAnalysisResult {
-  concepts: string[];
-  skills: string[];
-  cognitive_level: number;
-  explanation: string;
-}
-
-export interface AiAnalysisCache {
-  id: number;
-  content_hash: string;
-  analysis_result?: AiAnalysisResult;
-  review_status: AiReviewStatus;
-  reviewed_by?: number | null;
-  reviewed_at?: string | null;
-  created_at: string;
-}
-
-export interface AiAnalysisResponse {
-  id: number;
-  content_hash: string;
-  analysis_result?: AiAnalysisResult;
-  review_status: AiReviewStatus;
-}
-
-export interface AiReviewRequest {
-  review_status: AiReviewStatus;
-  updated_analysis_result?: AiAnalysisResult;
-}
 
 // --- Matrix ---
 export interface MatrixRuleGroup {

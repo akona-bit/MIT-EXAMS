@@ -30,40 +30,22 @@ class ObsidianParser:
 
             node = None
             if parent_node:
-                # Among candidates, find one that has parent_node as primary parent
-                from app.models.question import KnowledgeNodeParent
                 for c in candidates:
-                    check = await self.db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == c.id,
-                            KnowledgeNodeParent.parent_id == parent_node.id,
-                            KnowledgeNodeParent.is_primary == True
-                        )
-                    )
-                    if check.scalar_one_or_none():
+                    if c.parent_id == parent_node.id:
                         node = c
                         break
             else:
-                # Root level: find node with no primary parent
-                from app.models.question import KnowledgeNodeParent
                 for c in candidates:
-                    check = await self.db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == c.id,
-                            KnowledgeNodeParent.is_primary == True
-                        )
-                    )
-                    if not check.scalar_one_or_none():
+                    if c.parent_id is None:
                         node = c
                         break
 
             if not node:
-                node = KnowledgeNode(name=part)
+                node = KnowledgeNode(name=part, parent_id=parent_node.id if parent_node else None)
                 self.db.add(node)
                 await self.db.flush()
 
-            if parent_node and node:
-                await KnowledgeService.add_relation(self.db, node.id, parent_node.id, is_primary=True)
+
 
             current_node = node
             parent_node = node
@@ -157,13 +139,10 @@ class ObsidianParser:
             status=QuestionStatus.PENDING,
             creator_id=self.creator_id,
             parent_question_id=parent_question_id,
+            knowledge_node_id=kn_node.id,
         )
         self.db.add(question)
         await self.db.flush()
-
-        from app.models.question import QuestionSkillTag
-        tag = QuestionSkillTag(question_id=question.id, knowledge_node_id=kn_node.id, is_primary=True)
-        self.db.add(tag)
         
         # Create Answers
         for idx, ans_dict in enumerate(answers, start=1):

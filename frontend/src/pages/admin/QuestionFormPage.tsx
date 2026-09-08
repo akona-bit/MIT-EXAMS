@@ -331,8 +331,11 @@ export default function QuestionFormPage() {
                     <option value="Sinh học">Sinh học</option>
                     <option value="Lịch sử">Lịch sử</option>
                     <option value="Địa lí">Địa lí</option>
-                    <option value="Tiếng Anh">Tiếng Anh</option>
                     <option value="Ngữ văn">Ngữ văn</option>
+                    <option value="Tiếng Anh">Tiếng Anh</option>
+                    <option value="Giáo dục Kinh tế và Pháp luật">Giáo dục Kinh tế và Pháp luật</option>
+                    <option value="Tin học">Tin học</option>
+                    <option value="Công nghệ">Công nghệ</option>
                   </select>
                 </div>
                 

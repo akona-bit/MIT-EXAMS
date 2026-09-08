@@ -3,7 +3,7 @@ import io
 from typing import Any, Dict, List, Optional
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.question import KnowledgeNode, KnowledgeNodeParent
+from app.models.question import KnowledgeNode
 from app.models.exam import MatrixRule
 
 
@@ -69,34 +69,21 @@ class MatrixImportService:
         node = None
         if parent_id:
             for c in candidates:
-                check = await db.execute(
-                    select(KnowledgeNodeParent).where(
-                        KnowledgeNodeParent.child_id == c.id,
-                        KnowledgeNodeParent.parent_id == parent_id,
-                        KnowledgeNodeParent.is_primary.is_(True),
-                    )
-                )
-                if check.scalar_one_or_none():
+                if c.parent_id == parent_id:
                     node = c
                     break
         else:
             from app.models.question import KnowledgeNodeType
             for c in candidates:
                 if c.node_type and c.node_type.value == node_type:
-                    check = await db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == c.id,
-                            KnowledgeNodeParent.is_primary.is_(True),
-                        )
-                    )
-                    if not check.scalar_one_or_none():
+                    if c.parent_id is None:
                         node = c
                         break
 
         if not node:
             from app.models.question import KnowledgeNodeType
             type_enum = KnowledgeNodeType(node_type) if node_type in ["TOPIC", "CONCEPT", "SKILL"] else KnowledgeNodeType.SKILL
-            node = KnowledgeNode(name=name, node_type=type_enum)
+            node = KnowledgeNode(name=name, node_type=type_enum, parent_id=parent_id)
             db.add(node)
             await db.flush()
 
@@ -144,19 +131,9 @@ class MatrixImportService:
 
             # Find concept under topic
             if topic_node:
-                stmt = select(KnowledgeNode).where(KnowledgeNode.name == concept_name)
+                stmt = select(KnowledgeNode).where(KnowledgeNode.name == concept_name, KnowledgeNode.parent_id == topic_node.id)
                 result = await db.execute(stmt)
-                for c in result.scalars().all():
-                    check = await db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == c.id,
-                            KnowledgeNodeParent.parent_id == topic_node.id,
-                            KnowledgeNodeParent.is_primary.is_(True),
-                        )
-                    )
-                    if check.scalar_one_or_none():
-                        concept_node = c
-                        break
+                concept_node = result.scalars().first()
                 if concept_node:
                     suggestions.append({"field": "concept", "message": f"Khớp concept #{concept_node.id}"})
                 else:
@@ -164,19 +141,9 @@ class MatrixImportService:
 
             # Find skill under concept
             if concept_node:
-                stmt = select(KnowledgeNode).where(KnowledgeNode.name == skill_name)
+                stmt = select(KnowledgeNode).where(KnowledgeNode.name == skill_name, KnowledgeNode.parent_id == concept_node.id)
                 result = await db.execute(stmt)
-                for s in result.scalars().all():
-                    check = await db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == s.id,
-                            KnowledgeNodeParent.parent_id == concept_node.id,
-                            KnowledgeNodeParent.is_primary.is_(True),
-                        )
-                    )
-                    if check.scalar_one_or_none():
-                        skill_node = s
-                        break
+                skill_node = result.scalars().first()
                 if skill_node:
                     suggestions.append({"field": "skill", "message": f"Khớp skill #{skill_node.id}"})
                 else:
@@ -253,47 +220,23 @@ class MatrixImportService:
             concept_node = None
             if concept_name:
                 # Find concept under topic
-                stmt = select(KnowledgeNode).where(KnowledgeNode.name == concept_name)
+                stmt = select(KnowledgeNode).where(KnowledgeNode.name == concept_name, KnowledgeNode.parent_id == topic_node.id)
                 result = await db.execute(stmt)
-                for c in result.scalars().all():
-                    check = await db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == c.id,
-                            KnowledgeNodeParent.parent_id == topic_node.id,
-                            KnowledgeNodeParent.is_primary.is_(True),
-                        )
-                    )
-                    if check.scalar_one_or_none():
-                        concept_node = c
-                        break
+                concept_node = result.scalars().first()
                 if not concept_node:
                     concept_node = await MatrixImportService._find_or_create_node(
                         db, concept_name, "CONCEPT", topic_node.id
                     )
-                    from app.services.knowledge_service import KnowledgeService
-                    await KnowledgeService.add_relation(db, concept_node.id, topic_node.id, is_primary=True)
 
             skill_node = None
             if skill_name and concept_node:
-                stmt = select(KnowledgeNode).where(KnowledgeNode.name == skill_name)
+                stmt = select(KnowledgeNode).where(KnowledgeNode.name == skill_name, KnowledgeNode.parent_id == concept_node.id)
                 result = await db.execute(stmt)
-                for s in result.scalars().all():
-                    check = await db.execute(
-                        select(KnowledgeNodeParent).where(
-                            KnowledgeNodeParent.child_id == s.id,
-                            KnowledgeNodeParent.parent_id == concept_node.id,
-                            KnowledgeNodeParent.is_primary.is_(True),
-                        )
-                    )
-                    if check.scalar_one_or_none():
-                        skill_node = s
-                        break
+                skill_node = result.scalars().first()
                 if not skill_node:
                     skill_node = await MatrixImportService._find_or_create_node(
                         db, skill_name, "SKILL", concept_node.id
                     )
-                    from app.services.knowledge_service import KnowledgeService
-                    await KnowledgeService.add_relation(db, skill_node.id, concept_node.id, is_primary=True)
 
             target_node_id = skill_node.id if skill_node else (concept_node.id if concept_node else topic_node.id)
 

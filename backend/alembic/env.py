@@ -28,7 +28,7 @@ from app.models.obsidian import ObsidianSyncRun, ObsidianFile
 from app.models.passage import Passage
 from app.models.system import SystemSetting
 from app.models.feedback import Feedback
-from app.models.ai import AiAnalysisCache, AiRequestLog
+
 from app.models.notification import Notification, NotificationType
 target_metadata = Base.metadata
 

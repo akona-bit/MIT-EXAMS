@@ -9,7 +9,7 @@ from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.models.passage import Passage
 from app.services.knowledge_service import KnowledgeService
-from app.models.question import Question, Answer, QuestionSkillTag
+from app.models.question import Question, Answer
 from app.schemas.passage import PassageCreate, PassageUpdate, PassageResponse, PassageSearchResponse, QuestionBulkCreateRequest, QuestionBulkUpdateRequest
 
 router = APIRouter()
@@ -137,7 +137,8 @@ async def create_questions_bulk(public_code: str, req: QuestionBulkCreateRequest
             passage_id=passage.id,
             source_author=q_req.source_author,
             source_title=q_req.source_title,
-            creator_id=current_user.id
+            creator_id=current_user.id,
+            knowledge_node_id=q_req.primary_knowledge_node_id,
         )
         db.add(new_q)
         await db.flush() # Need flush to get new_q.id
@@ -151,13 +152,6 @@ async def create_questions_bulk(public_code: str, req: QuestionBulkCreateRequest
                 position=ans.position
             )
             db.add(new_a)
-
-        # Add tags
-        primary_tag = QuestionSkillTag(question_id=new_q.id, knowledge_node_id=q_req.primary_knowledge_node_id, is_primary=True)
-        db.add(primary_tag)
-        for sec_id in (q_req.secondary_knowledge_node_ids or []):
-            if sec_id != q_req.primary_knowledge_node_id:
-                db.add(QuestionSkillTag(question_id=new_q.id, knowledge_node_id=sec_id, is_primary=False))
 
         created_codes.append(q_code)
 
@@ -208,19 +202,7 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
             upd_q.resource_id = q_req.resource_id
             upd_q.source_author = q_req.source_author
             upd_q.source_title = q_req.source_title
-
-            # Xóa tags cũ
-            tag_stmt = select(QuestionSkillTag).where(QuestionSkillTag.question_id == upd_q.id)
-            tag_res = await db.execute(tag_stmt)
-            for t in tag_res.scalars().all():
-                await db.delete(t)
-
-            # Thêm tags mới
-            primary_tag = QuestionSkillTag(question_id=upd_q.id, knowledge_node_id=q_req.primary_knowledge_node_id, is_primary=True)
-            db.add(primary_tag)
-            for sec_id in (q_req.secondary_knowledge_node_ids or []):
-                if sec_id != q_req.primary_knowledge_node_id:
-                    db.add(QuestionSkillTag(question_id=upd_q.id, knowledge_node_id=sec_id, is_primary=False))
+            upd_q.knowledge_node_id = q_req.primary_knowledge_node_id
 
             # Xóa answers cũ
             ans_stmt = select(Answer).where(Answer.question_id == upd_q.id)
@@ -254,7 +236,8 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
                 passage_id=passage.id,
                 source_author=q_req.source_author,
                 source_title=q_req.source_title,
-                creator_id=current_user.id
+                creator_id=current_user.id,
+                knowledge_node_id=q_req.primary_knowledge_node_id,
             )
             db.add(new_q)
             await db.flush()
@@ -267,13 +250,6 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
                     position=ans.position
                 )
                 db.add(new_a)
-                
-            # Add tags
-            primary_tag = QuestionSkillTag(question_id=new_q.id, knowledge_node_id=q_req.primary_knowledge_node_id, is_primary=True)
-            db.add(primary_tag)
-            for sec_id in (q_req.secondary_knowledge_node_ids or []):
-                if sec_id != q_req.primary_knowledge_node_id:
-                    db.add(QuestionSkillTag(question_id=new_q.id, knowledge_node_id=sec_id, is_primary=False))
 
             created_codes.append(q_code)
 
@@ -295,7 +271,7 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
 @router.delete("/{public_code}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def delete_passage(public_code: str, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import update as sa_update
-    from app.models.question import QuestionSkillTag, Answer
+    from app.models.question import Answer
     result = await db.execute(select(Passage).where(Passage.public_code == public_code))
     passage = result.scalars().first()
     if not passage:
@@ -307,7 +283,7 @@ async def delete_passage(public_code: str, db: AsyncSession = Depends(get_db)):
 
     # Cascade delete related records
     for q_id in q_ids:
-        await db.execute(delete(QuestionSkillTag).where(QuestionSkillTag.question_id == q_id))
+
         await db.execute(delete(Answer).where(Answer.question_id == q_id))
     await db.execute(delete(Question).where(Question.passage_id == passage.id))
 

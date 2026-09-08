@@ -22,11 +22,8 @@ import {
   Copy,
   AlertCircle,
   History,
-  Sparkles,
   Database,
 } from "lucide-react";
-import AiReviewQueueTab from "../../components/admin/question/AiReviewQueueTab";
-import AiReviewModal from "../../components/admin/question/AiReviewModal";
 
 export default function QuestionsPage() {
   const navigate = useNavigate();
@@ -48,7 +45,6 @@ export default function QuestionsPage() {
   const [historyList, setHistoryList] = useState<Question[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
-  const [aiReviewItem, setAiReviewItem] = useState<Question | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "AI_REVIEW">("ALL");
@@ -269,15 +265,6 @@ export default function QuestionsPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-indigo-500 hover:bg-indigo-50 hover:text-indigo-600"
-            title="Phân tích AI"
-            onClick={() => setAiReviewItem(row)}
-          >
-            <Sparkles className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
             className="h-8 w-8 text-primary-500 hover:bg-primary-50 hover:text-primary-600"
             title="Duyệt / Từ chối"
             onClick={() => setReviewItem(row)}
@@ -360,21 +347,10 @@ export default function QuestionsPage() {
         >
           Hàng chờ duyệt
         </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${activeTab === "AI_REVIEW" ? "bg-white shadow text-slate-900 dark:bg-slate-700 dark:text-white" : "text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"}`}
-          onClick={() => setActiveTab("AI_REVIEW")}
-        >
-          <Sparkles className="w-4 h-4 text-violet-500" />
-          Phân tích AI
-        </button>
       </div>
 
-      {activeTab === "AI_REVIEW" ? (
-        <AiReviewQueueTab />
-      ) : (
-        <>
-          <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden flex flex-col gap-4 p-6 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden flex flex-col gap-4 p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <input
@@ -461,17 +437,6 @@ export default function QuestionsPage() {
               emptyMessage={searchTerm ? "Không tìm thấy câu hỏi phù hợp." : "Chưa có câu hỏi nào trong ngân hàng."}
             />
           </div>
-        </>
-      )}
-
-      <AiReviewModal
-        isOpen={!!aiReviewItem}
-        onClose={() => {
-          setAiReviewItem(null);
-          fetchQuestions(); // Refresh in case AI review added tags
-        }}
-        questionId={aiReviewItem?.id || null}
-      />
 
       <ConfirmDialog
         isOpen={deleteId !== null}

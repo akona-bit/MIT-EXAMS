@@ -8,12 +8,11 @@ from app.models.exam import ExamFormQuestion
 from app.db.database import get_db
 from app.models.user import User
 from app.models.question import Question, Answer, QuestionStatus, QuestionType, KnowledgeNode, KnowledgeNodeType
-from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate, QuestionReviewRequest, QuestionSimilarityResponse, AiSuggestTagsRequest, AiSuggestTagsResponse
+from app.schemas.question import QuestionCreate, QuestionResponse, QuestionUpdate, QuestionReviewRequest, QuestionSimilarityResponse
 from pydantic import BaseModel
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
 from app.services.knowledge_service import KnowledgeService
-from app.models.ai import AiAnalysisCache, AiReviewStatus
 
 router = APIRouter()
 
@@ -80,79 +79,7 @@ async def get_questions(
     return {"items": mapped_items, "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
 
 
-@router.get("/ai-review-queue")
-async def get_ai_review_queue(
-    review_status: str = "AI_SUGGESTED",
-    skip: int = 0,
-    limit: int = 50,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    """
-    List AI analysis cache entries filtered by review_status (default: AI_SUGGESTED).
-    Used by the "Duyệt phân tích AI" admin page to review AI suggestions in bulk.
-    NOTE: must be declared before /{question_id} to avoid path shadowing.
-    """
-    if current_user.role.name not in ("ADMIN", "TEACHER"):
-        raise HTTPException(status_code=403, detail="Only teachers and admins can view AI review queue")
 
-    try:
-        status_enum = AiReviewStatus(review_status)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid review_status. Valid: AI_SUGGESTED, HUMAN_EDITED, HUMAN_CONFIRMED, HUMAN_REJECTED")
-
-    count_stmt = select(func.count()).select_from(AiAnalysisCache).where(AiAnalysisCache.review_status == status_enum)
-    total = (await db.execute(count_stmt)).scalar_one()
-
-    result = await db.execute(
-        select(AiAnalysisCache)
-        .options(selectinload(AiAnalysisCache.question))
-        .where(AiAnalysisCache.review_status == status_enum)
-        .order_by(AiAnalysisCache.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    caches = result.scalars().all()
-
-    items = []
-    for c in caches:
-        items.append({
-            "id": c.id,
-            "source_question_id": c.source_question_id,
-            "question_content": c.question.content if c.question else None,
-            "analysis_result": c.analysis_result,
-            "confidence": c.confidence,
-            "ai_model_used": c.ai_model_used,
-            "review_status": c.review_status.value if hasattr(c.review_status, "value") else c.review_status,
-            "reviewed_by": c.reviewed_by,
-            "reviewed_at": c.reviewed_at,
-            "created_at": c.created_at,
-        })
-    return {"items": items, "total": total}
-
-
-
-
-
-@router.post("/ai-suggest-tags", response_model=AiSuggestTagsResponse)
-async def ai_suggest_tags_endpoint(
-    request: AiSuggestTagsRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    from app.services.ai_analysis import suggest_question_tags
-    
-    # Get existing topics and concepts to provide context to AI
-    nodes_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.node_type.in_([KnowledgeNodeType.TOPIC, KnowledgeNodeType.CONCEPT])))
-    existing_nodes = [{"id": n.id, "name": n.name, "type": n.node_type.value} for n in nodes_result.scalars().all()]
-    
-    result = await suggest_question_tags(
-        content=request.content,
-        answers=request.answers,
-        sub_items=request.sub_items,
-        existing_nodes=existing_nodes
-    )
-    return result
 
 
 @router.get("/{question_id}", response_model=QuestionResponse)
@@ -503,126 +430,6 @@ async def delete_question(question_id: int, db: AsyncSession = Depends(get_db), 
     await db.delete(question)
     await db.commit()
 
-from app.schemas.ai import AiAnalysisResponse
-from app.services.ai_analysis import (
-    get_fully_loaded_question,
-    compute_question_hash,
-    get_cached_analysis,
-    analyze_question_with_gemini,
-    log_ai_request
-)
-from app.models.ai import AiAnalysisCache, AiReviewStatus
-
-@router.post("/{question_id}/analyze", response_model=AiAnalysisResponse)
-async def analyze_question(
-    question_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Trigger AI analysis for a specific question.
-    Only Teachers and Admins can perform this action.
-    """
-    if current_user.role.name not in ("ADMIN", "TEACHER"):
-        raise HTTPException(status_code=403, detail="Only teachers and admins can analyze questions")
-        
-    question = await get_fully_loaded_question(db, question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-        
-    # Calculate hash
-    content_hash = compute_question_hash(question)
-    
-    # Check cache first
-    cached_result = await get_cached_analysis(db, content_hash)
-    if cached_result:
-        return cached_result
-        
-    # Not in cache or usable cache, call AI
-    # Pass a simplified text version to AI (you can adjust this later)
-    q_text = question.content
-    for sub in getattr(question, 'sub_items', []):
-        q_text += f"\n- {getattr(sub, 'label', '')}: {getattr(sub, 'prompt', '')}"
-    for ans in getattr(question, 'answers', []):
-        q_text += f"\n[ ] {ans.content}"
-        
-    ai_response = await analyze_question_with_gemini(question, q_text)
-    
-    # Estimate cost (very rough estimate for Gemini 1.5 Pro)
-    cost = (ai_response["token_count"] / 1000) * 0.0035 
-    
-    # Save to Cache
-    new_cache = AiAnalysisCache(
-        content_hash=content_hash,
-        source_question_id=question.id,
-        analysis_result=ai_response["result"],
-        confidence=0.9, # default or parse from AI if requested
-        ai_model_used="gemini-1.5-pro",
-        review_status=AiReviewStatus.AI_SUGGESTED,
-        reviewed_by=None
-    )
-    db.add(new_cache)
-    await db.commit()
-    await db.refresh(new_cache)
-    
-    # Log request
-    await log_ai_request(
-        db=db,
-        endpoint=f"/questions/{question_id}/analyze",
-        question_id=question.id,
-        token_count=ai_response["token_count"],
-        cost_estimate=cost
-    )
-    
-    return new_cache
-    
-from app.schemas.ai import AiReviewRequest
-from app.models.ai import AiReviewStatus
-from sqlalchemy import func
-
-@router.post("/{question_id}/ai-analysis/review", response_model=AiAnalysisResponse)
-async def review_ai_analysis(
-    question_id: int,
-    request: AiReviewRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Accept, edit, or reject the AI analysis result.
-    If confirmed/edited, the concepts and skills are saved as non-primary QuestionSkillTags.
-    """
-    if current_user.role.name not in ("ADMIN", "TEACHER"):
-        raise HTTPException(status_code=403, detail="Only teachers and admins can review AI analysis")
-        
-    question = await get_fully_loaded_question(db, question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-        
-    content_hash = compute_question_hash(question)
-    
-    # Find the latest cache
-    stmt = select(AiAnalysisCache).where(AiAnalysisCache.content_hash == content_hash)
-    result = await db.execute(stmt)
-    cache = result.scalars().first()
-    
-    if not cache:
-        raise HTTPException(status_code=404, detail="No AI analysis found for this question version")
-        
-    # Update cache
-    cache.review_status = request.review_status
-    cache.reviewed_by = current_user.id
-    cache.reviewed_at = func.now()
-    
-    if request.updated_analysis_result:
-        cache.analysis_result = request.updated_analysis_result
-        
-        # We no longer add secondary tags because the model strictly follows a 1-1 structure.
-        # So we just log or do nothing. We can safely ignore AI secondary tags.
-        pass
-        
-    await db.commit()
-    await db.refresh(cache)
-    return cache
 
 @router.post("/{question_id}/review", response_model=QuestionResponse, dependencies=[Depends(RequireRole(["ADMIN", "MODERATOR", "TEACHER"]))])
 async def review_question(

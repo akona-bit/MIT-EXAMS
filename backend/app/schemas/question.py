@@ -150,22 +150,3 @@ class QuestionSimilarityResponse(BaseModel):
     status: str
 
 
-# --- AI Suggest Tags Schemas ---
-class AiSuggestTagsRequest(BaseModel):
-    content: str
-    answers: Optional[List[str]] = None  # ["A. Nội dung đáp án A", ...]
-    sub_items: Optional[List[str]] = None  # ["a. Nội dung ý con", ...]
-
-class AiSuggestedNode(BaseModel):
-    name: str
-    node_id: Optional[int] = None
-    node_type: str  # "TOPIC", "CONCEPT", "SKILL"
-    confidence: float  # 0.0 - 1.0
-    reasoning: Optional[str] = None
-
-class AiSuggestTagsResponse(BaseModel):
-    primary_suggestion: AiSuggestedNode
-    secondary_suggestions: List[AiSuggestedNode] = []
-    cognitive_level: Optional[int] = None  # 1-4
-    tags: List[str] = []
-    ai_model: str = "gemini-1.5-flash"
