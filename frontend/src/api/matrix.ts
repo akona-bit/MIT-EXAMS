@@ -149,3 +149,7 @@ export async function createMatrixFromDgnlBlueprint(
   const response = await client.post<DgnlBlueprintCreateResult>('/api/v1/matrix/from-dgnl-blueprint', data);
   return response.data;
 }
+export async function getDgnlBlueprintTemplate(): Promise<{ rules: any[]; groups: any[] }> {
+  const response = await client.get<{ rules: any[]; groups: any[] }>('/api/v1/matrix/dgnl-blueprint/template');
+  return response.data;
+}

@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   getDgnlBlueprint,
-  createMatrixFromDgnlBlueprint,
+  getDgnlBlueprintTemplate,
   type DgnlBlueprint,
   type DgnlBlueprintSlot,
 } from "../../../api/matrix";
 import Button from "../../ui/Button";
-import Input from "../../ui/Input";
 import Modal from "../../ui/Modal";
 import { toast } from "../../ui/Toast";
 import {
@@ -18,11 +16,14 @@ import {
   CheckCircle2,
   Clock,
   Target,
+  ArrowRight,
 } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface DgnlBlueprintModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onApply: (data: { rules: any[]; groups: any[] }) => void;
 }
 
 // Màu theo phần — đồng bộ design token (emerald/sky/indigo/rose)
@@ -33,16 +34,11 @@ const PART_STYLES: Record<number, { bar: string; chip: string; ring: string }> =
   4: { bar: "bg-rose-500", chip: "bg-rose-50 text-rose-700 border-rose-200", ring: "ring-rose-200" },
 };
 
-export default function DgnlBlueprintModal({ isOpen, onClose }: DgnlBlueprintModalProps) {
-  const navigate = useNavigate();
+export default function DgnlBlueprintModal({ isOpen, onClose, onApply }: DgnlBlueprintModalProps) {
   const [blueprint, setBlueprint] = useState<DgnlBlueprint | null>(null);
   const [structureErrors, setStructureErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [name, setName] = useState("Ma trận ĐGNL ĐHQG-HCM chuẩn 120 câu");
-  const [description, setDescription] = useState(
-    "Sinh tự động từ blueprint khung xương chuẩn (đối chiếu 3 nguồn: đề mẫu ĐHQG + 2 đề phục dựng).",
-  );
+  const [isApplying, setIsApplying] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -57,28 +53,26 @@ export default function DgnlBlueprintModal({ isOpen, onClose }: DgnlBlueprintMod
     }
   }, [isOpen]);
 
-  const handleCreate = async () => {
-    if (!name.trim()) {
-      toast.warning("Vui lòng nhập tên ma trận.");
-      return;
-    }
-    setIsCreating(true);
+  const handleApply = async () => {
+    setIsApplying(true);
     try {
-      const res = await createMatrixFromDgnlBlueprint({ name: name.trim(), description: description.trim() || undefined });
-      if (res.unmatched?.length > 0) {
+      const template = await getDgnlBlueprintTemplate();
+      const matched = template.rules.filter((r) => r.knowledge_node_id);
+      
+      if (matched.length < template.rules.length) {
         toast.warning(
-          `Đã tạo ma trận với ${res.matched.length}/39 ô khớp kiến thức. ${res.unmatched.length} ô chưa có node tương ứng — hãy bổ sung trong trang chi tiết.`,
+          `Đã áp dụng mẫu với ${matched.length}/${template.rules.length} ô khớp kiến thức. Số còn lại hãy chọn thủ công trong bảng.`
         );
       } else {
-        toast.success(`Đã tạo ma trận ĐGNL chuẩn — khớp đủ ${res.matched.length}/39 ô kiến thức.`);
+        toast.success(`Đã áp dụng mẫu ĐGNL chuẩn — khớp đủ ${matched.length}/${template.rules.length} ô kiến thức.`);
       }
+      onApply(template);
       onClose();
-      navigate(`/admin/matrix/${res.id}`);
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.response?.data?.detail?.message || "Lỗi khi tạo ma trận từ blueprint.");
+      toast.error("Lỗi khi tải dữ liệu mẫu blueprint.");
     } finally {
-      setIsCreating(false);
+      setIsApplying(false);
     }
   };
 
@@ -89,7 +83,7 @@ export default function DgnlBlueprintModal({ isOpen, onClose }: DgnlBlueprintMod
       <div
         key={slot.key}
         title={`${slot.label} (${slot.count} câu)${slot.note ? " — " + slot.note : ""}`}
-        className={`relative group flex flex-col justify-center rounded-lg ${style.bar} text-white shadow-sm overflow-hidden cursor-default`}
+        className={`relative group flex flex-col justify-center rounded-lg ${style.bar} text-white shadow-sm overflow-hidden cursor-default transition-all duration-300 hover:scale-105 hover:z-10`}
         style={{ width: `${widthPct}%`, minWidth: "34px" }}
       >
         <span className="text-[11px] font-bold text-center leading-none">{slot.count}</span>
@@ -102,114 +96,105 @@ export default function DgnlBlueprintModal({ isOpen, onClose }: DgnlBlueprintMod
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Blueprint ĐGNL ĐHQG-HCM — 120 câu chuẩn" maxWidth="max-w-4xl">
-      <div className="p-6 space-y-5 overflow-y-auto">
+    <Modal isOpen={isOpen} onClose={onClose} title="Template Blueprint ĐGNL ĐHQG-HCM" maxWidth="max-w-4xl">
+      <div className="p-6 space-y-6 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/30">
         {/* Info banner */}
-        <div className="rounded-xl bg-primary-50 dark:bg-primary-900/20 p-4 border border-primary-100 dark:border-primary-800/50 flex gap-3 items-start">
-          <div className="p-2 bg-primary-600 text-white rounded-lg shrink-0">
-            <Blocks className="w-5 h-5" />
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100/50 dark:from-primary-900/20 dark:to-primary-900/10 p-5 border border-primary-200/50 dark:border-primary-800/50 flex gap-4 items-start shadow-sm"
+        >
+          <div className="p-2.5 bg-white dark:bg-slate-800 text-primary-600 rounded-xl shrink-0 shadow-sm border border-primary-100 dark:border-primary-800">
+            <Blocks className="w-6 h-6" />
           </div>
-          <div className="text-sm text-primary-900 dark:text-primary-200 leading-relaxed">
-            <p className="font-bold mb-1">Khung xương bất biến đã đối chiếu chéo 3 nguồn</p>
-            <p>
-              4 phần × 30 câu · khối chung dữ kiện {blueprint ? "12+5+5 (TV) và 7+8 (TA)" : ""} · trình tự 6 lĩnh vực
-              Tư duy khoa học <span className="font-semibold">Hóa → Lý → Sinh → XH/KT → Sử → Ứng dụng</span> (cứng).
-              Toán: 9 khối 2 câu + 4 khối 3 câu (2 khối đầu cứng).
+          <div className="text-sm text-primary-950 dark:text-primary-100 leading-relaxed">
+            <p className="font-bold text-base mb-1.5 flex items-center gap-2">
+              Bản mẫu linh hoạt (Template Mode)
+              <span className="px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">Mới</span>
+            </p>
+            <p className="text-primary-800 dark:text-primary-200/80">
+              Thay vì tạo ngay ma trận cứng nhắc, bạn có thể áp dụng bản mẫu này vào Form. 
+              Mẫu bao gồm <strong>39 ô kiến thức chuẩn</strong> (đối chiếu 3 nguồn: đề mẫu ĐHQG + 2 đề phục dựng). 
+              Sau khi áp dụng, bạn <strong>hoàn toàn có thể sửa đổi</strong> số lượng câu, xóa bớt phần thi, hoặc thay đổi chủ đề trước khi lưu.
             </p>
           </div>
-        </div>
+        </motion.div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center h-40">
+          <div className="flex items-center justify-center h-48">
             <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
           </div>
         ) : blueprint ? (
-          <>
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="space-y-6"
+          >
             {/* Summary chips */}
             <div className="flex flex-wrap gap-2 text-xs font-semibold">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                <Target className="w-3.5 h-3.5 text-primary-500" /> {blueprint.total_questions} câu · {blueprint.total_slots} ô ma trận
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm text-slate-700 dark:text-slate-200">
+                <Target className="w-4 h-4 text-primary-500" /> {blueprint.total_questions} câu mặc định
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                <Clock className="w-3.5 h-3.5 text-primary-500" /> {blueprint.duration_minutes} phút · {blueprint.score_scale}
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm text-slate-700 dark:text-slate-200">
+                <Clock className="w-4 h-4 text-primary-500" /> {blueprint.duration_minutes} phút
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                <FileText className="w-3.5 h-3.5 text-primary-500" /> Khối chung ngữ liệu: liền kề bắt buộc
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                <Lock className="w-3.5 h-3.5 text-primary-500" /> Trình tự cứng ({blueprint.parts.reduce((acc, p) => acc + p.slots.filter((s) => s.order_locked).length, 0)} ô)
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm text-slate-700 dark:text-slate-200">
+                <FileText className="w-4 h-4 text-primary-500" /> Nhóm ngữ liệu tự động
               </span>
             </div>
 
             {/* Part skeletons */}
-            <div className="space-y-4">
-              {blueprint.parts.map((part) => {
+            <div className="grid grid-cols-1 gap-4">
+              {blueprint.parts.map((part, index) => {
                 const style = PART_STYLES[part.part];
                 return (
-                  <div key={part.part} className={`rounded-2xl border border-slate-200 dark:border-slate-700 p-4 bg-white/60 dark:bg-slate-900/60 ring-1 ring-inset ${style.ring}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${style.bar}`} />
-                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15 + index * 0.05 }}
+                    key={part.part} 
+                    className={`rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 bg-white dark:bg-slate-800/80 ring-1 ring-inset ${style.ring} shadow-sm hover:shadow-md transition-shadow`}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-3 h-3 rounded-full ${style.bar} shadow-sm`} />
+                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm md:text-base">
                           Phần {part.part}: {part.name}
                         </h4>
                       </div>
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${style.chip}`}>
-                        Câu {part.question_range} · {part.total} câu
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${style.chip}`}>
+                        {part.total} câu
                       </span>
                     </div>
                     {/* Block bar */}
-                    <div className="flex gap-1 h-10 items-stretch">
+                    <div className="flex gap-1.5 h-12 items-stretch">
                       {part.slots.map((slot) => renderSlotBar(slot, part.part))}
                     </div>
-                    {/* Legend */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                      {part.slots.map((slot) => (
-                        <span key={slot.key} className="inline-flex items-center gap-1">
-                          <span className={`inline-block w-2 h-2 rounded-sm ${style.bar}`} />
-                          <span className="font-medium text-slate-600 dark:text-slate-300">{slot.count}p</span> {slot.label}
-                          {slot.passage && <FileText className="w-3 h-3 inline" />}
-                          {slot.order_locked && <Lock className="w-3 h-3 inline" />}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
-
-            {/* Create form */}
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-5 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="Tên ma trận" value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} />
-                <Input label="Mô tả" value={description} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)} />
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Hệ thống sẽ tạo <strong>39 ô ma trận</strong> (rule đơn giản — engine tự cân bằng dạng câu/mức độ) +{" "}
-                <strong>5 nhóm chung ngữ liệu</strong>. Ô nào chưa có node kiến thức tương ứng sẽ được báo để bạn bổ sung.
-                Các ô đọc hiểu cần gắn Passage cụ thể sau khi tạo.
-              </p>
-            </div>
-          </>
+          </motion.div>
         ) : null}
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose} disabled={isCreating}>
-            Hủy bỏ
+        <div className="flex justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-800">
+          <Button variant="ghost" onClick={onClose} disabled={isApplying} className="rounded-xl px-5">
+            Đóng
           </Button>
           <Button
-            onClick={handleCreate}
-            isLoading={isCreating}
+            onClick={handleApply}
+            isLoading={isApplying}
             disabled={isLoading || !blueprint || structureErrors.length > 0}
-            className="bg-primary-600 hover:bg-primary-700 text-white font-bold shadow-lg shadow-primary-500/30 px-6 rounded-xl"
+            className="bg-primary-600 hover:bg-primary-700 text-white font-bold shadow-lg shadow-primary-500/30 px-6 rounded-xl group"
           >
-            {!isCreating && <CheckCircle2 className="w-4 h-4 mr-2" />}
-            {isCreating ? "Đang tạo ma trận..." : "Tạo ma trận từ blueprint"}
+            {!isApplying && <CheckCircle2 className="w-4 h-4 mr-2" />}
+            {isApplying ? "Đang xử lý..." : "Sử dụng mẫu này"}
+            {!isApplying && <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />}
           </Button>
         </div>
       </div>
     </Modal>
   );
 }
-

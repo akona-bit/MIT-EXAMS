@@ -49,6 +49,12 @@ export default function MatrixFormPage() {
   // DGNL Blueprint state
   const [isBlueprintOpen, setIsBlueprintOpen] = useState(false);
   
+  const handleApplyBlueprint = (data: { rules: any[]; groups: any[] }) => {
+    setRules(data.rules);
+    setGroups(data.groups);
+    if (!name) setName("Ma trận ĐGNL ĐHQG-HCM chuẩn");
+  };
+  
   // Versioning state
   const [matrixUsage, setMatrixUsage] = useState<{ is_used: boolean; total_runs: number } | null>(null);
   const [isCreatingVersion, setIsCreatingVersion] = useState(false);
@@ -170,9 +176,9 @@ export default function MatrixFormPage() {
       return;
     }
 
-    const invalidRule = rules.find((r) => !r.knowledge_node_id || !r.question_type || !r.count || r.count <= 0);
+    const invalidRule = rules.find((r) => !r.knowledge_node_id || !r.count || r.count <= 0);
     if (invalidRule) {
-      toast.warning("Vui lòng điền đầy đủ và hợp lệ thông tin cho tất cả quy tắc (Chủ đề, Dạng câu, Số lượng > 0)");
+      toast.warning("Vui lòng điền đầy đủ và hợp lệ thông tin cho tất cả quy tắc (Chủ đề, Số lượng > 0)");
       return;
     }
 
@@ -183,8 +189,8 @@ export default function MatrixFormPage() {
         description: description || null,
         rules: rules.map((r) => ({
           knowledge_node_id: Number(r.knowledge_node_id),
-          question_type: r.question_type,
-          level: Number(r.level || 1),
+          question_type: r.question_type || null,
+          level: r.level ? Number(r.level) : null,
           count: Number(r.count || 1),
           part: Number(r.part || 1),
           group_local_id: r.group_local_id,
@@ -433,22 +439,28 @@ export default function MatrixFormPage() {
                                  <div className="space-y-1.5">
                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dạng câu (Cố định)</label>
                                    <select
-                                     disabled
+                                     disabled={!rule.question_type}
                                      className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
-                                     value={rule.question_type || "SINGLE_CHOICE"}
+                                     value={rule.question_type || ""}
+                                     onChange={(e) => updateRule(idx, "question_type", e.target.value)}
                                    >
+                                     <option value="">Tự động chọn</option>
                                      <option value="SINGLE_CHOICE">Trắc nghiệm</option>
                                    </select>
                                  </div>
 
                                  <div className="space-y-1.5">
-                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mức độ (Auto)</label>
+                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mức độ</label>
                                    <select
-                                     disabled
                                      className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
-                                     value={rule.level || 1}
+                                     value={rule.level || ""}
+                                     onChange={(e) => updateRule(idx, "level", e.target.value ? Number(e.target.value) : undefined)}
                                    >
-                                     <option value={1}>Tự động cân bằng</option>
+                                     <option value="">Tự động cân bằng</option>
+                                     <option value={1}>Nhận biết</option>
+                                     <option value={2}>Thông hiểu</option>
+                                     <option value={3}>Vận dụng</option>
+                                     <option value={4}>Vận dụng cao</option>
                                    </select>
                                  </div>
 
@@ -586,7 +598,11 @@ export default function MatrixFormPage() {
          </div>
       </Modal>
 
-      <DgnlBlueprintModal isOpen={isBlueprintOpen} onClose={() => setIsBlueprintOpen(false)} />
+        <DgnlBlueprintModal
+          isOpen={isBlueprintOpen}
+          onClose={() => setIsBlueprintOpen(false)}
+          onApply={handleApplyBlueprint}
+        />
     </div>
   );
 }

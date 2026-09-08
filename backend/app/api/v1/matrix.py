@@ -51,6 +51,46 @@ async def dgnl_blueprint():
     return {"blueprint": blueprint, "structure_errors": validate_blueprint()}
 
 
+@router.get("/dgnl-blueprint/template")
+async def dgnl_blueprint_template(db: AsyncSession = Depends(get_db)):
+    """Trả về dữ liệu rules và groups từ blueprint để điền sẵn vào form tạo Matrix."""
+    from app.services.dgnl_blueprint import BLUEPRINT_SLOTS
+    
+    nodes_result = await db.execute(select(KnowledgeNode.id, KnowledgeNode.name))
+    nodes = [{"id": n.id, "name": n.name} for n in nodes_result.all()]
+    auto_map = match_nodes(nodes)
+
+    groups = []
+    rules = []
+    
+    group_local_ids = []
+    for slot in BLUEPRINT_SLOTS:
+        if slot.passage and slot.key not in group_local_ids:
+            group_local_ids.append(slot.key)
+            groups.append({
+                "local_id": slot.key,
+                "label": slot.label
+            })
+            
+    for slot in BLUEPRINT_SLOTS:
+        node_id = auto_map.get(slot.key)
+        rules.append({
+            "knowledge_node_id": node_id,
+            "count": slot.count,
+            "part": slot.part,
+            "position": slot.position,
+            "group_local_id": slot.key if slot.passage else None,
+            "_slot_key": slot.key,
+            "_slot_label": slot.label,
+            "_node_hint": slot.node_hint
+        })
+
+    return {
+        "groups": groups,
+        "rules": rules
+    }
+
+
 @router.post("/from-dgnl-blueprint", response_model=MatrixResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def create_matrix_from_dgnl_blueprint(request: Request, req: DgnlBlueprintCreateRequest, db: AsyncSession = Depends(get_db)):
     """Tạo ma trận hoàn chỉnh theo blueprint ĐGNL 120 câu, auto-match KnowledgeNode."""
