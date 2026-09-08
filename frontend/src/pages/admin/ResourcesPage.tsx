@@ -258,7 +258,7 @@ export default function ResourcesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 rounded-2xl border border-slate-200/60 bg-white/60 p-1.5 dark:border-slate-700/60 dark:bg-slate-900/60 overflow-x-auto shadow-sm">
+      <div className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 dark:border-slate-700 dark:bg-slate-900 overflow-x-auto shadow-sm">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -435,7 +435,7 @@ function VanBanTab({ passages, isLoading, search, setSearch, onEdit, onDelete }:
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {passages.map((p: any) => (
-            <article key={p.public_code} className="glass-card flex flex-col justify-between p-6 hover:-translate-y-1 transition duration-300 shadow-sm hover:shadow-xl">
+            <article key={p.public_code} className="flex flex-col justify-between p-6 hover:-translate-y-1 transition duration-300 shadow-sm hover:shadow-xl">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md">{p.public_code}</span>
@@ -478,7 +478,7 @@ function ResourceListTab({ items, isLoading, tab, search, setSearch, onDelete }:
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((item: ResourceResponse) => (
-            <article key={item.id} className="glass-card overflow-hidden flex flex-col transition duration-300 hover:shadow-xl group">
+            <article key={item.id} className="overflow-hidden flex flex-col transition duration-300 hover:shadow-xl group">
               <div className="h-40 bg-slate-100 dark:bg-slate-800 relative flex items-center justify-center p-4">
                 {item.type === 'IMAGE' ? (
                    <img src={item.content_url} alt={item.original_name} className="max-h-full max-w-full object-contain rounded-md" />
@@ -560,7 +560,7 @@ function ResourceForm({ tab, draft, setDraft }: any) {
 
 function EmptyState({ message, hint }: { message: string; hint: string }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700/50 bg-white/40 dark:bg-slate-900/20 px-6 py-20 text-center">
+    <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/20 px-6 py-20 text-center">
       <p className="text-lg font-bold text-slate-800 dark:text-slate-200">{message}</p>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
     </div>

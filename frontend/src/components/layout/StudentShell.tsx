@@ -46,7 +46,7 @@ export default function StudentShell({ children, backTo, backLabel }: StudentShe
           <div className="flex items-center gap-3">
             <NotificationBell />
             {!backTo && (
-              <div className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200/60 bg-white/60 dark:bg-slate-900/60 dark:border-slate-800/60 px-4 py-1.5 shadow-sm backdrop-blur-md">
+              <div className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 px-4 py-1.5 shadow-sm">
                 <div className="h-6 w-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xs font-bold text-primary-600 dark:text-primary-400">
                   {user?.username?.[0]?.toUpperCase() || "S"}
                 </div>

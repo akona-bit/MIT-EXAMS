@@ -47,14 +47,14 @@ export default function ConfirmDialog({
       />
       
       {/* Modal Content */}
-      <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
         <div className="p-6">
           <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">{title}</h3>
           <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
             {message}
           </div>
         </div>
-        <div className="bg-slate-50 dark:bg-slate-950/50 px-6 py-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-white/5">
+        <div className="bg-slate-50 dark:bg-slate-800 px-6 py-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-700">
           <Button variant="ghost" onClick={onCancel} disabled={isLoading}>
             {cancelText}
           </Button>

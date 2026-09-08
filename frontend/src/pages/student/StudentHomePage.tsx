@@ -170,7 +170,7 @@ export default function StudentHomePage() {
               {Array.from({ length: 3 }).map((_, i) => (
                 <div
                   key={i}
-                  className="animate-pulse rounded-3xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-6 backdrop-blur-xl"
+                  className="animate-pulse rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6"
                 >
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="space-y-3 flex-1">
@@ -187,7 +187,7 @@ export default function StudentHomePage() {
                     <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
                   </div>
                   <div className="h-10 w-full rounded-xl bg-slate-200 dark:bg-slate-700 mb-6" />
-                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-5">
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-5">
                     <div className="h-3 w-12 rounded bg-slate-200 dark:bg-slate-700" />
                     <div className="h-10 w-28 rounded-xl bg-slate-200 dark:bg-slate-700" />
                   </div>
@@ -210,7 +210,7 @@ export default function StudentHomePage() {
           )}
           
           {!isLoading && !error && exams.length === 0 && (
-            <div className="rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 p-16 text-center backdrop-blur-xl">
+            <div className="rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-16 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
                 <FileText className="h-8 w-8 text-slate-400" />
               </div>
@@ -233,7 +233,7 @@ export default function StudentHomePage() {
               <motion.article
                 variants={itemAnim}
                 key={exam.id}
-                className="group relative overflow-hidden rounded-3xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary-500/10"
+                className="group relative overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary-500/10"
               >
                 <div className="absolute top-0 right-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-primary-500/5 transition-transform group-hover:scale-150" />
                 
@@ -265,12 +265,12 @@ export default function StudentHomePage() {
                     {exam.description || "Bài thi trắc nghiệm MIT EXAMS."}
                   </p>
                   
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 bg-slate-50/50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-white/5">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 mb-6 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
                     <Clock className="h-4 w-4 text-primary-500 shrink-0" />
                     <span className="truncate">{formatExamWindow(exam.start_time, exam.end_time)}</span>
                   </div>
                   
-                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-5">
+                  <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-5">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       Mã #{exam.id}
                     </span>

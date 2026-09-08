@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, Numeric
 from typing import List, Optional
 import os
 import shutil
@@ -218,7 +218,7 @@ async def get_students(
             User.registration_number,
             User.is_active,
             User.can_view_answers,
-            func.round(avg_score_subq.c.avg_score, 1).label("avg_score"),
+            func.round(cast(avg_score_subq.c.avg_score, Numeric), 1).label("avg_score"),
             avg_score_subq.c.exam_count,
         )
         .join(Role, Role.id == User.role_id)

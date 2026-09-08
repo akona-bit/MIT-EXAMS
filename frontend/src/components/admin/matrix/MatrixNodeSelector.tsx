@@ -8,6 +8,7 @@ interface MatrixNodeSelectorProps {
   subject?: string;
   error?: string;
   placeholder?: string;
+  preloadedNodes?: any[];
 }
 
 // Helper to flatten the tree
@@ -26,10 +27,11 @@ export default function MatrixNodeSelector({
   onChange, 
   subject, 
   error,
-  placeholder = "-- Chọn chủ đề / kỹ năng --"
+  placeholder = "-- Chọn chủ đề / kỹ năng --",
+  preloadedNodes
 }: MatrixNodeSelectorProps) {
   const [tree, setTree] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!preloadedNodes);
 
   // Search state
   const [search, setSearch] = useState('');
@@ -37,6 +39,10 @@ export default function MatrixNodeSelector({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (preloadedNodes) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     getKnowledgeTree(subject).then(data => {
       setTree(data);
@@ -45,7 +51,7 @@ export default function MatrixNodeSelector({
       console.error(err);
       setLoading(false);
     });
-  }, [subject]);
+  }, [subject, preloadedNodes]);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -58,7 +64,11 @@ export default function MatrixNodeSelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const allNodes = useMemo(() => flattenTree(tree), [tree]);
+  const allNodes = useMemo(() => {
+    if (preloadedNodes) return preloadedNodes;
+    return flattenTree(tree);
+  }, [tree, preloadedNodes]);
+
   
   const selectedNode = allNodes.find(n => n.id === value);
   

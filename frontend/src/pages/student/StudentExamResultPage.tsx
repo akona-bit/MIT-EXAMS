@@ -176,7 +176,7 @@ function ResultContent({
           {/* Điểm tổng (điểm thô) */}
           <motion.div
             variants={itemAnim}
-            className="mb-6 overflow-hidden rounded-3xl border border-slate-200/60 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70"
+            className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
           >
             <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -215,7 +215,7 @@ function ResultContent({
               {raw_scores.parts.map((part) => (
                 <div
                   key={part.part}
-                  className="rounded-2xl border border-slate-200/60 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70"
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
                 >
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Phần {part.part} · {part.label}
@@ -245,7 +245,7 @@ function ResultContent({
               Xem lại bài làm
             </h2>
             {!result.can_view_answers ? (
-              <div className="flex items-start gap-3 rounded-2xl border border-slate-200/60 bg-white/70 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
+              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
                 <Lock className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
                 <div>
                   <p className="text-sm font-semibold">Tính năng xem đáp án chưa được mở</p>
@@ -256,7 +256,7 @@ function ResultContent({
                 </div>
               </div>
             ) : !result.review ? (
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200/60 bg-white/70 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
                 <EyeOff className="h-5 w-5 text-slate-400" />
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   Chưa có dữ liệu xem lại cho bài làm này.
@@ -284,7 +284,7 @@ function TrueScoreSection({ trueScore }: { trueScore: StudentExamResult["true_sc
   return (
     <motion.div
       variants={itemAnim}
-      className="mb-6 rounded-3xl border border-slate-200/60 bg-white/70 p-6 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70"
+      className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
     >
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <BookOpenCheck className="h-5 w-5 text-primary-500" />
@@ -342,7 +342,7 @@ const STATUS_STYLES: Record<ReviewQuestion["status"], { ring: string; badge: str
     label: "Trừ điểm",
   },
   skipped: {
-    ring: "border-slate-200/60 dark:border-white/10",
+    ring: "border-slate-200 dark:border-slate-700",
     badge: "bg-slate-500/10 text-slate-500 dark:text-slate-400",
     label: "Bỏ trống",
   },
@@ -386,7 +386,7 @@ function ReviewList({
             className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
               filter === f.key
                 ? "bg-primary-500 text-white shadow-md shadow-primary-500/25"
-                : "border border-slate-200/60 bg-white/70 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:bg-slate-800"
+                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             }`}
           >
             {f.label}
@@ -404,7 +404,7 @@ function ReviewList({
           <QuestionReviewCard key={q.position} question={q} />
         ))}
         {filtered.length === 0 && (
-          <p className="rounded-2xl border border-slate-200/60 bg-white/70 p-5 text-sm text-slate-500 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-400">
+          <p className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
             Không có câu nào trong mục này.
           </p>
         )}
@@ -475,7 +475,7 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
             return (
               <div
                 key={subItemId}
-                className="rounded-xl border border-slate-200/70 px-3 py-2.5 dark:border-white/10"
+                className="rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-700"
               >
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
                   {head.sub_item_label && (

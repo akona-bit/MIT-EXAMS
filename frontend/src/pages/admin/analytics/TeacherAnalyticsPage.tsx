@@ -135,7 +135,7 @@ export default function TeacherAnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="border-b border-slate-200/60 dark:border-slate-800/60 pb-6">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-6">
         <h1 className="text-3xl font-extrabold text-gradient pb-1 tracking-tight">
           Thống Kê Lớp Học
         </h1>
@@ -152,7 +152,7 @@ export default function TeacherAnalyticsPage() {
         className="grid grid-cols-1 sm:grid-cols-3 gap-6"
       >
         <motion.div variants={itemAnim}>
-          <Card className="relative overflow-hidden group glass-card hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 border border-white/50 dark:border-white/10 p-6 rounded-3xl">
+          <Card className="relative overflow-hidden group hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 border border-slate-200 dark:border-slate-700 p-6 rounded-3xl">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent dark:from-indigo-500/10 pointer-events-none" />
             <div className="relative flex items-center gap-5">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-transform">
@@ -171,7 +171,7 @@ export default function TeacherAnalyticsPage() {
         </motion.div>
 
         <motion.div variants={itemAnim}>
-          <Card className="relative overflow-hidden group glass-card hover:shadow-xl hover:shadow-primary-500/10 hover:-translate-y-1 transition-all duration-300 border border-white/50 dark:border-white/10 p-6 rounded-3xl">
+          <Card className="relative overflow-hidden group hover:shadow-xl hover:shadow-primary-500/10 hover:-translate-y-1 transition-all duration-300 border border-slate-200 dark:border-slate-700 p-6 rounded-3xl">
             <div className="absolute inset-0 bg-gradient-to-br from-primary-50/50 to-transparent dark:from-primary-500/10 pointer-events-none" />
             <div className="relative flex items-center gap-5">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400 shadow-inner group-hover:scale-110 group-hover:-rotate-3 transition-transform">
@@ -190,7 +190,7 @@ export default function TeacherAnalyticsPage() {
         </motion.div>
 
         <motion.div variants={itemAnim}>
-          <Card className="relative overflow-hidden group glass-card hover:shadow-xl hover:shadow-success-500/10 hover:-translate-y-1 transition-all duration-300 border border-white/50 dark:border-white/10 p-6 rounded-3xl">
+          <Card className="relative overflow-hidden group hover:shadow-xl hover:shadow-success-500/10 hover:-translate-y-1 transition-all duration-300 border border-slate-200 dark:border-slate-700 p-6 rounded-3xl">
             <div className="absolute inset-0 bg-gradient-to-br from-success-50/50 to-transparent dark:from-success-500/10 pointer-events-none" />
             <div className="relative flex items-center gap-5">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-success-100 dark:bg-success-500/20 text-success-600 dark:text-success-400 shadow-inner group-hover:scale-110 group-hover:rotate-3 transition-transform">
@@ -214,7 +214,7 @@ export default function TeacherAnalyticsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.5 }}
       >
-        <Card className="p-0 overflow-hidden glass-card shadow-2xl shadow-slate-200/50 dark:shadow-none border border-white/60 dark:border-white/10 rounded-3xl relative">
+        <Card className="p-0 overflow-hidden shadow-2xl shadow-slate-200 dark:shadow-none border border-slate-200 dark:border-slate-700 rounded-3xl relative">
           <div className="absolute inset-0 bg-gradient-to-b from-white/40 to-transparent dark:from-white/5 pointer-events-none" />
           <div className="relative p-6 sm:p-8 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -227,7 +227,7 @@ export default function TeacherAnalyticsPage() {
             </div>
             <Badge
               variant="outline"
-              className="self-start sm:self-center px-4 py-1 text-sm bg-white/50 dark:bg-slate-800/50 backdrop-blur-md"
+              className="self-start sm:self-center px-4 py-1 text-sm bg-white dark:bg-slate-800"
             >
               Cập nhật trực tiếp
             </Badge>

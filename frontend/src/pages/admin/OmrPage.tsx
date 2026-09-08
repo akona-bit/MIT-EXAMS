@@ -120,7 +120,7 @@ export default function OmrPage() {
             </div>
 
             {/* Upload card */}
-            <div className="glass-card rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-6 space-y-4">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
                 <h2 className="text-lg font-bold">1. Tải lên phiếu trả lời</h2>
                 <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-1">
@@ -160,7 +160,7 @@ export default function OmrPage() {
 
             {/* Job result card */}
             {job && (
-                <div className="glass-card rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-6 space-y-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                         <h2 className="text-lg font-bold">
                             2. Kết quả xử lý - Job #{job.job.id}
@@ -180,9 +180,9 @@ export default function OmrPage() {
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-slate-50/80 dark:bg-slate-950/50 border-b border-slate-200/60 dark:border-white/10 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+                            <thead className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
                                 <tr>
                                     <th className="px-4 py-3 font-semibold">Phiếu</th>
                                     <th className="px-4 py-3 font-semibold">SBD (đọc được)</th>
@@ -191,9 +191,9 @@ export default function OmrPage() {
                                     <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                                 {job.sheets.map((s) => (
-                                    <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                                    <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                                         <td className="px-4 py-3">
                                             {s.image_path ? (
                                                 <a

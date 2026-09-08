@@ -57,6 +57,9 @@ class SheetLayout:
 
     # 120 câu hỏi: 5 khối, mỗi khối 24 câu x 4 lựa chọn (A/B/C/D)
     # Khối 1: câu 1-24, Khối 2: 25-48, Khối 3: 49-72, Khối 4: 73-96, Khối 5: 97-120
+    # Geometry (đã kiểm chứng bằng scripts/verify_irt_omr.py — mọi bubble phải nằm trong khung 0-100%):
+    #   - Ngang: block 5 x=88% + 4 ô x cell_w 3.0% → ô D cuối cx=98.5% ✓
+    #   - Dọc: 24 hàng x cell_h 1.3% từ y=62% → hàng cuối cy=92.55% ✓ (trước hàng Type y=95%)
     blocks: List[Dict] = field(default_factory=lambda: [
         {"start": 1, "end": 24, "origin_x": 8.0, "origin_y": 62.0},
         {"start": 25, "end": 48, "origin_x": 28.0, "origin_y": 62.0},
@@ -64,9 +67,9 @@ class SheetLayout:
         {"start": 73, "end": 96, "origin_x": 68.0, "origin_y": 62.0},
         {"start": 97, "end": 120, "origin_x": 88.0, "origin_y": 62.0},
     ])
-    question_cell_w: float = 4.0  # % width mỗi ô đáp án (A/B/C/D)
-    question_cell_h: float = 3.5  # % height mỗi câu
-    question_bubble_r: float = 1.2  # % bán kính ô bubble câu hỏi
+    question_cell_w: float = 3.0  # % width mỗi ô đáp án (A/B/C/D)
+    question_cell_h: float = 1.3  # % height mỗi câu (24 câu phải vừa trong 62%→95%)
+    question_bubble_r: float = 0.55  # % bán kính bubble (< nửa cell_h để mask không chồng nhau)
 
     # Hàng Type (calibration pattern) ở cuối trang
     # 8 ô bubble: pattern cố định [trống, trống, trống, trống, trống, đầy, đầy, trống, đầy]

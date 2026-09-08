@@ -10,7 +10,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       ref={ref}
       whileHover={{ y: -4, transition: { duration: 0.2, ease: "easeOut" } }}
       className={cn(
-        "glass-card border-none bg-white/40 dark:bg-slate-900/40 relative overflow-hidden group",
+        "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl relative overflow-hidden group",
         className
       )}
       {...props}

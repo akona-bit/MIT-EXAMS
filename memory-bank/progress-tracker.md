@@ -92,6 +92,15 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-08` — **Đồng nhất UI Blueprint Modal + Kiểm chứng IRT/CTT/OMR (verify script)**:
+  - [x] **Redesign `DgnlBlueprintModal`**: đồng bộ màu 4 phần thi theo chuẩn `ui-tokens.md` (TV=primary, TA=danger, Toán=warning, TDK=success — trước đó dùng sai emerald/sky/indigo/rose); thay banner tự chế bằng component `Alert`; hiển thị `structure_errors` bằng Alert warning (trước chỉ disable nút ngầm); glass style (rounded-2xl + border-slate-200/60 + bg-white/70) đồng nhất với các trang admin; sửa class không tồn tại `dark:hover:bg-slate-750`; nút CTA dùng Button mặc định của hệ thống.
+  - [x] **Fix bug layout OMR (`layout_config.py`)**: layout mặc định tràn khung — block 5 (x=88% + 4 ô × 4% → cx=102%) và 24 hàng × 3.5% từ y=62% (→ 144%). Sửa thành `question_cell_w=3.0`, `question_cell_h=1.3`, `question_bubble_r=0.55` → mọi bubble trong khung 0-100%.
+  - [x] **Fix bug `chi_square` (`irt_engine.py`)**: nhánh item bị bỏ qua append 5 phần tử vào DataFrame 2 cột → crash; sửa thành `[np.nan, np.nan]`.
+  - [x] **Thêm `backend/scripts/verify_irt_omr.py`** — script kiểm chứng tự gồm 28 check: IRT MMLE phục hồi tham số (corr b=0.998, MAE=0.048; theta corr=0.879), chi-square fit, SE, true_score 0-300; CTT (p, D-index, point-biserial); OMR sinh phiếu tổng hợp theo SheetLayout (SBD 123456, Mã đề 161, 117 câu đơn + 3 bỏ trống + 2 tô kép) rồi đọc lại qua OpenCV pipeline + HybridOMREngine, cả phiếu phẳng lẫn phiếu méo perspective ~20px.
+  - [x] **Kết quả: 28/28 PASS**. Lưu ý quan trọng ghi trong script: nội dung phiếu phải vẽ nén vào vùng giữa 4 marker (marker centre ≡ góc khung chuẩn) — pipeline warp marker tâm → góc ảnh. `npm run build` frontend pass 100%.
+  - [x] **Redesign lần 2 `DgnlBlueprintModal`** (theo phản hồi người dùng — bản danh sách dòng quá dài dòng): chuyển sang dạng **tile grid** — mỗi ô kiến thức là 1 tile gọn (số câu to màu phần thi + tên + icon ràng buộc), thêm thanh tỉ lệ trọng số (segment ∝ số câu) đầu mỗi phần, footer đổi thành legend icon (Chung ngữ liệu / Cố định vị trí / Nhóm hoán đổi). Build pass 100%.
+  - [x] **Bỏ kính trong suốt (theo phản hồi người dùng)**: phát hiện gốc rễ — class `glass-card` trong `Modal.tsx` **không được định nghĩa trong CSS nào** → panel modal không có nền, trang bên dưới lộ xuyên qua. Fix tại `Modal.tsx`: panel nền đặc `bg-white dark:bg-slate-900` + viền `slate-200/700` + `rounded-2xl` (áp dụng cho toàn bộ modal hệ thống). Đồng thời thay mọi nền mờ `/70 /80` + `backdrop-blur` trong `DgnlBlueprintModal` bằng nền đặc (chip `slate-50/800`, card phần `white/800`, tile `slate-50/900`, footer đặc). Build pass 100%.
+
 - `2026-09-08` — **Hoàn tất gỡ bỏ AI và dọn dẹp hệ thống sang cấu trúc 1-1**:
   - [x] Xóa bỏ hoàn toàn code và schemas liên quan đến AI (`app/models/ai.py`, `app/schemas/ai.py`, `AiSuggestTagsRequest`, v.v.)
   - [x] Sửa lỗi crash backend do import file/models AI đã bị xóa (`questions.py`)

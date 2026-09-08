@@ -43,11 +43,11 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
         }}
       />
       
-      {/* Modal panel */}
-      <div className={`relative w-full ${maxWidth} m-4 max-h-[90vh] flex flex-col glass-card shadow-2xl border border-white/40 dark:border-white/10 animate-in fade-in zoom-in-95 duration-200`}>
-        
+      {/* Modal panel — nền ĐẶC (không trong suốt), bo góc, viền rõ */}
+      <div className={`relative w-full ${maxWidth} m-4 max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200`}>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 dark:border-white/10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
           {title && (
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               {title}

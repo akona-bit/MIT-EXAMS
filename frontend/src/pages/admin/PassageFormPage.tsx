@@ -89,12 +89,12 @@ export default function PassageFormPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-sm text-slate-500">
           Đang tải dữ liệu ngữ liệu...
         </div>
       ) : (
         <form onSubmit={handleSave} className="space-y-6">
-          <div className="glass-card space-y-6 border-t-4 border-t-primary-500 p-6">
+          <div className="space-y-6 border-t-4 border-t-primary-500 p-6">
             <h2 className="text-lg font-bold border-b border-slate-200 dark:border-slate-700 pb-2">1. Thông tin chung</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -118,7 +118,7 @@ export default function PassageFormPage() {
             </div>
           </div>
 
-          <div className="glass-card space-y-6 p-6">
+          <div className="space-y-6 p-6">
             <h2 className="text-lg font-bold border-b border-slate-200 dark:border-slate-700 pb-2">
               2. Nội dung bài đọc <span className="text-red-500">*</span>
             </h2>

@@ -94,7 +94,7 @@ export default function StudentAnalyticsPage() {
       <div className="grid grid-cols-10 sm:grid-cols-15 gap-2 sm:gap-3 mt-6">
         {questions.map((q) => {
           let bg =
-            "bg-slate-100 dark:bg-slate-800 text-slate-500 shadow-inner border border-slate-200/50 dark:border-slate-700";
+            "bg-slate-100 dark:bg-slate-800 text-slate-500 shadow-inner border border-slate-200 dark:border-slate-700";
           if (q.status === "correct")
             bg =
               "bg-success-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.4)] border border-success-400";
@@ -164,7 +164,7 @@ export default function StudentAnalyticsPage() {
         salutatorianName={classSummary?.salutatorian?.name}
       />
 
-      <div className="border-b border-slate-200/60 dark:border-slate-800/60 pb-6">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-6">
         <h1 className="text-3xl font-extrabold text-gradient pb-1 tracking-tight">
           Tra Cứu Điểm Cá Nhân
         </h1>
@@ -179,7 +179,7 @@ export default function StudentAnalyticsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <Card className="p-2 sm:p-4 glass-card border border-white/50 dark:border-white/10 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden relative">
+        <Card className="p-2 sm:p-4 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-xl shadow-slate-200 dark:shadow-none overflow-hidden relative">
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/50 via-purple-50/50 to-transparent dark:from-indigo-900/10 dark:via-purple-900/10 pointer-events-none" />
           <form
             onSubmit={handleSearch}
@@ -192,7 +192,7 @@ export default function StudentAnalyticsPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Nhập họ tên, SBD hoặc email thí sinh..."
-                className="h-14 w-full rounded-2xl border-2 border-transparent bg-white/80 dark:bg-slate-900/60 pl-14 pr-4 text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 outline-none transition-all focus:border-indigo-500/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-[0_0_20px_rgba(99,102,241,0.15)] shadow-sm backdrop-blur-md"
+                className="h-14 w-full rounded-2xl border-2 border-transparent bg-white dark:bg-slate-900 pl-14 pr-4 text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 outline-none transition-all focus:border-indigo-500/50 focus:bg-white dark:focus:bg-slate-900 focus:shadow-[0_0_20px_rgba(99,102,241,0.15)] shadow-sm"
               />
             </div>
             <Button
@@ -225,7 +225,7 @@ export default function StudentAnalyticsPage() {
         >
           <div className="space-y-8">
             <motion.div variants={itemAnim}>
-              <Card className="relative overflow-hidden glass-card p-8 rounded-3xl border border-white/50 dark:border-white/10 shadow-xl shadow-slate-200/50 dark:shadow-none">
+              <Card className="relative overflow-hidden p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200 dark:shadow-none">
                 <div className="absolute top-0 right-0 p-6 opacity-10">
                   <User className="h-32 w-32" />
                 </div>
@@ -254,8 +254,8 @@ export default function StudentAnalyticsPage() {
                         </p>
                       </div>
                     )}
-                    <div className="pt-6 mt-2 border-t border-slate-200/60 dark:border-slate-800/60 grid grid-cols-2 gap-6">
-                      <div className="bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 backdrop-blur-sm">
+                    <div className="pt-6 mt-2 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 gap-6">
+                      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
                         <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-2">
                           Điểm Toán (IRT)
                         </p>
@@ -270,7 +270,7 @@ export default function StudentAnalyticsPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 backdrop-blur-sm">
+                      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
                         <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-2">
                           Điểm TDKH (IRT)
                         </p>
@@ -292,7 +292,7 @@ export default function StudentAnalyticsPage() {
             </motion.div>
 
             <motion.div variants={itemAnim}>
-              <Card className="p-8 glass-card rounded-3xl border border-white/50 dark:border-white/10 shadow-xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
+              <Card className="p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200 dark:shadow-none relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/30 to-transparent dark:from-indigo-500/5 pointer-events-none" />
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-6">
@@ -303,7 +303,7 @@ export default function StudentAnalyticsPage() {
                       Ma Trận Kiến Thức
                     </h3>
                   </div>
-                  <div className="flex flex-wrap gap-4 mb-6 text-sm font-semibold text-slate-600 dark:text-slate-400 bg-white/60 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
+                  <div className="flex flex-wrap gap-4 mb-6 text-sm font-semibold text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/50">
                     <div className="flex items-center gap-2">
                       <span className="w-4 h-4 rounded-full bg-success-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]"></span>{" "}
                       Trả lời đúng
@@ -325,7 +325,7 @@ export default function StudentAnalyticsPage() {
 
           <div className="space-y-8">
             <motion.div variants={itemAnim} className="h-full">
-              <Card className="p-8 h-[550px] flex flex-col glass-card rounded-3xl border border-white/50 dark:border-white/10 shadow-xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
+              <Card className="p-8 h-[550px] flex flex-col rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200 dark:shadow-none relative overflow-hidden">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-50/50 via-transparent to-transparent dark:from-indigo-900/20 pointer-events-none" />
                 <div className="relative z-10 flex items-center gap-3 mb-8">
                   <div className="p-2.5 bg-purple-100 dark:bg-purple-500/20 rounded-xl">

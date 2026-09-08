@@ -80,7 +80,7 @@ export default function SystemSettingsPage() {
       )}
 
       <div className="space-y-6">
-        <div className="p-6 glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+        <div className="p-6 bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
           <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Chế độ Bảo trì (Maintenance Mode)</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
             Khi bật, học sinh sẽ không thể truy cập vào các tính năng tương ứng. Không ảnh hưởng đến Giáo viên và Quản trị viên.

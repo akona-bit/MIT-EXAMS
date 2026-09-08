@@ -54,7 +54,7 @@ export default function MarkdownEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-slate dark:prose-invert max-w-none focus:outline-none min-h-[150px] p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10 prose-table:border-collapse prose-table:w-full prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-th:border prose-th:border-slate-300 prose-th:p-2 prose-th:bg-slate-100 dark:prose-th:bg-slate-800",
+          "prose prose-slate dark:prose-invert max-w-none focus:outline-none min-h-[150px] p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 prose-table:border-collapse prose-table:w-full prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-th:border prose-th:border-slate-300 prose-th:p-2 prose-th:bg-slate-100 dark:prose-th:bg-slate-800",
       },
     },
     onUpdate: ({ editor }) => {

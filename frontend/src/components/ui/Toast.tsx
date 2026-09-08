@@ -74,8 +74,8 @@ function ToastItemDisplay({ toast, onRemove }: { toast: ToastItem; onRemove: (id
   return (
     <div
       className={cn(
-        'flex items-start gap-3 w-full max-w-sm p-4 rounded-xl border backdrop-blur-xl shadow-lg',
-        'bg-white/80 dark:bg-slate-900/80',
+        'flex items-start gap-3 w-full max-w-sm p-4 rounded-xl border shadow-lg',
+        'bg-white dark:bg-slate-900',
         'animate-in slide-in-from-right-full fade-in duration-300',
         COLOR_MAP[toast.type]
       )}

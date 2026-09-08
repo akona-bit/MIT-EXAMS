@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createMatrix,
@@ -17,10 +17,31 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import DgnlBlueprintModal from "../../components/admin/matrix/DgnlBlueprintModal";
 import MatrixVisualization from "../../components/matrix/MatrixVisualization";
-import { Layers, Link2, AlertTriangle, Activity, Settings, BarChart2, CheckCircle2, Blocks } from "lucide-react";
+import { Layers, Link2, AlertTriangle, Activity, Settings, BarChart2, CheckCircle2, Blocks, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "../../components/ui/Toast";
 import MatrixNodeSelector from "../../components/admin/matrix/MatrixNodeSelector";
+
+interface FormMatrixRule extends Partial<MatrixRule> {
+  _slot_label?: string;
+  _node_hint?: string;
+  _slot_key?: string;
+  _order_locked?: boolean;
+  _shuffle_group?: number;
+  _note?: string;
+  _passage?: boolean;
+}
+
+// Helper to flatten the tree to pass to selectors
+function flattenTree(nodes: any[], result: any[] = []) {
+  for (const node of nodes) {
+    result.push({ ...node });
+    if (node.children && node.children.length > 0) {
+      flattenTree(node.children, result);
+    }
+  }
+  return result;
+}
 
 export default function MatrixFormPage() {
   const { id } = useParams();
@@ -29,12 +50,13 @@ export default function MatrixFormPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(Boolean(id));
   const [nodes, setNodes] = useState<KnowledgeNode[]>([]);
+  const flattenedNodes = useMemo(() => flattenTree(nodes), [nodes]);
   const isEditMode = Boolean(id);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   
-  const [rules, setRules] = useState<Partial<MatrixRule>[]>([]);
+  const [rules, setRules] = useState<FormMatrixRule[]>([]);
   const [groups, setGroups] = useState<MatrixRuleGroup[]>([]);
   
   // Group selection state
@@ -394,90 +416,136 @@ export default function MatrixFormPage() {
                    ) : (
                      <div className="space-y-4">
                        <AnimatePresence>
-                         {rules.map((rule, idx) => {
-                           const group = rule.group_local_id ? groups.find(g => g.local_id === rule.group_local_id) : null;
-                           const isSelected = selectedRuleIndices.has(idx);
-                           
-                           return (
-                             <motion.div 
-                               initial={{ opacity: 0, y: 10 }}
-                               animate={{ opacity: 1, y: 0 }}
-                               exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                               key={idx} 
-                               className={`relative flex items-stretch gap-0 rounded-2xl transition-all duration-300 shadow-sm ${
-                                 isSelected ? 'bg-primary-50 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-600 dark:shadow-[0_0_20px_-5px_rgba(30,58,138,0.4)]' : 'bg-white dark:bg-[#0f172a]/80 border border-slate-200 dark:border-slate-700/50 hover:border-primary-300 dark:hover:border-primary-700/50'
-                               }`}
-                             >
-                               {/* Selector sidebar */}
-                               <div className={`w-10 flex flex-col items-center justify-center rounded-l-2xl border-r border-slate-100 dark:border-slate-800/50 transition-colors ${isSelected ? 'bg-primary-100 dark:bg-primary-800/40' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
-                                 <input 
-                                   type="checkbox" 
-                                   className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-slate-300 cursor-pointer"
-                                   checked={isSelected}
-                                   onChange={() => toggleSelectRule(idx)}
-                                 />
-                               </div>
-
-                               {/* Form Fields */}
-                               <div className="flex-1 p-4 grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
-                                 {group && (
-                                   <div className="absolute -top-3 left-12 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 shadow-sm z-10">
-                                      <Link2 className="w-3 h-3" />
-                                      {group.label || "Nhóm"}
-                                      <button type="button" onClick={() => ungroupRule(idx)} className="ml-1 hover:text-amber-950 font-black">&times;</button>
+                         {(() => {
+                           let currentPart = -1;
+                           const PART_NAMES: Record<number, string> = {
+                             1: "Sử dụng ngôn ngữ — Tiếng Việt",
+                             2: "Sử dụng ngôn ngữ — Tiếng Anh",
+                             3: "Toán học",
+                             4: "Tư duy khoa học"
+                           };
+                           return rules.map((rule, idx) => {
+                             const group = rule.group_local_id ? groups.find(g => g.local_id === rule.group_local_id) : null;
+                             const isSelected = selectedRuleIndices.has(idx);
+                             const part = rule.part || 1;
+                             const showPartHeader = part !== currentPart;
+                             currentPart = part;
+                             
+                             return (
+                               <React.Fragment key={idx}>
+                                 {showPartHeader && (
+                                   <div className="mt-8 mb-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                                      <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                                        Phần {part}: {PART_NAMES[part] || "Khác"}
+                                      </h3>
                                    </div>
                                  )}
+                                 <motion.div 
+                                   initial={{ opacity: 0, y: 10 }}
+                                   animate={{ opacity: 1, y: 0 }}
+                                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                                   className={`relative flex flex-col gap-0 rounded-2xl transition-all duration-300 shadow-sm ${
+                                     isSelected ? 'bg-primary-50 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-600 dark:shadow-[0_0_20px_-5px_rgba(30,58,138,0.4)]' : 'bg-white dark:bg-[#0f172a]/80 border border-slate-200 dark:border-slate-700/50 hover:border-primary-300 dark:hover:border-primary-700/50'
+                                   } ${rule._passage ? 'ml-4 md:ml-8 border-l-4 border-l-indigo-500' : ''}`}
+                                 >
+                                   
+                                   {/* Blueprint Metadata Header */}
+                                   {rule._slot_label && (
+                                     <div className="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2 md:gap-3 rounded-t-2xl">
+                                       <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{rule._slot_label}</span>
+                                       {rule._order_locked && (
+                                         <span className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800">
+                                           <Lock className="w-3 h-3" /> Cố định
+                                         </span>
+                                       )}
+                                       {rule._shuffle_group && (
+                                         <span className="flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-2 py-0.5 rounded-full border border-sky-200 dark:border-sky-800">
+                                           Hoán đổi nhóm {rule._shuffle_group}
+                                         </span>
+                                       )}
+                                       {rule._note && (
+                                         <span className="text-xs text-slate-500 italic max-w-sm md:max-w-md truncate" title={rule._note}>
+                                           — {rule._note}
+                                         </span>
+                                       )}
+                                     </div>
+                                   )}
 
-                                 <div className="col-span-2 space-y-1.5">
-                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chủ đề kiến thức</label>
-                                   <MatrixNodeSelector
-                                     value={rule.knowledge_node_id || null}
-                                     onChange={(nodeId) => updateRule(idx, "knowledge_node_id", nodeId || 0)}
-                                   />
-                                 </div>
+                                   <div className="flex items-stretch">
+                                     {/* Selector sidebar */}
+                                     <div className={`w-10 flex flex-col items-center justify-center rounded-bl-2xl ${!rule._slot_label && 'rounded-tl-2xl'} border-r border-slate-100 dark:border-slate-800/50 transition-colors ${isSelected ? 'bg-primary-100 dark:bg-primary-800/40' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
+                                       <input 
+                                         type="checkbox" 
+                                         className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-slate-300 cursor-pointer"
+                                         checked={isSelected}
+                                         onChange={() => toggleSelectRule(idx)}
+                                       />
+                                     </div>
 
-                                 <div className="space-y-1.5">
-                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dạng câu (Cố định)</label>
-                                   <select
-                                     disabled={!rule.question_type}
-                                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
-                                     value={rule.question_type || ""}
-                                     onChange={(e) => updateRule(idx, "question_type", e.target.value)}
-                                   >
-                                     <option value="">Tự động chọn</option>
-                                     <option value="SINGLE_CHOICE">Trắc nghiệm</option>
-                                   </select>
-                                 </div>
+                                     {/* Form Fields */}
+                                     <div className="flex-1 p-4 grid grid-cols-2 md:grid-cols-5 gap-4 items-end relative">
+                                       {group && (
+                                         <div className="absolute -top-3 left-4 flex items-center gap-1 bg-amber-100 dark:bg-amber-900/80 text-amber-800 dark:text-amber-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 shadow-sm z-10">
+                                            <Link2 className="w-3 h-3" />
+                                            {group.label || "Nhóm"}
+                                            <button type="button" onClick={() => ungroupRule(idx)} className="ml-1 hover:text-amber-950 font-black">&times;</button>
+                                         </div>
+                                       )}
 
-                                 <div className="space-y-1.5">
-                                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mức độ</label>
-                                   <select
-                                     className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
-                                     value={rule.level || ""}
-                                     onChange={(e) => updateRule(idx, "level", e.target.value ? Number(e.target.value) : undefined)}
-                                   >
-                                     <option value="">Tự động cân bằng</option>
-                                     <option value={1}>Nhận biết</option>
-                                     <option value={2}>Thông hiểu</option>
-                                     <option value={3}>Vận dụng</option>
-                                     <option value={4}>Vận dụng cao</option>
-                                   </select>
-                                 </div>
+                                       <div className="col-span-2 space-y-1.5">
+                                         <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chủ đề kiến thức</label>
+                                         <MatrixNodeSelector
+                                           value={rule.knowledge_node_id || null}
+                                           onChange={(nodeId) => updateRule(idx, "knowledge_node_id", nodeId || 0)}
+                                           preloadedNodes={flattenedNodes}
+                                         />
+                                       </div>
 
-                                 <div className="flex gap-2">
-                                   <div className="flex-1 space-y-1.5">
-                                     <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Số lượng (Cố định)</label>
-                                     <input
-                                       type="number" min="1" disabled
-                                       className="w-full px-3 py-2 text-sm font-bold text-center bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
-                                       value={rule.count || 1}
-                                     />
+                                       <div className="space-y-1.5">
+                                         <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dạng câu (Cố định)</label>
+                                         <select
+                                           disabled={!rule.question_type}
+                                           className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
+                                           value={rule.question_type || ""}
+                                           onChange={(e) => updateRule(idx, "question_type", e.target.value)}
+                                         >
+                                           <option value="">Tự động chọn</option>
+                                           <option value="SINGLE_CHOICE">Trắc nghiệm</option>
+                                         </select>
+                                       </div>
+
+                                       <div className="space-y-1.5">
+                                         <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mức độ</label>
+                                         <select
+                                           className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
+                                           value={rule.level || ""}
+                                           onChange={(e) => updateRule(idx, "level", e.target.value ? Number(e.target.value) : undefined)}
+                                         >
+                                           <option value="">Tự động cân bằng</option>
+                                           <option value={1}>Nhận biết</option>
+                                           <option value={2}>Thông hiểu</option>
+                                           <option value={3}>Vận dụng</option>
+                                           <option value={4}>Vận dụng cao</option>
+                                         </select>
+                                       </div>
+
+                                       <div className="flex gap-2">
+                                         <div className="flex-1 space-y-1.5">
+                                           <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Số lượng (Cố định)</label>
+                                           <input
+                                             type="number" min="1" disabled
+                                             className="w-full px-3 py-2 text-sm font-bold text-center bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
+                                             value={rule.count || 1}
+                                           />
+                                         </div>
+                                       </div>
+                                     </div>
                                    </div>
-                                 </div>
-                               </div>
-                             </motion.div>
-                           );
-                         })}
+                                 </motion.div>
+                               </React.Fragment>
+                             );
+                           });
+                         })()}
                        </AnimatePresence>
                      </div>
                    )}

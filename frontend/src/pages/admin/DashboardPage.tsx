@@ -97,7 +97,7 @@ export default function DashboardPage() {
             Theo dõi tổng quan chất lượng bài thi và thống kê tương tác
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/60 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:border-primary-800/50 dark:bg-[#0b1121]/60 dark:text-primary-100 shadow-[0_0_20px_-5px_rgba(30,58,138,0.2)] backdrop-blur-xl">
+        <div className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 dark:border-primary-800/50 dark:bg-[#0b1121]/60 dark:text-primary-100 shadow-[0_0_20px_-5px_rgba(30,58,138,0.2)]">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           ? [1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-32 rounded-2xl" />)
           : stats.map((stat) => (
               <motion.div key={stat.label} variants={itemAnim}>
-                <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-[0_0_30px_-5px_rgba(30,58,138,0.3)] hover:-translate-y-1 glass-card shadow-lg border border-slate-200/60 dark:border-primary-900/50 dark:bg-[#0b1121]/60 backdrop-blur-xl">
+                <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-slate-200 dark:hover:shadow-[0_0_30px_-5px_rgba(30,58,138,0.3)] hover:-translate-y-1 shadow-lg border border-slate-200 dark:border-primary-900/50 dark:bg-[#0b1121]/60">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent dark:from-primary-500/5 dark:to-transparent" />
                   <CardContent className="relative p-6">
                     <div className="flex items-center justify-between">
@@ -146,7 +146,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Score Distribution Chart */}
-        <Card className="lg:col-span-2 flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-primary-900/50 dark:bg-[#0b1121]/60 backdrop-blur-xl">
+        <Card className="lg:col-span-2 flex flex-col shadow-lg border border-slate-200 dark:border-primary-900/50 dark:bg-[#0b1121]/60">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -198,7 +198,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Exams */}
-        <Card className="flex flex-col glass-card shadow-lg border border-slate-200/60 dark:border-primary-900/50 dark:bg-[#0b1121]/60 backdrop-blur-xl">
+        <Card className="flex flex-col shadow-lg border border-slate-200 dark:border-primary-900/50 dark:bg-[#0b1121]/60">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-indigo-500" />

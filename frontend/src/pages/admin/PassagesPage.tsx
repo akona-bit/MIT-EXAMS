@@ -122,7 +122,7 @@ export default function PassagesPage() {
         </Button>
       </div>
 
-      <div className="glass-card p-6 border-t-4 border-t-primary-500">
+      <div className="p-6 border-t-4 border-t-primary-500">
         <div className="mb-6">
           <div className="relative max-w-md">
             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

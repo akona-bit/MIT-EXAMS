@@ -82,7 +82,11 @@ async def dgnl_blueprint_template(db: AsyncSession = Depends(get_db)):
             "group_local_id": slot.key if slot.passage else None,
             "_slot_key": slot.key,
             "_slot_label": slot.label,
-            "_node_hint": slot.node_hint
+            "_node_hint": slot.node_hint,
+            "_order_locked": slot.order_locked,
+            "_shuffle_group": slot.shuffle_group,
+            "_note": slot.note,
+            "_passage": slot.passage
         })
 
     return {

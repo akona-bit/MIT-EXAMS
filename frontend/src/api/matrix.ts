@@ -106,6 +106,7 @@ export interface DgnlBlueprintSlot {
   passage: boolean;
   group: boolean;
   order_locked: boolean;
+  shuffle_group?: number | null;
   note: string;
 }
 

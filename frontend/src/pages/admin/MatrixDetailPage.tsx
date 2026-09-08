@@ -109,7 +109,7 @@ export default function MatrixDetailPage() {
       </div>
 
       {/* Feasibility Check */}
-      <div className="glass-card p-6 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+      <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-500/10">
@@ -179,7 +179,7 @@ export default function MatrixDetailPage() {
       {/* Rules Table */}
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Chi tiết quy tắc</h2>
-        <div className="p-0 overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+        <div className="p-0 overflow-hidden bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
           <DataTable data={matrix.rules} columns={columns} keyExtractor={(item) => item.id} />
         </div>
       </div>

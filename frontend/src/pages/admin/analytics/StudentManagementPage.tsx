@@ -244,7 +244,7 @@ export default function StudentManagementPage() {
       </div>
 
       {/* Filters */}
-      <Card className="p-4 glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
+      <Card className="p-4 shadow-lg border border-slate-200 dark:border-slate-700">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Kỳ thi</label>
@@ -310,7 +310,7 @@ export default function StudentManagementPage() {
       </Card>
 
       {!examId ? (
-        <Card className="p-12 text-center glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60">
+        <Card className="p-12 text-center shadow-lg border border-slate-200 dark:border-slate-700">
           <FileText className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
           <p className="text-slate-500 dark:text-slate-400">
             Chọn một kỳ thi ở trên để xem danh sách thí sinh, mã đề và điểm số.
@@ -320,7 +320,7 @@ export default function StudentManagementPage() {
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-indigo-500 glass-card shadow-lg">
+            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-indigo-500 shadow-lg">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
                 <Users className="h-5 w-5 text-indigo-500" />
               </div>
@@ -329,7 +329,7 @@ export default function StudentManagementPage() {
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">{total}</p>
               </div>
             </Card>
-            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-success-500 glass-card shadow-lg">
+            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-success-500 shadow-lg">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success-50 dark:bg-success-500/10">
                 <CheckCircle2 className="h-5 w-5 text-success-500" />
               </div>
@@ -338,7 +338,7 @@ export default function StudentManagementPage() {
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">{kpi.submitted}</p>
               </div>
             </Card>
-            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-blue-500 glass-card shadow-lg">
+            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-blue-500 shadow-lg">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/10">
                 <PlayCircle className="h-5 w-5 text-blue-500" />
               </div>
@@ -347,7 +347,7 @@ export default function StudentManagementPage() {
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">{kpi.inProgress}</p>
               </div>
             </Card>
-            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-danger-500 glass-card shadow-lg">
+            <Card className="p-4 flex items-center gap-3 border-l-4 border-l-danger-500 shadow-lg">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-danger-50 dark:bg-danger-500/10">
                 <Ban className="h-5 w-5 text-danger-500" />
               </div>
@@ -359,7 +359,7 @@ export default function StudentManagementPage() {
           </div>
 
           {/* Table */}
-          <Card className="p-0 overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+          <Card className="p-0 overflow-hidden shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Danh sách Thí sinh</h2>

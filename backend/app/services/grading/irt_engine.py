@@ -410,9 +410,9 @@ def chi_square(df, item_param, num_bins=12):
         observed_valid = observed[valid]
         expected_valid = expected[valid]
 
-        # Nếu không đủ bin hợp lệ → bỏ item
+        # Nếu không đủ bin hợp lệ → bỏ item (NaN để giữ đúng 2 cột Chi2/p_value)
         if expected_valid.shape[0] == 0:
-            results.append([item, a, b, np.nan, np.nan])
+            results.append([np.nan, np.nan])
             continue
 
         # Tính chi-square

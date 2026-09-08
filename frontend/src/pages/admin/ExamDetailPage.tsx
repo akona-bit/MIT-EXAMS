@@ -128,7 +128,7 @@ export default function ExamDetailPage() {
         <Button variant="ghost" onClick={() => navigate('/admin/exams')}>Quay lại</Button>
       </div>
 
-      <div className="flex border-b border-slate-200 dark:border-white/10">
+      <div className="flex border-b border-slate-200 dark:border-slate-700">
         <button
           className={`px-4 py-3 font-semibold text-sm transition-colors ${activeTab === 'info' ? 'text-primary-600 border-b-2 border-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           onClick={() => setActiveTab('info')}
@@ -146,7 +146,7 @@ export default function ExamDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           {activeTab === 'info' ? (
-            <div className="glass-card p-6">
+            <div className="p-6">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Chi tiết kỳ thi</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
                 <div className="space-y-1">
@@ -165,7 +165,7 @@ export default function ExamDetailPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="glass-card p-6">
+              <div className="p-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Tổng quan</h3>
                 {overview ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -191,12 +191,12 @@ export default function ExamDetailPage() {
                 )}
               </div>
               
-              <div className="glass-card p-6">
+              <div className="p-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Phân tích chất lượng câu hỏi (IRT)</h3>
                 {itemsAnalysis && itemsAnalysis.length > 0 ? (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-white/10">
+                      <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                         <tr>
                           <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">ID</th>
                           <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Độ khó (b)</th>
@@ -204,9 +204,9 @@ export default function ExamDetailPage() {
                           <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cảnh báo</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                         {itemsAnalysis.map(item => (
-                          <tr key={item.question_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                          <tr key={item.question_id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                             <td className="px-4 py-3 font-medium">{item.question_id}</td>
                             <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{item.difficulty_b}</td>
                             <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{item.discrimination_a}</td>
@@ -229,7 +229,7 @@ export default function ExamDetailPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="glass-card p-6 flex flex-col gap-4">
+          <div className="p-6 flex flex-col gap-4">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Thao tác</h3>
             {exam.status === 'DRAFT' && (
               <>

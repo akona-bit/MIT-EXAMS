@@ -654,7 +654,7 @@ export default function KnowledgePage() {
       </AnimatePresence>
 
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)_320px] mt-6">
-        <aside className="flex flex-col overflow-hidden h-[600px] glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+        <aside className="flex flex-col overflow-hidden h-[600px] bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
           <div className="p-4 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
@@ -723,7 +723,7 @@ export default function KnowledgePage() {
           />
         </main>
 
-        <aside className="flex flex-col h-[600px] overflow-y-auto custom-scrollbar p-5 glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+        <aside className="flex flex-col h-[600px] overflow-y-auto custom-scrollbar p-5 bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
           <div className="flex items-center justify-between mb-5 shrink-0">
             <p className="text-[11px] font-bold uppercase tracking-wider text-primary-600 dark:text-primary-400">
               Chi tiết Node

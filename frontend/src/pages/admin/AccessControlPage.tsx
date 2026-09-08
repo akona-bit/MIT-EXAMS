@@ -113,10 +113,10 @@ function StudentsTab() {
         <span className="text-xs text-slate-400 whitespace-nowrap">{total} thí sinh</span>
       </div>
 
-      <div className="overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+      <div className="overflow-hidden bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50/80 dark:bg-slate-950/50 border-b border-slate-200/60 dark:border-white/10 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
               <tr>
                 <th className="px-4 py-3 font-semibold">SBD</th>
                 <th className="px-4 py-3 font-semibold">Họ tên</th>
@@ -127,13 +127,13 @@ function StudentsTab() {
                 <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {loading ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center"><div className="flex flex-col items-center gap-3"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-24" /></div></td></tr>
               ) : students.length === 0 ? (
                 <tr><td colSpan={7}><EmptyState title="Không có thí sinh nào" message="Chưa có thí sinh nào được thêm vào hệ thống." /></td></tr>
               ) : students.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs font-medium text-slate-700 dark:text-slate-300">{s.sbd || "-"}</td>
                   <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{s.full_name || s.username}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{s.email}</td>
@@ -296,10 +296,10 @@ function StaffTab() {
         <Button onClick={() => setIsInviteModalOpen(true)}>+ Mời người dùng</Button>
       </div>
 
-      <div className="overflow-hidden glass-card shadow-lg border border-slate-200/60 dark:border-slate-700/60 rounded-2xl">
+      <div className="overflow-hidden bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50/80 dark:bg-slate-950/50 border-b border-slate-200/60 dark:border-white/10 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
               <tr>
                 <th className="px-4 py-3 font-semibold">Họ tên</th>
                 <th className="px-4 py-3 font-semibold">Email</th>
@@ -308,13 +308,13 @@ function StaffTab() {
                 <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100/80 dark:divide-white/5">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {loading ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center"><div className="flex flex-col items-center gap-3"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-24" /></div></td></tr>
               ) : staff.length === 0 ? (
                 <tr><td colSpan={5}><EmptyState title="Không có giáo viên/quản trị nào" message="Chưa có nhân viên nào được thêm vào hệ thống." /></td></tr>
               ) : staff.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                   <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{u.full_name || u.username}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{u.email}</td>
                   <td className="px-4 py-3">

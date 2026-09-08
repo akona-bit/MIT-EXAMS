@@ -13,7 +13,7 @@ export default function MaintenanceScreen({
 }: MaintenanceScreenProps) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-      <div className="max-w-md w-full glass-card p-8 rounded-2xl shadow-xl text-center space-y-6">
+      <div className="max-w-md w-full p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl text-center space-y-6">
         <div className="mx-auto w-20 h-20 bg-warning-100 dark:bg-warning-900/30 text-warning-500 rounded-full flex items-center justify-center">
           <AlertTriangle className="w-10 h-10" />
         </div>

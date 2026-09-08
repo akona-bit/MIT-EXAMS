@@ -304,13 +304,13 @@ export default function QuestionFormPage() {
       </div>
 
       {isFetching ? (
-        <div className="rounded-2xl border border-slate-200/60 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-8 text-center text-sm text-slate-500 backdrop-blur-xl">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-sm text-slate-500">
           Đang tải dữ liệu câu hỏi...
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-8">
           
-          <div className="glass-card space-y-6">
+          <div className="space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">1. Phân loại & Ma trận</h2>
             
             {/* Phần thi và Kỹ năng */}
@@ -350,7 +350,7 @@ export default function QuestionFormPage() {
                   Mức độ
                 </label>
                 <select
-                  className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                  className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
                   value={level}
                   onChange={(e) => setLevel(Number(e.target.value))}
                 >
@@ -365,7 +365,7 @@ export default function QuestionFormPage() {
                   Dạng câu hỏi
                 </label>
                 <select
-                  className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                  className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
                   value={type}
                   onChange={(e) => handleTypeChange(e.target.value)}
                 >
@@ -424,7 +424,7 @@ export default function QuestionFormPage() {
             </div>
           </div>
           
-          <div className="glass-card space-y-6">
+          <div className="space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">2. Nội dung</h2>
             <div className="space-y-4">
               <MarkdownEditor
@@ -440,7 +440,7 @@ export default function QuestionFormPage() {
             </div>
           </div>
           
-          <div className="glass-card space-y-6">
+          <div className="space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">3. Đáp án</h2>
             
             {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
@@ -555,7 +555,7 @@ export default function QuestionFormPage() {
             )}
           </div>
           
-          <div className="glass-card space-y-6">
+          <div className="space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">4. Nguồn (Tùy chọn)</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">

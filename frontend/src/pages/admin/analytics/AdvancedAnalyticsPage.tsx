@@ -328,7 +328,7 @@ export default function AdvancedAnalyticsPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <Card className="p-6 glass-card border-l-4 border-l-indigo-500">
+        <Card className="p-6 border-l-4 border-l-indigo-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tổng Số Thí Sinh</p>
@@ -340,7 +340,7 @@ export default function AdvancedAnalyticsPage() {
           </div>
         </Card>
         
-        <Card className="p-6 glass-card border-l-4 border-l-orange-500">
+        <Card className="p-6 border-l-4 border-l-orange-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Điểm TB Toán (IRT)</p>
@@ -352,7 +352,7 @@ export default function AdvancedAnalyticsPage() {
           </div>
         </Card>
         
-        <Card className="p-6 glass-card border-l-4 border-l-emerald-500">
+        <Card className="p-6 border-l-4 border-l-emerald-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Điểm TB Khoa học (IRT)</p>
@@ -364,7 +364,7 @@ export default function AdvancedAnalyticsPage() {
           </div>
         </Card>
         
-        <Card className="p-6 glass-card border-l-4 border-l-rose-500">
+        <Card className="p-6 border-l-4 border-l-rose-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Câu Hỏi Cần Lưu Ý</p>
@@ -379,7 +379,7 @@ export default function AdvancedAnalyticsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {/* Phân loại năng lực (Pie Chart) - Mới */}
-        <Card className="p-1 bg-[#f8fafc] dark:bg-slate-900/50 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden xl:col-span-2">
+        <Card className="p-1 bg-[#f8fafc] dark:bg-slate-900 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden xl:col-span-2">
           <Plot
             data={[plotPieMath as any, plotPieSci as any]}
             layout={{
@@ -453,7 +453,7 @@ export default function AdvancedAnalyticsPage() {
         </Card>
         
         {/* Boxplot */}
-        <Card className="p-1 bg-[#f8fafc] dark:bg-slate-900/50 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+        <Card className="p-1 bg-[#f8fafc] dark:bg-slate-900 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
           <Plot
             data={[plotBoxMath as any, plotBoxSci as any]}
             layout={{
@@ -518,8 +518,7 @@ export default function AdvancedAnalyticsPage() {
       </div>
       
       {/* Leaderboard Table */}
-      <Card className="mt-8 bg-white dark:bg-slate-900/70 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-6 glass-card">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 font-['Inter']">Bảng Xếp Hạng Năng Lực (Top 10 Thí Sinh)</h2>
+      <Card className="mt-8 bg-white dark:bg-slate-900 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-6">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -549,7 +548,7 @@ export default function AdvancedAnalyticsPage() {
       </Card>
 
       {/* Descriptive Stats Table */}
-      <Card className="mt-8 bg-white dark:bg-slate-900/70 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-6 glass-card">
+      <Card className="mt-8 bg-white dark:bg-slate-900 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-6">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 font-['Inter']">Bảng Thống kê Mô tả Tổng quan</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -580,7 +579,7 @@ export default function AdvancedAnalyticsPage() {
       </Card>
 
       {/* Flagged Items Table */}
-      <Card className="mt-8 bg-white dark:bg-slate-900/70 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-6 glass-card">
+      <Card className="mt-8 bg-white dark:bg-slate-900 shadow-md border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden p-6">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 font-['Inter'] flex items-center gap-2">
           <AlertTriangle className="text-rose-500" size={24} /> Bảng Cảnh báo Câu hỏi (Misfit Items)
         </h2>

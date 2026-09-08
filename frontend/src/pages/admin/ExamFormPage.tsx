@@ -71,7 +71,7 @@ export default function ExamFormPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-6 rounded-2xl glass-card p-6"
+        className="space-y-6 rounded-2xl p-6"
       >
         {errorMessage && (
           <div
@@ -103,7 +103,7 @@ export default function ExamFormPage() {
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Mục tiêu, đối tượng hoặc ghi chú cho kỳ thi"
-            className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
+              className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none"
           />
         </div>
 
@@ -121,7 +121,7 @@ export default function ExamFormPage() {
               value={matrixId}
               onChange={(event) => setMatrixId(event.target.value)}
               disabled={isFetching}
-              className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md disabled:opacity-50"
+              className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none disabled:opacity-50"
             >
               <option value="">
                 {isFetching ? "Đang tải ma trận..." : "-- Chọn ma trận --"}
@@ -155,7 +155,7 @@ export default function ExamFormPage() {
               onChange={(event) =>
                 setFormCount(Math.max(1, Number(event.target.value)))
               }
-              className="w-full px-4 py-2.5 text-sm font-medium bg-white/80 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none backdrop-blur-md"
+            className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none"
             />
             <p className="mt-1.5 text-xs text-slate-500">
               Đề gốc sẽ được tạo kèm các mã đề xáo trộn.
@@ -163,7 +163,7 @@ export default function ExamFormPage() {
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-slate-200 dark:border-white/10 pt-4">
+        <div className="flex justify-end border-t border-slate-200 dark:border-slate-700 pt-4">
           <Button
             type="submit"
             isLoading={isLoading}

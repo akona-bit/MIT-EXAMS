@@ -58,7 +58,7 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
 
   if (rules.length === 0) {
     return (
-      <div className="text-center p-8 text-slate-500 glass-card rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+      <div className="text-center p-8 text-slate-500 rounded-2xl border border-slate-200 dark:border-slate-700">
         Không có dữ liệu để hiển thị biểu đồ
       </div>
     );
@@ -80,7 +80,7 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Topic Distribution (Pie) */}
-      <div className="glass-card p-6 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex flex-col items-center">
+      <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center">
         <h4 className="text-lg font-bold mb-1 text-slate-900 dark:text-white">Phân phối theo Kiến thức</h4>
         <p className="text-xs text-slate-500 mb-4">{distributions.totalQuestions} câu hỏi</p>
         <div className="w-full h-64">
@@ -109,7 +109,7 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
       </div>
 
       {/* Level Distribution (Bar) */}
-      <div className="glass-card p-6 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex flex-col items-center">
+      <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center">
         <h4 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Phân phối theo Mức độ</h4>
         <div className="w-full h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -129,7 +129,7 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
       </div>
 
       {/* Type Distribution (Bar) */}
-      <div className="glass-card p-6 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex flex-col items-center">
+      <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center">
         <h4 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Phân phối theo Dạng câu</h4>
         <div className="w-full h-64">
           <ResponsiveContainer width="100%" height="100%">

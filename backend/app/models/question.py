@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from .base import Base
 from .user import User
+from .passage import Passage
 
 class Resource(Base):
     """Stub model for Supabase Storage metadata. Files are in Supabase Storage, not in this table."""
