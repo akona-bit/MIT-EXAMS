@@ -691,7 +691,7 @@ export default function KnowledgePage() {
   const [noteName, setNoteName] = useState("");
   const [noteDescription, setNoteDescription] = useState("");
   const [noteType, setNoteType] = useState("TOPIC");
-  const [noteSubject, setNoteSubject] = useState("Toán");
+  const [noteSubject, setNoteSubject] = useState("Sử dụng ngôn ngữ — Tiếng Việt");
   const [noteParentId, setNoteParentId] = useState<string>("none");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingParent, setIsEditingParent] = useState(false);
@@ -744,7 +744,7 @@ export default function KnowledgePage() {
       setNoteName("");
       setNoteDescription("");
       setNoteType("TOPIC");
-      setNoteSubject("Toán");
+      setNoteSubject("Sử dụng ngôn ngữ — Tiếng Việt");
       setNoteParentId("none");
       setNoteError("");
       setShowNewNote(false);
@@ -927,19 +927,12 @@ export default function KnowledgePage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Môn học</label>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Phần thi</label>
                       <select value={noteSubject} onChange={e => setNoteSubject(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2">
-                        <option value="Toán">Toán</option>
-                        <option value="Vật lí">Vật lí</option>
-                        <option value="Hóa học">Hóa học</option>
-                        <option value="Sinh học">Sinh học</option>
-                        <option value="Lịch sử">Lịch sử</option>
-                        <option value="Địa lí">Địa lí</option>
-                        <option value="Ngữ văn">Ngữ văn</option>
-                        <option value="Tiếng Anh">Tiếng Anh</option>
-                        <option value="Giáo dục Kinh tế và Pháp luật">Giáo dục Kinh tế và Pháp luật</option>
-                        <option value="Tin học">Tin học</option>
-                        <option value="Công nghệ">Công nghệ</option>
+                        <option value="Sử dụng ngôn ngữ — Tiếng Việt">Phần 1: Sử dụng ngôn ngữ — Tiếng Việt</option>
+                        <option value="Sử dụng ngôn ngữ — Tiếng Anh">Phần 1: Sử dụng ngôn ngữ — Tiếng Anh</option>
+                        <option value="Toán học">Phần 2: Toán học</option>
+                        <option value="Tư duy khoa học">Phần 3: Tư duy khoa học</option>
                       </select>
                     </div>
                   </div>

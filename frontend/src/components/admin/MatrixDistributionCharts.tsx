@@ -9,7 +9,7 @@ interface DistributionChartsProps {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#a855f7'];
 
 const LEVEL_LABELS: Record<number, string> = { 1: 'NB', 2: 'TH', 3: 'VD', 4: 'VDC' };
-const PART_LABELS: Record<number, string> = { 1: 'Tiếng Việt', 2: 'Tiếng Anh', 3: 'Toán', 4: 'Khoa học' };
+const PART_LABELS: Record<number, string> = { 1: 'Tiếng Việt', 2: 'Tiếng Anh', 3: 'Toán học', 4: 'Tư duy khoa học' };
 const TYPE_LABELS: Record<string, string> = {
   SINGLE_CHOICE: 'Trắc nghiệm',
   MULTIPLE_CHOICE: 'Nhiều lựa chọn',

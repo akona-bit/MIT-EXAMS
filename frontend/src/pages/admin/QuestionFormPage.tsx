@@ -28,7 +28,7 @@ export default function QuestionFormPage() {
   const [type, setType] = useState("SINGLE_CHOICE");
   
   // Knowledge Node State
-  const [subject, setSubject] = useState("Toán"); // Default subject
+  const [subject, setSubject] = useState("Sử dụng ngôn ngữ — Tiếng Việt"); // Default subject
   const [primaryNodeId, setPrimaryNodeId] = useState<number | null>(null);
 
 
@@ -313,29 +313,22 @@ export default function QuestionFormPage() {
           <div className="glass-card space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">1. Phân loại & Ma trận</h2>
             
-            {/* Môn học và Kỹ năng */}
+            {/* Phần thi và Kỹ năng */}
             <div className="space-y-6 bg-slate-50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/50">
               <div className="flex flex-col sm:flex-row gap-6">
                 <div className="w-full sm:w-1/3 space-y-2">
                   <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    Môn học
+                    Phần thi
                   </label>
                   <select
                     className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 shadow-sm"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                   >
-                    <option value="Toán">Toán</option>
-                    <option value="Vật lí">Vật lí</option>
-                    <option value="Hóa học">Hóa học</option>
-                    <option value="Sinh học">Sinh học</option>
-                    <option value="Lịch sử">Lịch sử</option>
-                    <option value="Địa lí">Địa lí</option>
-                    <option value="Ngữ văn">Ngữ văn</option>
-                    <option value="Tiếng Anh">Tiếng Anh</option>
-                    <option value="Giáo dục Kinh tế và Pháp luật">Giáo dục Kinh tế và Pháp luật</option>
-                    <option value="Tin học">Tin học</option>
-                    <option value="Công nghệ">Công nghệ</option>
+                    <option value="Sử dụng ngôn ngữ — Tiếng Việt">Phần 1: Sử dụng ngôn ngữ — Tiếng Việt</option>
+                    <option value="Sử dụng ngôn ngữ — Tiếng Anh">Phần 1: Sử dụng ngôn ngữ — Tiếng Anh</option>
+                    <option value="Toán học">Phần 2: Toán học</option>
+                    <option value="Tư duy khoa học">Phần 3: Tư duy khoa học</option>
                   </select>
                 </div>
                 

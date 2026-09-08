@@ -97,6 +97,7 @@
   - [x] Sửa lỗi crash backend do import file/models AI đã bị xóa (`questions.py`)
   - [x] Hoàn thiện việc gỡ bỏ `KnowledgeNodeParent` và `QuestionSkillTag`, cấu trúc lại `matrix_import.py`, `obsidian_parser.py`, `passages.py`, `seed_questions.py`, và `latex_service.py` để sử dụng `parent_id` và `knowledge_node_id` trực tiếp theo thiết kế 1-1 mới.
   - [x] Xóa bỏ các scripts tạm thời, các file test thừa và kiểm tra độ ổn định UI/backend. Chốt chặn hoàn chỉnh ở mô hình 1-1.
+  - [x] Đổi nhãn "Môn học" thành "Phần thi" và cập nhật danh sách các lựa chọn thành 4 phần chuẩn theo ma trận ĐGNL (`QuestionFormPage`, `KnowledgePage`, `MatrixDetailPage`, `MatrixDistributionCharts`).
 
 - `2026-09-07` — **UI Cleanup & Fix lỗi TypeScript**:
   - [x] Fix lỗi `OmrSheet` type: thêm thuộc tính `image_path` và `exam_submission_id` để khớp với logic hiển thị.

@@ -62,7 +62,7 @@ export default function MatrixDetailPage() {
       key: "part",
       header: "Phần",
       render: (val) => {
-        const parts: Record<number, string> = { 1: "Tiếng Việt", 2: "Tiếng Anh", 3: "Toán", 4: "Khoa học" };
+        const parts: Record<number, string> = { 1: "Tiếng Việt", 2: "Tiếng Anh", 3: "Toán học", 4: "Tư duy khoa học" };
         return parts[val] || `Phần ${val}`;
       },
     },
