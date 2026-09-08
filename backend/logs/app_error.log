@@ -1,0 +1,400 @@
+2026-09-08 23:55:42 | ERROR | app_error | Unhandled exception: PUT /api/v1/admin/staff/2 - type object 'AuditAction' has no attribute 'UPDATE_USER'
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\admin.py", line 441, in update_staff
+    await log_audit(db, current_user.id, AuditAction.UPDATE_USER, "User", user.id, f"Updated staff user {user.username}")
+                                         ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'AuditAction' has no attribute 'UPDATE_USER'
+2026-09-08 23:55:44 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/verify-otp - can't compare offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 159, in verify_otp
+    if otp.expires_at < datetime.now(timezone.utc):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2026-09-08 23:55:44 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/verify-otp - can't compare offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 159, in verify_otp
+    if otp.expires_at < datetime.now(timezone.utc):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2026-09-08 23:55:45 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/send-otp - can't subtract offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 109, in send_otp
+    if latest_otp and (datetime.now(timezone.utc) - latest_otp.created_at).total_seconds() < 60:
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't subtract offset-naive and offset-aware datetimes
+2026-09-08 23:58:15 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/verify-otp - can't compare offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 159, in verify_otp
+    if otp.expires_at < datetime.now(timezone.utc):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2026-09-08 23:58:16 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/verify-otp - can't compare offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 159, in verify_otp
+    if otp.expires_at < datetime.now(timezone.utc):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2026-09-08 23:58:16 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/verify-otp - can't compare offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 159, in verify_otp
+    if otp.expires_at < datetime.now(timezone.utc):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: can't compare offset-naive and offset-aware datetimes
+2026-09-08 23:58:17 | ERROR | app_error | Unhandled exception: POST /api/v1/auth/send-otp - can't subtract offset-naive and offset-aware datetimes
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\MIT\backend\app\main.py", line 42, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1574, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 2012, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1594, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 1183, in handle
+    await app(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python314\Lib\site-packages\fastapi\routing.py", line 337, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\MIT\backend\app\api\v1\auth.py", line 109, in send_otp
+    if latest_otp and (datetime.now(timezone.utc) - latest_otp.created_at).total_seconds() < 60:
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: can't subtract offset-naive and offset-aware datetimes

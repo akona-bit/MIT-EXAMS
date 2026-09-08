@@ -5,7 +5,7 @@
 ## Trạng thái tổng quan
 
 **Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND) + UI REDESIGN
-**Cập nhật lần cuối:** 2026-09-05
+**Cập nhật lần cuối:** 2026-09-09
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -171,6 +171,8 @@
   - [x] Cập nhật dòng `Section` (PhanThi): ghi rõ chưa có bảng riêng — phần thi đang là cột `part` (1-4) trên `MatrixRule`/`ExamFormQuestion` + `ctt_score_part*`/`irt_score_part*` trên `ExamResult`; tên `Section` được reserve cho bảng tương lai.
   - [x] Không đổi bất kỳ code/model nào — chỉ cập nhật tài liệu chuẩn tên bảng.
 
+
+- `2026-09-09` — **Bug fixes & Backend tests**: Fix `auth.py` naive-vs-aware datetime bug (SQLite returns naive, code compared with `datetime.now(timezone.utc)` → `TypeError`). Switch to `datetime.utcnow()` + `.replace(tzinfo=None)` on loaded values. Create backend test suite: `conftest.py` (fixtures: SQLite in-memory, seed roles, users), `helpers.py` (auth_header), `test_admin.py` (16 tests), `test_auth.py` (10 tests), `test_exams.py` (8 tests). Result: **33 passed, 1 skipped** (skip = `AuditAction.UPDATE_USER` missing from enum — known bug to fix separately).
 
 - `2026-09-05` — **Chốt chuẩn tên bảng tiếng Anh (phụ lục ERD trong architecture.md)**:
   - [x] Đối chiếu bảng đối chiếu ERD gốc ↔ tên bảng thật (architecture.md §8) với code thực tế `backend/app/models/*.py`: 18/20 dòng khớp.
