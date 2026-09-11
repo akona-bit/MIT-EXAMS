@@ -10,13 +10,37 @@ from app.models.question import Question, KnowledgeNode
 class LatexService:
     @staticmethod
     def _map_subject_to_folder(node_name: str) -> str:
-        name = node_name.lower()
-        if "tiếng việt" in name: return "tv"
-        if "tiếng anh" in name: return "ta"
-        if "toán" in name: return "toan"
-        if "logic" in name: return "logic"
-        if "phân tích số liệu" in name: return "ptsl"
-        if "khoa học" in name or "lý" in name or "hóa" in name or "sinh" in name: return "slkh"
+        import unicodedata
+        def remove_accents(input_str):
+            nfkd_form = unicodedata.normalize('NFKD', input_str)
+            return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
+            
+        name = remove_accents(node_name.lower())
+        
+        # Tiếng Anh
+        if any(k in name for k in ["tieng anh", "english", "grammar", "vocab", "reading", "cloze", "sentence", "phrasal", "word formation", "error ident", "idiom", "para completion", "inference"]):
+            return "ta"
+            
+        # Tiếng Việt
+        if any(k in name for k in ["tieng viet", "ngon ngu", "thanh ngu", "chinh ta", "chon tu", "hieu dan giai", "phan tich doan", "sap xep", "bat thong tin", "tom tat"]):
+            return "tv"
+            
+        # Toán
+        if any(k in name for k in ["toan", "dai so", "hinh hoc", "ham so", "xac suat", "phuong trinh", "oxy", "so phuc", "luy thua", "logarithm", "to hop", "vector"]):
+            return "toan"
+            
+        # Logic
+        if any(k in name for k in ["logic", "suy luan sang tao", "nhan dien mau"]):
+            return "logic"
+            
+        # Phân tích số liệu
+        if any(k in name for k in ["so lieu", "bieu do", "du lieu"]):
+            return "ptsl"
+            
+        # Khoa học
+        if any(k in name for k in ["khoa hoc", "ly", "hoa", "sinh", "thi nghiem", "vat ly", "gia thuyet", "nguyen nhan"]):
+            return "slkh"
+            
         return "other"
         
     @staticmethod
