@@ -287,8 +287,21 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
             )}
             {(exam.status === 'PUBLISHED' || exam.status === 'FINISHED') && (
               <>
-                <Button variant="default" onClick={handleRunIrt} disabled={!!irtStatus && irtStatus !== 'SUCCESS' && irtStatus !== 'FAILED'} className="w-full justify-center shadow-lg shadow-primary-500/20">
-                  {irtStatus === 'PENDING' || irtStatus === 'STARTED' ? `Đang chạy IRT... (${irtStatus})` : 'Chạy phân tích IRT'}
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    // Đang chạy: bấm để mở lại terminal tiến trình (polling vẫn chạy nền)
+                    if (irtStatus === 'PENDING' || irtStatus === 'STARTED') {
+                      setIsIrtModalOpen(true);
+                      return;
+                    }
+                    handleRunIrt();
+                  }}
+                  className="w-full justify-center shadow-lg shadow-primary-500/20"
+                >
+                  {irtStatus === 'PENDING' || irtStatus === 'STARTED'
+                    ? 'Đang chạy IRT — xem tiến trình'
+                    : 'Chạy phân tích IRT'}
                 </Button>
               </>
             )}
