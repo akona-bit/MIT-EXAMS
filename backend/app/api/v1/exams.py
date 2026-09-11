@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, status, BackgroundTasks
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -218,7 +218,7 @@ async def publish_exam_route(request: Request, exam_id: int, db: AsyncSession = 
     return exam
 
 @router.put("/{exam_id}/complete", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def complete_exam(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
+async def complete_exam(request: Request, exam_id: int, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     exam = await db.get(Exam, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
@@ -237,16 +237,21 @@ async def complete_exam(request: Request, exam_id: int, db: AsyncSession = Depen
     
     IRT_THRESHOLD = 200
     
-    # Trigger grading + IRT calibration background task
-    from app.services.grading.scorer import run_irt_calibration_task
+    # Trigger grading + IRT calibration background task (FastAPI BackgroundTasks —
+    # đã bỏ Celery; xem grading.py POST /exams/{exam_id}/run-irt)
     from app.models.grading import IrtTask
     
     if submission_count >= IRT_THRESHOLD:
         # Enough data — run full IRT calibration
-        task = run_irt_calibration_task.delay(exam_id)
-        irt_task = IrtTask(exam_id=exam_id, celery_task_id=task.id, status="PENDING")
+        from app.services.grading.scorer import background_run_irt
+        import uuid
+        
+        irt_task_id = str(uuid.uuid4())
+        irt_task = IrtTask(exam_id=exam_id, celery_task_id=irt_task_id, status="PENDING")
         db.add(irt_task)
         await db.commit()
+        
+        background_tasks.add_task(background_run_irt, exam_id, irt_task_id)
     else:
         # Below threshold — CTT only, skip IRT
         import logging

@@ -341,7 +341,7 @@ export default function ExamDetailPage() {
         title={confirmAction === 'irt' ? 'Chạy phân tích IRT?' : 'Xuất bản kỳ thi?'}
         message={
           confirmAction === 'irt'
-            ? 'Hệ thống sẽ khởi chạy tiến trình phân tích IRT và quy đổi điểm chuẩn. Quá trình chạy nền (Celery) và có thể mất vài phút.'
+            ? 'Hệ thống sẽ khởi chạy tiến trình phân tích IRT và quy đổi điểm chuẩn. Quá trình chạy nền (background task) và có thể mất vài phút.'
             : 'Học sinh sẽ có thể tham gia kỳ thi này sau khi xuất bản.'
         }
         confirmText={confirmAction === 'irt' ? 'Chạy IRT' : 'Xuất bản'}

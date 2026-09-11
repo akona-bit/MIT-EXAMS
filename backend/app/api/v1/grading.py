@@ -75,4 +75,13 @@ async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     if not irt_task:
         raise HTTPException(status_code=404, detail="Task not found")
         
-    return {"task_id": task_id, "status": irt_task.status, "logs": irt_task.logs or []}
+    task_status = irt_task.status
+    
+    # Stale-task guard: task PENDING quá 15 phút nghĩa là background worker
+    # đã bị mất (redeploy/restart server) — báo FAILED để client ngừng poll.
+    if task_status == "PENDING" and irt_task.created_at is not None:
+        from datetime import datetime, timedelta, timezone
+        if datetime.now(timezone.utc) - irt_task.created_at > timedelta(minutes=15):
+            task_status = "FAILED"
+    
+    return {"task_id": task_id, "status": task_status, "logs": irt_task.logs or []}

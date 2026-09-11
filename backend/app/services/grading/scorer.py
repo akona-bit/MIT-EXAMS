@@ -1,7 +1,9 @@
 from typing import Any, Optional
 import asyncio
+import logging
 
-from celery import shared_task
+logger = logging.getLogger(__name__)
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -398,7 +400,15 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                 )
                 item_params_for_se = [(float(a), float(b)) for a, b in zip(a_est, b_est)]
                 # all_item_se cũng có thể nặng, đưa vào thread
-                se_a, se_b = await asyncio.to_thread(all_item_se, item_params_for_se)
+                # LƯU Ý: all_item_se trả về mảng shape (J, 2) — mỗi dòng là (se_a, se_b)
+                # của từng câu hỏi. KHÔNG unpack trực tiếp thành 2 biến
+                # (trước đây gây lỗi "too many values to unpack (expected 2)").
+                item_se_matrix = await asyncio.to_thread(all_item_se, item_params_for_se)
+                item_se_matrix = np.asarray(item_se_matrix)
+                if item_se_matrix.ndim != 2 or item_se_matrix.shape[1] < 2:
+                    raise ValueError(f"all_item_se returned unexpected shape: {item_se_matrix.shape}")
+                se_a = item_se_matrix[:, 0]
+                se_b = item_se_matrix[:, 1]
                 await append_log(f"Ước lượng tham số MMLE thành công cho {J} câu hỏi.")
             except Exception as e:
                 if task:
@@ -548,4 +558,33 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
             }
             
     # Run the native async function
-    return await process_irt()
+    try:
+        return await process_irt()
+    except Exception as e:
+        # Background task crashed ngoài các nhánh try/except bên trong —
+        # phải đánh dấu FAILED để client không poll vô hạn.
+        logger.exception(f"Unhandled IRT background error for task {task_id}: {e}")
+        try:
+            from app.core.error_log import log_error
+            log_error(f"IRT background task {task_id} crashed: {e}")
+        except Exception:
+            pass
+        try:
+            async with isolated_session() as db:
+                result = await db.execute(
+                    select(IrtTask).where(IrtTask.celery_task_id == task_id)
+                )
+                failed_task = result.scalars().first()
+                if failed_task and failed_task.status not in ("SUCCESS", "FAILED"):
+                    failed_task.status = "FAILED"
+                    failed_task.error_details = f"Unhandled background error: {str(e)}"
+                    failed_task.logs = list(failed_task.logs or []) + [
+                        {
+                            "time": datetime.now(timezone.utc).isoformat(),
+                            "msg": f"Lỗi không mong muốn: {str(e)}",
+                        }
+                    ]
+                    await db.commit()
+        except Exception:
+            logger.exception(f"Could not mark IrtTask {task_id} as FAILED")
+        raise

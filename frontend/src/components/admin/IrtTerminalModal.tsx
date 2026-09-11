@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 
@@ -22,7 +22,7 @@ export default function IrtTerminalModal({ isOpen, onClose, status, logs }: IrtT
   const isComplete = status === 'SUCCESS' || status === 'FAILED';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="4xl">
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-4xl">
       <div className="flex flex-col h-[70vh] bg-slate-900 rounded-lg overflow-hidden border border-slate-700 shadow-2xl">
         
         {/* Header */}
@@ -51,7 +51,7 @@ export default function IrtTerminalModal({ isOpen, onClose, status, logs }: IrtT
           {/* Terminal / Logs Left Side */}
           <div className="flex-1 bg-black p-4 overflow-y-auto font-mono text-sm leading-relaxed" ref={terminalRef}>
             {logs.length === 0 ? (
-              <div className="text-slate-500 italic">Đang khởi tạo tiến trình nền (Celery Worker)...</div>
+              <div className="text-slate-500 italic">Đang khởi tạo tiến trình nền (background task)...</div>
             ) : (
               logs.map((log, index) => {
                 const isError = log.msg.toLowerCase().includes('lỗi') || log.msg.toLowerCase().includes('fail');

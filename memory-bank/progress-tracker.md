@@ -420,6 +420,14 @@
   - Backend `advanced_analytics.py`: bỏ `* 10` double-multiply trên `ctt_score_partX` (DB đã lưu ×10 sẵn)
   - Frontend không cần sửa — dùng `max_raw_score`/`max_total` từ API
 
+
+- **2026-09-11 — Fix lỗi chạy IRT sau deploy (đã xác minh trong DB production):**
+  - ✅ Bug chính (task #9 FAILED): `all_item_se()` trả mảng shape `(J, 2)` nhưng scorer.py unpack `se_a, se_b = all_item_se(...)` → "too many values to unpack (expected 2)". Sửa: slice cột `item_se_matrix[:, 0/1]` + guard shape. — `services/grading/scorer.py`
+  - ✅ Bug ImportError: `exams.py` complete_exam vẫn import `run_irt_calibration_task` (đã bị xoá khỏi scorer) → endpoint 500 khi kết thúc kỳ thi. Sửa: chuyển sang `BackgroundTasks` + `background_run_irt` (đồng bộ grading.py). — `api/v1/exams.py`
+  - ✅ Task kẹt PENDING vô hạn (#6/7/8/10 — background task chết khi redeploy): (1) thêm global try/except trong `background_run_irt` đánh dấu FAILED + error_details; (2) stale-guard ở `GET /grading/tasks/{task_id}`: PENDING quá 15 phút → trả FAILED để client ngừng poll. — `scorer.py`, `api/v1/grading.py`
+  - ✅ Frontend: bỏ import React thừa + prop `size` sai trên Modal (`maxWidth="max-w-4xl"`), đổi text "Celery" → "background task". — `IrtTerminalModal.tsx`, `ExamDetailPage.tsx`
+  - Kiểm chứng: `all_item_se` sanity test pass (shape (5,2)), py_compile + import app.main OK, tsc sạch trên IrtTerminalModal.
+
 ## Vấn đề đang mở / cần quyết định
 
 - Bảng tên tiếng Anh chính thức cho các entity ERD gốc tiếng Việt đã đề xuất trong `architecture.md` (phụ lục) — cần người dùng xác nhận trước khi dùng làm chuẩn cứng.
