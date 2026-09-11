@@ -429,6 +429,12 @@
   - Kiểm chứng: `all_item_se` sanity test pass (shape (5,2)), py_compile + import app.main OK, tsc sạch trên IrtTerminalModal.
 
 
+- **2026-09-11 — Xác minh IRT CHẠY ĐƯỢC trên dữ liệu thật (dry-run + E2E đều pass):**
+  - Dry-run thuật toán trên exam #21 (J=102 câu unique, N=301 bài làm, answer rate 100%): MMLE OK (a ∈ [0.789, 1.034], b ∈ [-0.029, 0.253]) → all_item_se FIX OK (slice (J,2)) → Theta OK ([-6.0, 0.91]) → True Score OK (179/300 sample). — `backend/_irt_dryrun.py` (đã xoá sau test)
+  - E2E chạy THẬT `background_run_irt(21, task_id)` — đúng code deploy: trả `{'participants_scored': 301}`, task status=SUCCESS, completed_at set, error_details=None; **120/120 Question calibrated** (a_param non-null), 120 ItemAnalysisResult rows, ExamResult được ghi IRT scores (parts 181-216, total 718-858, method=IRT). — `backend/_irt_e2e.py` (đã xoá sau test)
+  - Kết luận: **IRT chạy trọn vẹn end-to-end sau commit 662492e.** Render cần có bản mới này mới có luồng UI hoạt động tương tự.
+
+
 - **2026-09-11 — Thêm UI xác nhận "đang xuất đề" cho LaTeX export:**
   - ✅ Nút "Xuất Đề (LaTeX)" ở `ExamDetailPage.tsx` trước đây gọi `exportExamLaTeX()` fire-and-forget (dynamic import, không loading state, không bắt lỗi) → user không thấy phản hồi gì trong lúc backend build ZIP (có thể chậm với nhiều mã đề).
   - ✅ Sửa: thêm state `isExportingLaTeX` — nút disabled + label "Đang xuất đề (LaTeX)..." trong lúc fetch; toast.success khi tải xong, toast.error khi thất bại. Đồng bộ convention với nút "Cấp SBD & Mật khẩu".
