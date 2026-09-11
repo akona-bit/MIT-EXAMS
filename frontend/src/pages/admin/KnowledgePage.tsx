@@ -447,7 +447,7 @@ function GraphCanvas({
         />
 
         {replayProgress !== -1 && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 px-6 py-3 rounded-full border border-slate-700 shadow-2xl flex items-center gap-4">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 px-6 py-3 rounded-full border border-slate-700 shadow-2xl flex items-center gap-4 pointer-events-auto">
             <span className="text-white text-xs font-bold tracking-wider uppercase flex items-center gap-2">
               <Timer className="h-4 w-4 text-primary-400" />
               Timelapse
@@ -574,14 +574,12 @@ function GraphCanvas({
                 fgRef.current?.zoomToFit(600, 200);
               }
             }}
-            d3VelocityDecay={isPhysicsActive ? 0.3 : 1}
-            cooldownTicks={isPhysicsActive ? undefined : 0}
           />
         </div>
 
         {/* Toolbar Overlay */}
-        <div className="absolute right-4 top-4 z-20 flex flex-col gap-2">
-          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1">
+        <div className="absolute right-4 top-4 z-20 flex flex-col gap-2 pointer-events-none">
+          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1 pointer-events-auto">
             <button
               type="button"
               title="Tái hiện lịch sử hình thành (Timelapse)"
@@ -601,7 +599,7 @@ function GraphCanvas({
             </button>
           </div>
 
-          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1">
+          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1 pointer-events-auto">
             <button
               type="button"
               title="Phóng to"
@@ -634,7 +632,7 @@ function GraphCanvas({
             </button>
           </div>
 
-          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1">
+          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1 pointer-events-auto">
             <button
               type="button"
               title={isPhysicsActive ? "Dừng mô phỏng" : "Tiếp tục mô phỏng"}
@@ -667,10 +665,11 @@ function GraphCanvas({
           </div>
         </div>
 
-        <div className="absolute left-4 top-4 z-20 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 shadow-sm">
+        {/* Stats Overlay */}
+        <div className="absolute left-4 top-4 z-20 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 shadow-sm pointer-events-none">
           Graph view · {nodes.length} nodes · {edges.length} links
         </div>
-        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[10px] font-medium text-slate-600 dark:text-slate-300 shadow-sm">
+        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[10px] font-medium text-slate-600 dark:text-slate-300 shadow-sm pointer-events-none">
           <span className="flex items-center gap-1.5">
             <i
               className="inline-block h-2.5 w-2.5 rounded-full"

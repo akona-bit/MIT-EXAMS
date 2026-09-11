@@ -66,6 +66,7 @@ class IrtTask(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     error_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    logs: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=list)
 
     exam = relationship("Exam")
 

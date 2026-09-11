@@ -7,7 +7,7 @@ from typing import Optional
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
-from app.services.grading.scorer import grade_submission_ctt, run_irt_calibration_task
+from app.services.grading.scorer import grade_submission_ctt
 from app.models.grading import IrtTask
 
 router = APIRouter()
@@ -45,18 +45,27 @@ async def score_submission(submission_id: int, db: AsyncSession = Depends(get_db
         
     return response_data
 
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+import uuid
+
 @router.post("/exams/{exam_id}/run-irt", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
-async def run_irt(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
-    # Trigger Celery Task
-    task = run_irt_calibration_task.delay(exam_id)
+async def run_irt(request: Request, exam_id: int, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    from app.services.grading.scorer import background_run_irt
+    
+    # Generate UUID for the task
+    task_id = str(uuid.uuid4())
     
     # Save to DB
-    irt_task = IrtTask(exam_id=exam_id, celery_task_id=task.id, status="PENDING")
+    irt_task = IrtTask(exam_id=exam_id, celery_task_id=task_id, status="PENDING")
     db.add(irt_task)
     await db.commit()
+    
+    # Add to FastAPI background tasks
+    background_tasks.add_task(background_run_irt, exam_id, task_id)
+    
     capture(request, "irt_calibration_started", {"exam_id": exam_id})
     
-    return {"message": "IRT Calibration started", "task_id": task.id}
+    return {"message": "IRT Calibration started", "task_id": task_id}
 
 @router.get("/tasks/{task_id}", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
@@ -66,4 +75,4 @@ async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     if not irt_task:
         raise HTTPException(status_code=404, detail="Task not found")
         
-    return {"task_id": task_id, "status": irt_task.status}
+    return {"task_id": task_id, "status": irt_task.status, "logs": irt_task.logs or []}

@@ -296,8 +296,9 @@ async def grade_submission_ctt(db: AsyncSession, submission_id: int) -> ExamResu
     return exam_result
 
 
-@shared_task(bind=True)
-def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
+import asyncio
+
+async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
     from contextlib import asynccontextmanager
     
     @asynccontextmanager
@@ -318,12 +319,20 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
         async with isolated_session() as db:
             # 1. Mark as started
             result = await db.execute(
-                select(IrtTask).where(IrtTask.celery_task_id == self.request.id)
+                select(IrtTask).where(IrtTask.celery_task_id == task_id)
             )
             task = result.scalars().first()
             if task:
                 task.status = "STARTED"
+                task.logs = [{"time": datetime.now(timezone.utc).isoformat(), "msg": "Bắt đầu tiến trình phân tích IRT..."}]
                 await db.commit()
+            
+            async def append_log(msg: str):
+                if task:
+                    logs = task.logs or []
+                    logs.append({"time": datetime.now(timezone.utc).isoformat(), "msg": msg})
+                    task.logs = list(logs)
+                    await db.commit()
             
             # 2. Get ALL unique question_ids used in this exam's forms
             form_q_result = await db.execute(
@@ -336,8 +345,11 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             if not unique_qids:
                 if task:
                     task.status = "FAILED"
+                    await append_log("Lỗi: Không tìm thấy câu hỏi nào trong đề thi này!")
                     await db.commit()
                 return {"status": "FAILED", "reason": "No questions found in this exam"}
+                
+            await append_log(f"Đã tải {len(unique_qids)} câu hỏi duy nhất từ ma trận đề thi.")
                 
             qid_to_index = {qid: i for i, qid in enumerate(unique_qids)}
             J = len(unique_qids)
@@ -356,10 +368,12 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             if not records:
                 if task:
                     task.status = "SUCCESS" # No data to run
+                    await append_log("Không có bài làm nào để chấm.")
                     await db.commit()
                 return {"status": "SUCCESS", "message": "No submissions found"}
                 
             N = len(records)
+            await append_log(f"Tìm thấy {N} bài làm. Đang trích xuất ma trận phản hồi (Response Matrix)...")
             
             # 4. Build response matrix U (N x J)
             U = np.full((N, J), -1, dtype=int)
@@ -375,15 +389,22 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                         pass
             
             # 5. Run MMLE to get a, b parameters
+            await append_log(f"Bắt đầu ước lượng tham số (MMLE - Marginal Maximum Likelihood)...")
             try:
                 # K=41 to speed up, max_iter=30
-                a_est, b_est = mmle(U, name=f"IRT_Exam_{exam_id}", max_iter=30, K=41, verbose=False)
+                # Chạy MMLE trong thread riêng để không block FastAPI event loop
+                a_est, b_est = await asyncio.to_thread(
+                    mmle, U, name=f"IRT_Exam_{exam_id}", max_iter=30, K=41, verbose=False
+                )
                 item_params_for_se = [(float(a), float(b)) for a, b in zip(a_est, b_est)]
-                se_a, se_b = all_item_se(item_params_for_se)
+                # all_item_se cũng có thể nặng, đưa vào thread
+                se_a, se_b = await asyncio.to_thread(all_item_se, item_params_for_se)
+                await append_log(f"Ước lượng tham số MMLE thành công cho {J} câu hỏi.")
             except Exception as e:
                 if task:
                     task.status = "FAILED"
                     task.error_details = f"MMLE/SE failed: {str(e)}"
+                    await append_log(f"Lỗi MMLE: {str(e)}")
                     await db.commit()
                 return {"status": "FAILED", "reason": f"MMLE failed: {str(e)}"}
             
@@ -402,8 +423,10 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 })
             if question_updates:
                 await bulk_update(db, Question, question_updates)
+                await append_log(f"Đã cập nhật tham số a, b vào ngân hàng câu hỏi gốc.")
             
             # 7. Estimate Theta for all students
+            await append_log("Đang ước lượng năng lực Theta cho thí sinh (EAP)...")
             # Prepare clean responses for theta estimation (replace -1 with 0)
             clean_responses = []
             for i in range(N):
@@ -412,7 +435,8 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 clean_responses.append(row)
                 
             try:
-                theta_est = theta_estimate(clean_responses, item_params_list)
+                # Chạy Theta estimation trong thread riêng
+                theta_est = await asyncio.to_thread(theta_estimate, clean_responses, item_params_list)
             except Exception as e:
                 if task:
                     task.status = "FAILED"
@@ -421,6 +445,7 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                 return {"status": "FAILED", "reason": f"Theta estimation failed: {str(e)}"}
             
             # 8. Calculate true scores and update ExamResult
+            await append_log("Tính toán điểm chuẩn (True Score) theo năng lực Theta...")
             cau_names = [f"Q_{qid}" for qid in unique_qids]
             item_params_df = pd.DataFrame(item_params_list, columns=["a", "b"], index=cau_names)
             
@@ -457,24 +482,27 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             
             if exam_result_updates:
                 await bulk_update(db, ExamResult, exam_result_updates)
+                await append_log(f"Đã cập nhật điểm chuẩn (True Score) cho {N} bài làm.")
             
             # Compute CTT and Chi-Square
+            await append_log("Đang phân tích chất lượng câu hỏi (CTT & Chi-Square Fit)...")
             try:
-                # Calculate CTT
-                U_df = pd.DataFrame(U, columns=cau_names)
-                # Add columns expected by cal_diff/cal_disc
-                U_df['SBD'] = range(1, N + 1)
-                U_df['Raw'] = U.sum(axis=1)
-                U_df['Null'] = (U == -1).sum(axis=1)
-                U_df['MaDe'] = 'default'
-                U_df['Gioi'] = 0
-                ctt_diff = cal_diff(U_df)
-                ctt_disc = cal_disc(U_df)
-                
-                # Calculate Chi-Square
-                df_for_chi2 = U_df.copy()
-                df_for_chi2["Theta"] = theta_est
-                chi2_df = chi_square(df_for_chi2, item_params_df)
+                # Calculate CTT trong thread
+                def run_ctt():
+                    U_df = pd.DataFrame(U, columns=cau_names)
+                    U_df['SBD'] = range(1, N + 1)
+                    U_df['Raw'] = U.sum(axis=1)
+                    U_df['Null'] = (U == -1).sum(axis=1)
+                    U_df['MaDe'] = 'default'
+                    U_df['Gioi'] = 0
+                    diff = cal_diff(U_df)
+                    disc = cal_disc(U_df)
+                    df_for_chi2 = U_df.copy()
+                    df_for_chi2["Theta"] = theta_est
+                    chi2 = chi_square(df_for_chi2, item_params_df)
+                    return diff, disc, chi2
+
+                ctt_diff, ctt_disc, chi2_df = await asyncio.to_thread(run_ctt)
                 
                 # Clear previous results for this exam
                 await db.execute(delete(ItemAnalysisResult).where(ItemAnalysisResult.exam_id == exam_id))
@@ -501,12 +529,14 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
                     })
                 if analysis_inserts:
                     await bulk_insert(db, ItemAnalysisResult, analysis_inserts)
+                    await append_log(f"Đã lưu {len(analysis_inserts)} kết quả phân tích (Item Analysis) vào lưu trữ.")
             except Exception as e:
                 # Log but do not fail the whole task if just analysis generation fails
                 if task:
                     task.error_details = f"Item analysis generation failed: {str(e)}"
                 
             # 9. Mark success
+            await append_log("Hoàn tất quá trình IRT!")
             if task:
                 task.status = "SUCCESS"
                 task.completed_at = datetime.now(timezone.utc)
@@ -514,20 +544,8 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             await db.commit()
             
             return {
-                "status": "SUCCESS", 
-                "exam_id": exam_id, 
                 "participants_scored": N
             }
-
-    # Run the async logic synchronously in Celery
-    # Use asgiref.sync.async_to_sync which is robust against event loop issues in Celery threads
-    try:
-        from asgiref.sync import async_to_sync
-        return async_to_sync(process_irt)()
-    except ImportError:
-        # Fallback if asgiref is not available
-        import concurrent.futures
-        def _run_async():
-            return asyncio.run(process_irt())
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(_run_async).result()
+            
+    # Run the native async function
+    return await process_irt()

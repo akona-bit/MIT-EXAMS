@@ -10,6 +10,7 @@ import GenerateExamModal from '../../components/admin/GenerateExamModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { toast } from '../../components/ui/Toast';
 import Modal from '../../components/ui/Modal';
+import IrtTerminalModal from '../../components/admin/IrtTerminalModal';
 
 export default function ExamDetailPage() {
   const { id } = useParams();
@@ -20,6 +21,8 @@ export default function ExamDetailPage() {
   
   const [irtTaskId, setIrtTaskId] = useState<string | null>(null);
   const [irtStatus, setIrtStatus] = useState<string | null>(null);
+  const [irtLogs, setIrtLogs] = useState<{time: string, msg: string}[]>([]);
+  const [isIrtModalOpen, setIsIrtModalOpen] = useState(false);
   
   const [overview, setOverview] = useState<ExamOverview | null>(null);
   const [itemsAnalysis, setItemsAnalysis] = useState<ExamItemAnalysis[] | null>(null);
@@ -72,6 +75,9 @@ export default function ExamDetailPage() {
       try {
         const res = await getIrtTaskStatus(irtTaskId);
         setIrtStatus(res.status);
+        if (res.logs) {
+          setIrtLogs(res.logs);
+        }
         if (res.status === 'SUCCESS' || res.status === 'FAILED') {
           clearInterval(interval);
           if (res.status === 'SUCCESS') {
@@ -118,6 +124,8 @@ export default function ExamDetailPage() {
         const res = await runIrtCalibration(parseInt(id));
         setIrtTaskId(res.task_id);
         setIrtStatus('PENDING');
+        setIrtLogs([]);
+        setIsIrtModalOpen(true);
       }
     } catch (error) {
       toast.error(action === 'publish' ? 'Lỗi xuất bản' : 'Lỗi chạy IRT');
@@ -393,6 +401,16 @@ export default function ExamDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* IRT Terminal Modal */}
+      {isIrtModalOpen && (
+        <IrtTerminalModal
+          isOpen={isIrtModalOpen}
+          onClose={() => setIsIrtModalOpen(false)}
+          status={irtStatus}
+          logs={irtLogs}
+        />
+      )}
 
     </div>
   );
