@@ -254,13 +254,7 @@ class LatexService:
                 main_lines.append(r"\section*{PHẦN 3: TƯ DUY KHOA HỌC}")
                 main_lines.extend(part3_lines)
                 
-            # OTHER
-            other_lines = render_subject("other")
-            if other_lines:
-                main_lines.append(r"%======================")
-                main_lines.append(r"\section*{PHẦN KHÁC}")
-                main_lines.extend(other_lines)
-
+            # (PHẦN KHÁC has been intentionally removed)
             main_lines.extend([
                 r"%======================",
                 r"",
