@@ -428,6 +428,12 @@
   - ✅ Frontend: bỏ import React thừa + prop `size` sai trên Modal (`maxWidth="max-w-4xl"`), đổi text "Celery" → "background task". — `IrtTerminalModal.tsx`, `ExamDetailPage.tsx`
   - Kiểm chứng: `all_item_se` sanity test pass (shape (5,2)), py_compile + import app.main OK, tsc sạch trên IrtTerminalModal.
 
+
+- **2026-09-11 — Thêm UI xác nhận "đang xuất đề" cho LaTeX export:**
+  - ✅ Nút "Xuất Đề (LaTeX)" ở `ExamDetailPage.tsx` trước đây gọi `exportExamLaTeX()` fire-and-forget (dynamic import, không loading state, không bắt lỗi) → user không thấy phản hồi gì trong lúc backend build ZIP (có thể chậm với nhiều mã đề).
+  - ✅ Sửa: thêm state `isExportingLaTeX` — nút disabled + label "Đang xuất đề (LaTeX)..." trong lúc fetch; toast.success khi tải xong, toast.error khi thất bại. Đồng bộ convention với nút "Cấp SBD & Mật khẩu".
+  - Lưu ý: `client.ts` không set axios timeout → request giữ đến khi xong; backend `/export/latex` chạy đồng bộ.
+
 ## Vấn đề đang mở / cần quyết định
 
 - Bảng tên tiếng Anh chính thức cho các entity ERD gốc tiếng Việt đã đề xuất trong `architecture.md` (phụ lục) — cần người dùng xác nhận trước khi dùng làm chuẩn cứng.

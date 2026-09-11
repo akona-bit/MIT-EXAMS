@@ -32,6 +32,7 @@ export default function ExamDetailPage() {
   const [confirmAction, setConfirmAction] = useState<'publish' | 'irt' | null>(null);
 
   const [isGeneratingCredentials, setIsGeneratingCredentials] = useState(false);
+const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
   const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
   const [credentialsList, setCredentialsList] = useState<any[]>([]);
 
@@ -292,10 +293,25 @@ export default function ExamDetailPage() {
               </>
             )}
             {hasExistingForms && (
-                <Button variant="outline" onClick={() => {
-                  import('../../api/exams').then(api => api.exportExamLaTeX(exam.id));
-                }} className="w-full justify-center">
-                  Xuất Đề (LaTeX)
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (isExportingLaTeX) return;
+                    setIsExportingLaTeX(true);
+                    try {
+                      const api = await import('../../api/exams');
+                      await api.exportExamLaTeX(exam.id);
+                      toast.success('Đã xuất đề (LaTeX). Tệp ZIP đang được tải về.');
+                    } catch (error) {
+                      toast.error('Không thể xuất đề LaTeX. Vui lòng thử lại.');
+                    } finally {
+                      setIsExportingLaTeX(false);
+                    }
+                  }}
+                  disabled={isExportingLaTeX}
+                  className="w-full justify-center"
+                >
+                  {isExportingLaTeX ? 'Đang xuất đề (LaTeX)...' : 'Xuất Đề (LaTeX)'}
                 </Button>
             )}
             {exam.status === 'PUBLISHED' && (
