@@ -119,8 +119,8 @@ async def get_distributions(exam_id: int, db: AsyncSession = Depends(get_db)):
         
     # Example fields, depending on exactly what we want to plot.
     # Assuming part1 = Math, part2 = Sci for the plot
-    math_raw = [r.ctt_score_part1 * 10 for r in records if r.ctt_score_part1 is not None]
-    sci_raw = [r.ctt_score_part2 * 10 for r in records if r.ctt_score_part2 is not None]
+    math_raw = [r.ctt_score_part1 for r in records if r.ctt_score_part1 is not None]
+    sci_raw = [r.ctt_score_part2 for r in records if r.ctt_score_part2 is not None]
     
     math_irt = [r.irt_score_part1 for r in records if r.irt_score_part1 is not None]
     sci_irt = [r.irt_score_part2 for r in records if r.irt_score_part2 is not None]
@@ -164,10 +164,10 @@ async def get_gam_curve(exam_id: int, db: AsyncSession = Depends(get_db)):
         return {"status": "no_data"}
         
     math_theta = [(r.irt_score_part1 - 150) / 50 for r in records if r.irt_score_part1 is not None]
-    math_raw = [r.ctt_score_part1 * 10 for r in records if r.ctt_score_part1 is not None]
+    math_raw = [r.ctt_score_part1 for r in records if r.ctt_score_part1 is not None]
     
     sci_theta = [(r.irt_score_part2 - 150) / 50 for r in records if r.irt_score_part2 is not None]
-    sci_raw = [r.ctt_score_part2 * 10 for r in records if r.ctt_score_part2 is not None]
+    sci_raw = [r.ctt_score_part2 for r in records if r.ctt_score_part2 is not None]
 
     def fit_gam(theta, raw):
         if not theta or not raw or len(theta) < 10: return [], []
@@ -229,8 +229,8 @@ async def get_descriptive_stats(exam_id: int, db: AsyncSession = Depends(get_db)
     if not records:
         return {"status": "no_data"}
         
-    math_raw = [r.ctt_score_part1 * 10 for r in records if r.ctt_score_part1 is not None]
-    sci_raw = [r.ctt_score_part2 * 10 for r in records if r.ctt_score_part2 is not None]
+    math_raw = [r.ctt_score_part1 for r in records if r.ctt_score_part1 is not None]
+    sci_raw = [r.ctt_score_part2 for r in records if r.ctt_score_part2 is not None]
     math_irt = [r.irt_score_part1 for r in records if r.irt_score_part1 is not None]
     sci_irt = [r.irt_score_part2 for r in records if r.irt_score_part2 is not None]
     
@@ -269,8 +269,8 @@ async def get_penalty_vs_irt(exam_id: int, db: AsyncSession = Depends(get_db)):
     sci_data = []
     
     for r in records:
-        penalty_math = max(0, 150 - (r.ctt_score_part1 * 10 if r.ctt_score_part1 else 0)) / 10.0
-        penalty_sci = max(0, 150 - (r.ctt_score_part2 * 10 if r.ctt_score_part2 else 0)) / 10.0
+        penalty_math = max(0, 150 - (r.ctt_score_part1 if r.ctt_score_part1 else 0)) / 10.0
+        penalty_sci = max(0, 150 - (r.ctt_score_part2 if r.ctt_score_part2 else 0)) / 10.0
         
         if r.irt_score_part1 is not None:
             math_data.append({"penalty": round(penalty_math, 2), "irt": round(r.irt_score_part1, 2)})

@@ -29,7 +29,7 @@ const StudentHomePage = lazy(() => import("./pages/student/StudentHomePage"));
 const StudentExamShell = lazy(() => import("./pages/student/StudentExamShell"));
 const StudentExamResultPage = lazy(() => import("./pages/student/StudentExamResultPage"));
 const StudentDetailPage = lazy(() => import("./pages/student/StudentDetailPage"));
-const StudentComparePage = lazy(() => import("./pages/student/StudentComparePage"));
+const StudentLeaderboardPage = lazy(() => import("./pages/student/StudentLeaderboardPage"));
 
 const KnowledgePage = lazy(() => import("./pages/admin/KnowledgePage"));
 const ResourcesPage = lazy(() => import("./pages/admin/ResourcesPage"));
@@ -37,6 +37,8 @@ const AccessControlPage = lazy(() => import("./pages/admin/AccessControlPage"));
 const OmrPage = lazy(() => import("./pages/admin/OmrPage"));
 
 const StudentManagementPage = lazy(() => import("./pages/admin/analytics/StudentManagementPage"));
+const AdminCompareStudentsPage = lazy(() => import("./pages/admin/analytics/AdminCompareStudentsPage"));
+const StudentProfilePage = lazy(() => import("./features/student-profile/components/StudentProfilePage"));
 const AdvancedAnalyticsPage = lazy(() => import("./pages/admin/analytics/AdvancedAnalyticsPage"));
 const SystemSettingsPage = lazy(() => import("./pages/admin/settings/SystemSettingsPage"));
 const AdminFeedbacksPage = lazy(() => import("./pages/admin/AdminFeedbacksPage"));
@@ -140,6 +142,8 @@ function AppRoutes() {
           <Route path="omr" element={<OmrPage />} />
           <Route path="access" element={<AccessControlPage />} />
           <Route path="students" element={<StudentManagementPage />} />
+          <Route path="students/compare" element={<AdminCompareStudentsPage />} />
+          <Route path="students/:id" element={<StudentProfilePage />} />
           <Route path="analytics/ds" element={<AdvancedAnalyticsPage />} />
           <Route path="feedbacks" element={<AdminFeedbacksPage />} />
           <Route path="notifications" element={<AdminNotificationsPage />} />
@@ -158,10 +162,10 @@ function AppRoutes() {
           }
         >
           <Route index element={<StudentHomePage />} />
-          <Route path="profile" element={<StudentDetailPage />} />
-          <Route path="compare" element={<StudentComparePage />} />
+          <Route path="profile" element={<StudentProfilePage />} />
+          <Route path="leaderboard" element={<StudentLeaderboardPage />} />
         </Route>
-        <Route path="/exam/:id/session" element={<StudentExamShell />} />
+        <Route path="/student/exam/:id/session" element={<StudentExamShell />} />
         <Route path="/student/exam/:examId/result" element={
           <StudentShell backTo="/student" backLabel="Trang chủ">
             <StudentExamResultPage />

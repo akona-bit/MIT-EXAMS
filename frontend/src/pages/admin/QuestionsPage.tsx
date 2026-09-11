@@ -349,14 +349,14 @@ export default function QuestionsPage() {
         </button>
       </div>
 
-      <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden flex flex-col gap-4 p-6 mb-6">
+      <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden flex flex-col gap-4 p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Tìm kiếm câu hỏi..."
-                  className="h-11 w-full rounded-xl border border-white/60 bg-white/80 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500/50 focus:ring-4 focus:ring-primary-500/20 dark:border-white/10 dark:bg-slate-900/60 dark:focus:border-primary-500/50 backdrop-blur-md shadow-sm"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 text-sm outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700/50 dark:bg-[#0f172a]/80 shadow-inner"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -428,7 +428,7 @@ export default function QuestionsPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden p-6">
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden p-6">
             <DataTable
               data={filteredQuestions}
               columns={columns}
@@ -454,7 +454,7 @@ export default function QuestionsPage() {
 
       {/* Review Modal */}
       {reviewItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -521,7 +521,7 @@ export default function QuestionsPage() {
 
       {/* Similarity Modal */}
       {similarityItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
               <div>
@@ -600,7 +600,7 @@ export default function QuestionsPage() {
 
       {/* History Modal */}
       {historyItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
               <div>

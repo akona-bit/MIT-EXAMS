@@ -4,6 +4,7 @@ interface QuestionNavStripProps {
   flaggedQuestions: Set<number>;
   currentIndex: number;
   onSelect: (index: number) => void;
+  showMissingWarning?: boolean;
 }
 
 export default function QuestionNavStrip({
@@ -12,6 +13,7 @@ export default function QuestionNavStrip({
   flaggedQuestions,
   currentIndex,
   onSelect,
+  showMissingWarning = false,
 }: QuestionNavStripProps) {
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
@@ -20,13 +22,15 @@ export default function QuestionNavStrip({
         const isFlagged = flaggedQuestions.has(q.exam_form_question_id);
         const hasAnswer = !!savedAnswers[q.exam_form_question_id];
 
-        let bgClass = "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200";
+        let bgClass = "bg-white text-slate-600 border-slate-200 hover:bg-slate-50";
         if (isSelected) {
-          bgClass = "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/30 scale-110";
+          bgClass = "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-500/30 scale-110 z-10";
         } else if (isFlagged) {
-          bgClass = "bg-amber-100 text-amber-800 border-amber-400 ring-1 ring-amber-400";
+          bgClass = "bg-amber-50 text-amber-700 border-amber-300 ring-1 ring-amber-300";
         } else if (hasAnswer) {
-          bgClass = "bg-green-100 text-green-800 border-green-400";
+          bgClass = "bg-yellow-400 text-yellow-900 border-yellow-500";
+        } else if (showMissingWarning) {
+          bgClass = "bg-red-50 text-red-700 border-red-500 animate-pulse";
         }
 
         return (
@@ -35,15 +39,15 @@ export default function QuestionNavStrip({
             onClick={() => onSelect(idx)}
             className={`
               relative flex items-center justify-center shrink-0
-              w-9 h-9 rounded-full border text-xs font-bold
-              transition-all duration-150 cursor-pointer
+              w-10 h-10 rounded-xl border text-sm font-bold
+              transition-all duration-200 cursor-pointer
               ${bgClass}
             `}
             title={`Phần ${q.part} — Câu ${q.position}${isFlagged ? " (Đã đánh dấu)" : ""}${hasAnswer ? " (Đã trả lời)" : ""}`}
           >
             {q.position}
             {isFlagged && !isSelected && (
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-white" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-white shadow-sm" />
             )}
           </button>
         );

@@ -27,6 +27,7 @@ import {
   MessageSquare,
   ScanLine,
   Bell,
+  FileCheck,
 } from "lucide-react";
 
 interface AdminShellProps {
@@ -73,7 +74,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Kỳ thi", path: "/admin/exams", icon: <FileEdit className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Chấm bài (OMR)", path: "/admin/omr", icon: <ScanLine className="h-5 w-5" strokeWidth={1.8} /> },
-      { label: "Quản lý Thí sinh", path: "/admin/students", icon: <Users className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Quản lý Bài làm & Thí sinh", path: "/admin/students", icon: <Users className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Người dùng & Phân quyền", path: "/admin/access", icon: <KeyRound className="h-5 w-5" strokeWidth={1.8} /> },
     ],
   },
@@ -230,7 +231,7 @@ export default function AdminShell({ children }: AdminShellProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-slate-950/50 backdrop-blur-sm"
+              className="fixed inset-0 z-[100] bg-slate-950/50"
               onClick={() => setCmdOpen(false)}
             />
             <motion.div
@@ -290,7 +291,7 @@ export default function AdminShell({ children }: AdminShellProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}

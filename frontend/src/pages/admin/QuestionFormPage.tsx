@@ -26,6 +26,7 @@ export default function QuestionFormPage() {
   const [content, setContent] = useState("");
   const [level, setLevel] = useState(1);
   const [type, setType] = useState("SINGLE_CHOICE");
+  const [renderStyle, setRenderStyle] = useState<"standard" | "error_detection">("standard");
   
   // Knowledge Node State
   const [subject, setSubject] = useState("Sử dụng ngôn ngữ — Tiếng Việt"); // Default subject
@@ -80,6 +81,7 @@ export default function QuestionFormPage() {
         setContent(question.content);
         setLevel(question.level);
         setType(question.type || "SINGLE_CHOICE");
+        setRenderStyle(question.render_style || "standard");
         
         // Setup nodes
         if (question.knowledge_node_id) {
@@ -183,9 +185,16 @@ export default function QuestionFormPage() {
     if (!content.trim()) return "Nội dung câu hỏi không được để trống";
     
     if (type === "SINGLE_CHOICE") {
-      const normalizedAnswers = getNormalizedAnswers();
-      if (normalizedAnswers.length < 2) return "Cần nhập ít nhất 2 đáp án";
-      if (normalizedAnswers.filter(a => a.is_correct).length !== 1) return "Vui lòng chọn ĐÚNG 1 đáp án đúng";
+      if (renderStyle === "error_detection") {
+        const matchCount = (content.match(/\[.*?\]\{\.answer-error\}/g) || []).length;
+        if (matchCount !== 4) return `Câu hỏi Tìm lỗi sai bắt buộc phải đánh dấu đúng 4 cụm từ (hiện có ${matchCount})`;
+        const normalizedAnswers = getNormalizedAnswers();
+        if (normalizedAnswers.filter(a => a.is_correct).length !== 1) return "Vui lòng chọn ĐÚNG 1 đáp án đúng từ danh sách";
+      } else {
+        const normalizedAnswers = getNormalizedAnswers();
+        if (normalizedAnswers.length < 2) return "Cần nhập ít nhất 2 đáp án";
+        if (normalizedAnswers.filter(a => a.is_correct).length !== 1) return "Vui lòng chọn ĐÚNG 1 đáp án đúng";
+      }
     } else if (type === "MULTIPLE_CHOICE") {
       const normalizedAnswers = getNormalizedAnswers();
       if (normalizedAnswers.length < 2) return "Cần nhập ít nhất 2 đáp án";
@@ -209,6 +218,7 @@ export default function QuestionFormPage() {
         content,
         level,
         type,
+        render_style: renderStyle,
         knowledge_node_id: primaryNodeId as number,
         passage_id: selectedPassageId,
         source_author: sourceAuthor || undefined,
@@ -377,6 +387,33 @@ export default function QuestionFormPage() {
               </div>
             </div>
             
+            {type === "SINGLE_CHOICE" && (
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Kiểu hiển thị
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                  value={renderStyle}
+                  onChange={(e) => {
+                    const newStyle = e.target.value as "standard" | "error_detection";
+                    if (renderStyle === "error_detection" && newStyle === "standard") {
+                      if ((content.match(/\[.*?\]\{\.answer-error\}/g) || []).length > 0) {
+                        setConfirmMessage("Chuyển kiểu hiển thị sẽ làm mất các dấu đánh dấu lỗi sai trong nội dung. Bạn có chắc chắn?");
+                        setConfirmAction(() => () => setRenderStyle(newStyle));
+                        setConfirmOpen(true);
+                        return;
+                      }
+                    }
+                    setRenderStyle(newStyle);
+                  }}
+                >
+                  <option value="standard">Trắc nghiệm thường (A, B, C, D rời)</option>
+                  <option value="error_detection">Tìm lỗi sai (Gạch chân trong câu)</option>
+                </select>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
                 Gắn Ngữ liệu (Tuỳ chọn)
@@ -431,6 +468,7 @@ export default function QuestionFormPage() {
                 value={content}
                 onChange={setContent}
                 placeholder="Nhập nội dung câu hỏi..."
+                renderStyle={renderStyle}
               />
               <div className="flex justify-end">
                  <Button type="button" variant="outline" size="sm" onClick={handleDuplicateCheck} isLoading={isLoading}>
@@ -443,7 +481,35 @@ export default function QuestionFormPage() {
           <div className="space-y-6">
             <h2 className="text-lg font-bold border-b border-slate-200 pb-2 dark:border-slate-700">3. Đáp án</h2>
             
-            {(type === "SINGLE_CHOICE" || type === "MULTIPLE_CHOICE") && (
+            {type === "SINGLE_CHOICE" && renderStyle === "error_detection" && (
+              <div className="space-y-4 bg-slate-50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/50">
+                <p className="text-sm text-slate-500 mb-4">
+                  Bôi đen 4 cụm từ trong câu và bấm nút <strong>Đánh dấu lỗi sai</strong> ở thanh công cụ — thứ tự xuất hiện trong câu sẽ tự động là A, B, C, D.
+                </p>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Đáp án đúng
+                  </label>
+                  <select
+                    className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50"
+                    value={answers.findIndex(a => a.is_correct)}
+                    onChange={(e) => setCorrectAnswer(Number(e.target.value), false)}
+                  >
+                    {(() => {
+                      const matches = [...content.matchAll(/\[(.*?)\]\{\.answer-error\}/g)];
+                      if (matches.length === 0) return <option value="-1">Vui lòng đánh dấu cụm từ ở phần Nội dung...</option>;
+                      return matches.map((m, idx) => (
+                        <option key={idx} value={idx}>
+                          {String.fromCharCode(65 + idx)} — "{m[1]}"
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {(type === "SINGLE_CHOICE" && renderStyle === "standard" || type === "MULTIPLE_CHOICE") && (
               <div className="space-y-4">
                 {answers.map((ans, idx) => (
                   <div key={idx} className="flex items-start gap-4">

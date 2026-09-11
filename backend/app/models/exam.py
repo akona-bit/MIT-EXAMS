@@ -51,6 +51,7 @@ class MatrixRule(Base):
 
     matrix: Mapped["Matrix"] = relationship(back_populates="rules")
     group: Mapped[Optional["MatrixRuleGroup"]] = relationship(back_populates="rules")
+    knowledge_node: Mapped["KnowledgeNode"] = relationship("KnowledgeNode")
 
 class ExamGenerationStatus(str, enum.Enum):
     SUCCESS = "SUCCESS"
@@ -83,6 +84,7 @@ class Exam(Base):
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     matrix_id: Mapped[int] = mapped_column(ForeignKey("matrix.id"))
+    allow_omr: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -155,6 +157,7 @@ class ExamSubmission(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     exam_participant_id: Mapped[int] = mapped_column(ForeignKey("exam_participant.id"))
     submit_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    omr_image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     participant: Mapped["ExamParticipant"] = relationship(back_populates="submission")
     answers: Mapped[List["ExamSubmissionAnswer"]] = relationship(back_populates="submission", cascade="all, delete-orphan")

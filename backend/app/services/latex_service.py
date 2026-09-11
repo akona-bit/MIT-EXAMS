@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.models.exam import Exam, ExamForm, ExamFormQuestion, ExamFormAnswer
-from app.models.question import Question
-from app.models.knowledge import KnowledgeNode
+from app.models.question import Question, KnowledgeNode
 
 class LatexService:
     @staticmethod
@@ -55,64 +54,82 @@ class LatexService:
 
         # 3. Get Questions and Answers mapped to Form
         q_stmt = select(ExamFormQuestion).options(
-            selectinload(ExamFormQuestion.original_question).selectinload(Question.passage),
-            selectinload(ExamFormQuestion.original_question).selectinload(Question.knowledge_node)
+            selectinload(ExamFormQuestion.question_ref).selectinload(Question.passage),
+            selectinload(ExamFormQuestion.question_ref).selectinload(Question.knowledge_node)
         ).where(ExamFormQuestion.exam_form_id == form.id).order_by(ExamFormQuestion.position)
         q_result = await db.execute(q_stmt)
         form_questions = q_result.scalars().all()
         
-        a_stmt = select(ExamFormAnswer).where(ExamFormAnswer.exam_form_id == form.id)
+        a_stmt = select(ExamFormAnswer).options(selectinload(ExamFormAnswer.answer_ref)).join(ExamFormQuestion).where(ExamFormQuestion.exam_form_id == form.id)
         a_result = await db.execute(a_stmt)
         form_answers = a_result.scalars().all()
         
-        answers_by_question = {}
+        answers_by_fq = {}
         for ans in form_answers:
-            if ans.question_id not in answers_by_question:
-                answers_by_question[ans.question_id] = []
-            answers_by_question[ans.question_id].append(ans)
+            if ans.exam_form_question_id not in answers_by_fq:
+                answers_by_fq[ans.exam_form_question_id] = []
+            answers_by_fq[ans.exam_form_question_id].append(ans)
             
-        for q_id in answers_by_question:
-            answers_by_question[q_id].sort(key=lambda x: x.position)
+        for fq_id in answers_by_fq:
+            answers_by_fq[fq_id].sort(key=lambda x: x.new_position)
 
-        # 4. Group by Subject and Passage
-        folders = {}
-        for folder_name in ["tv", "ta", "toan", "logic", "ptsl", "slkh", "other"]:
-            folders[folder_name] = {"single": [], "passages": {}}
+        # 4. Group by Subject
+        subject_data = {
+            "tv": {"single": [], "passages": {}},
+            "ta": {"single": [], "passages": {}},
+            "toan": {"single": [], "passages": {}},
+            "logic": {"single": [], "passages": {}},
+            "ptsl": {"single": [], "passages": {}},
+            "slkh": {"single": [], "passages": {}},
+            "other": {"single": [], "passages": {}}
+        }
 
         for fq in form_questions:
-            orig_q = fq.original_question
-            
-            folder = "other"
-            if orig_q.knowledge_node:
-                folder = LatexService._map_subject_to_folder(orig_q.knowledge_node.name)
+            orig_q = fq.question_ref
+            subject = LatexService._map_subject_to_folder(orig_q.knowledge_node.name) if orig_q.knowledge_node else "other"
 
-            q_content = orig_q.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+            render_style = getattr(orig_q, 'render_style', 'standard')
             
-            # Format answers
-            answers = answers_by_question.get(orig_q.id, [])
-            ans_latex = ""
-            if len(answers) == 4:
-                macro_name = LatexService._determine_choice_macro(answers)
-                a1 = answers[0].content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                a2 = answers[1].content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                a3 = answers[2].content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                a4 = answers[3].content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                ans_latex = rf"\{macro_name}{{{a1}}}{{{a2}}}{{{a3}}}{{{a4}}}"
-            
-            q_block = rf"\q{{{q_content}}}"
-            if ans_latex:
-                q_block += "\n" + ans_latex
+            if render_style == "error_detection":
+                import re
+                pattern = r'\[(.*?)\]\{\.answer-error\}'
+                parts = re.split(pattern, orig_q.content)
+                if len(parts) == 9:
+                    # parts are: [text0, span1, text1, span2, text2, span3, text3, span4, text4]
+                    escaped_parts = [p.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#') for p in parts]
+                    q_block = r"\errorq{" + "}{".join(escaped_parts) + "}"
+                else:
+                    # Fallback if invalid
+                    q_content = orig_q.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    q_block = rf"\q{{{q_content}}}"
+            else:
+                q_content = orig_q.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                
+                # Format answers
+                answers = answers_by_fq.get(fq.id, [])
+                ans_latex = ""
+                if len(answers) == 4:
+                    macro_name = LatexService._determine_choice_macro([a.answer_ref for a in answers])
+                    a1 = answers[0].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    a2 = answers[1].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    a3 = answers[2].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    a4 = answers[3].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    ans_latex = rf"\{macro_name}{{{a1}}}{{{a2}}}{{{a3}}}{{{a4}}}"
+                
+                q_block = rf"\q{{{q_content}}}"
+                if ans_latex:
+                    q_block += "\n" + ans_latex
 
             if orig_q.passage_id:
-                if orig_q.passage_id not in folders[folder]["passages"]:
+                if orig_q.passage_id not in subject_data[subject]["passages"]:
                     p_content = orig_q.passage.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                    folders[folder]["passages"][orig_q.passage_id] = {
+                    subject_data[subject]["passages"][orig_q.passage_id] = {
                         "content": p_content,
                         "questions": []
                     }
-                folders[folder]["passages"][orig_q.passage_id]["questions"].append(q_block)
+                subject_data[subject]["passages"][orig_q.passage_id]["questions"].append(q_block)
             else:
-                folders[folder]["single"].append(q_block)
+                subject_data[subject]["single"].append(q_block)
 
 
         # 5. Create ZIP in memory
@@ -135,7 +152,6 @@ class LatexService:
             except Exception:
                 zipf.writestr("macros.tex", "% Missing macros")
 
-            # Build main.tex
             main_lines = [
                 r"\documentclass[12pt,a4paper]{article}",
                 r"",
@@ -145,110 +161,85 @@ class LatexService:
                 r"\begin{document}",
                 r"\pagestyle{fancy}",
                 rf"\renewcommand{{\examcode}}{{{form.code}}}",
-                r"\makeexamheader",
-                r"%======================"
+                r"\makeexamheader"
             ]
 
-            reading_counters = {k: 1 for k in folders.keys()}
+            reading_counters = {k: 1 for k in subject_data.keys()}
             
-            # Tiếng Việt
-            if len(folders["tv"]["single"]) > 0 or len(folders["tv"]["passages"]) > 0:
-                main_lines.append(r"\section*{PHẦN 1: SỬ DỤNG NGÔN NGỮ}")
-                main_lines.append(r"\subsection*{1.1. TIẾNG VIỆT}")
-                if folders["tv"]["single"]:
-                    zipf.writestr("content/tv/single.tex", "\n\n".join(folders["tv"]["single"]))
-                    main_lines.append(r"\inputspace{content/tv/single}")
-                for p_id, p_data in folders["tv"]["passages"].items():
-                    idx = reading_counters["tv"]
-                    reading_counters["tv"] += 1
-                    p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
-                    zipf.writestr(f"content/tv/reading{idx}.tex", p_str)
-                    main_lines.append(rf"\inputspace{{content/tv/reading{idx}}}")
+            def render_subject(subject_key: str):
+                lines = []
+                data = subject_data[subject_key]
+                if not data["single"] and not data["passages"]:
+                    return lines
+                
+                if data["single"]:
+                    zipf.writestr(f"content/{subject_key}/single.tex", "\n\n".join(data["single"]))
+                    lines.append(rf"\inputspace{{content/{subject_key}/single}}")
                     
-            # Tiếng Anh
-            if len(folders["ta"]["single"]) > 0 or len(folders["ta"]["passages"]) > 0:
-                # If section 1 not added yet
-                if "PHẦN 1:" not in "".join(main_lines):
-                    main_lines.append(r"\section*{PHẦN 1: SỬ DỤNG NGÔN NGỮ}")
-                main_lines.append(r"\subsection*{1.2. TIẾNG ANH}")
-                if folders["ta"]["single"]:
-                    zipf.writestr("content/ta/single.tex", "\n\n".join(folders["ta"]["single"]))
-                    main_lines.append(r"\inputspace{content/ta/single}")
-                for p_id, p_data in folders["ta"]["passages"].items():
-                    idx = reading_counters["ta"]
-                    reading_counters["ta"] += 1
-                    p_str = rf"\engread{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
-                    zipf.writestr(f"content/ta/eng_read{idx}.tex", p_str)
-                    main_lines.append(rf"\inputspace{{content/ta/eng_read{idx}}}")
+                for p_id, p_data in data["passages"].items():
+                    idx = reading_counters[subject_key]
+                    reading_counters[subject_key] += 1
+                    p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
+                    zipf.writestr(f"content/{subject_key}/reading{idx}.tex", p_str)
+                    lines.append(rf"\inputspace{{content/{subject_key}/reading{idx}}}")
+                return lines
 
-            # Toán
-            if len(folders["toan"]["single"]) > 0 or len(folders["toan"]["passages"]) > 0:
+            # Build exact structure based on data/main.tex
+            
+            # PHẦN 1
+            part1_lines = []
+            tv_lines = render_subject("tv")
+            if tv_lines:
+                part1_lines.extend([r"\subsection*{1.1. TIẾNG VIỆT}"] + tv_lines)
+                
+            ta_lines = render_subject("ta")
+            if ta_lines:
+                part1_lines.extend([r"\subsection*{1.2. TIẾNG ANH}"] + ta_lines)
+                
+            if part1_lines:
+                main_lines.append(r"%======================")
+                main_lines.append(r"\section*{PHẦN 1: SỬ DỤNG NGÔN NGỮ}")
+                main_lines.extend(part1_lines)
+
+            # PHẦN 2
+            part2_lines = render_subject("toan")
+            if part2_lines:
                 main_lines.append(r"%======================")
                 main_lines.append(r"\section*{PHẦN 2: TOÁN HỌC}")
-                if folders["toan"]["single"]:
-                    zipf.writestr("content/toan/single.tex", "\n\n".join(folders["toan"]["single"]))
-                    main_lines.append(r"\inputspace{content/toan/single}")
-                for p_id, p_data in folders["toan"]["passages"].items():
-                    idx = reading_counters["toan"]
-                    reading_counters["toan"] += 1
-                    p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
-                    zipf.writestr(f"content/toan/reading{idx}.tex", p_str)
-                    main_lines.append(rf"\inputspace{{content/toan/reading{idx}}}")
-
-            # Tư duy Khoa học (Logic, PTSL, Khoa học)
-            has_tdkh = False
-            for k in ["logic", "ptsl", "slkh"]:
-                if len(folders[k]["single"]) > 0 or len(folders[k]["passages"]) > 0:
-                    has_tdkh = True
-                    break
-                    
-            if has_tdkh:
+                main_lines.extend(part2_lines)
+                
+            # PHẦN 3
+            part3_lines = []
+            logic_ptsl_lines = []
+            logic_lines = render_subject("logic")
+            if logic_lines:
+                logic_ptsl_lines.extend(logic_lines)
+            ptsl_lines = render_subject("ptsl")
+            if ptsl_lines:
+                logic_ptsl_lines.extend(ptsl_lines)
+                
+            if logic_ptsl_lines:
+                part3_lines.extend([r"\subsection*{3.1. LOGIC, PHÂN TÍCH SỐ LIỆU}"] + logic_ptsl_lines)
+                
+            slkh_lines = render_subject("slkh")
+            if slkh_lines:
+                part3_lines.extend([r"\subsection*{3.2. SUY LUẬN KHOA HỌC}"] + slkh_lines)
+                
+            if part3_lines:
                 main_lines.append(r"%======================")
                 main_lines.append(r"\section*{PHẦN 3: TƯ DUY KHOA HỌC}")
+                main_lines.extend(part3_lines)
                 
-                # Logic và Phân tích số liệu
-                if len(folders["logic"]["single"]) > 0 or len(folders["logic"]["passages"]) > 0 or len(folders["ptsl"]["single"]) > 0 or len(folders["ptsl"]["passages"]) > 0:
-                    main_lines.append(r"\subsection*{3.1. LOGIC, PHÂN TÍCH SỐ LIỆU}")
-                    for sec in ["logic", "ptsl"]:
-                        if folders[sec]["single"]:
-                            zipf.writestr(f"content/{sec}/single.tex", "\n\n".join(folders[sec]["single"]))
-                            main_lines.append(rf"\inputspace{{content/{sec}/single}}")
-                        for p_id, p_data in folders[sec]["passages"].items():
-                            idx = reading_counters[sec]
-                            reading_counters[sec] += 1
-                            p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
-                            zipf.writestr(f"content/{sec}/reading{idx}.tex", p_str)
-                            main_lines.append(rf"\inputspace{{content/{sec}/reading{idx}}}")
-
-                # Khoa học
-                if len(folders["slkh"]["single"]) > 0 or len(folders["slkh"]["passages"]) > 0:
-                    main_lines.append(r"\subsection*{3.2. SUY LUẬN KHOA HỌC}")
-                    if folders["slkh"]["single"]:
-                        zipf.writestr("content/slkh/single.tex", "\n\n".join(folders["slkh"]["single"]))
-                        main_lines.append(r"\inputspace{content/slkh/single}")
-                    for p_id, p_data in folders["slkh"]["passages"].items():
-                        idx = reading_counters["slkh"]
-                        reading_counters["slkh"] += 1
-                        p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
-                        zipf.writestr(f"content/slkh/reading{idx}.tex", p_str)
-                        main_lines.append(rf"\inputspace{{content/slkh/reading{idx}}}")
-
-            # Other
-            if len(folders["other"]["single"]) > 0 or len(folders["other"]["passages"]) > 0:
+            # OTHER
+            other_lines = render_subject("other")
+            if other_lines:
                 main_lines.append(r"%======================")
-                main_lines.append(r"\section*{KHÁC}")
-                if folders["other"]["single"]:
-                    zipf.writestr("content/other/single.tex", "\n\n".join(folders["other"]["single"]))
-                    main_lines.append(r"\inputspace{content/other/single}")
-                for p_id, p_data in folders["other"]["passages"].items():
-                    idx = reading_counters["other"]
-                    reading_counters["other"] += 1
-                    p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
-                    zipf.writestr(f"content/other/reading{idx}.tex", p_str)
-                    main_lines.append(rf"\inputspace{{content/other/reading{idx}}}")
+                main_lines.append(r"\section*{PHẦN KHÁC}")
+                main_lines.extend(other_lines)
 
             main_lines.extend([
                 r"%======================",
+                r"",
                 r"\end{document}"
             ])
             

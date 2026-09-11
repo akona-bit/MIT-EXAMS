@@ -4,6 +4,8 @@ import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../stores/authStore";
 import { resolveSBD } from "../../api/auth";
+import { toast } from "../../components/ui/Toast";
+import PublicNoticeBoard from "../../components/auth/PublicNoticeBoard";
 
 export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
@@ -44,6 +46,7 @@ export default function LoginPage() {
         errorMessage = "Sai email hoặc Mật khẩu (hoặc tài khoản không tồn tại).";
       }
       setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -56,18 +59,26 @@ export default function LoginPage() {
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-primary-500/10 dark:bg-primary-700/10 rounded-full blur-3xl animate-in fade-in duration-1000 delay-300" />
       </div>
 
-      <div className="relative w-full max-w-5xl mx-auto px-4 py-12 flex flex-col items-center">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-500 rounded-2xl shadow-lg mb-4">
-            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">MIT EXAMS</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Hệ thống Quản lý Thi Trắc nghiệm</p>
+      <div className="relative w-full max-w-5xl mx-auto px-4 py-8 md:py-12 flex flex-col lg:flex-row gap-8 lg:gap-12 items-stretch justify-center min-h-[calc(100vh-6rem)]">
+        
+        {/* Bảng thông báo */}
+        <div className="order-2 lg:order-2 flex-1 w-full max-w-md flex flex-col pt-[104px]">
+          <PublicNoticeBoard />
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-slate-200 dark:border-slate-700 p-8 animate-in slide-in-from-bottom-4 duration-500 w-full max-w-md mb-12">
+        {/* Form đăng nhập */}
+        <div className="order-1 lg:order-1 flex-1 w-full max-w-md flex flex-col justify-center">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-500 rounded-2xl shadow-lg mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">MIT EXAMS</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Hệ thống Quản lý Thi Trắc nghiệm</p>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-slate-200 dark:border-slate-700 p-8 animate-in slide-in-from-right-4 duration-500 w-full max-w-md">
           <div className="space-y-5">
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Đăng nhập</h2>
@@ -84,8 +95,9 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
-                label="Email hoặc Số báo danh"
-                placeholder="Ví dụ: admin@example.com hoặc 123456"
+                label="Email / Tên đăng nhập / Số báo danh mới nhất"
+                type="text"
+                placeholder="Ví dụ: 123456 hoặc hs@mitexams.com"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 required
@@ -128,6 +140,7 @@ export default function LoginPage() {
             Nếu cần được hỗ trợ, hãy nhắn với developer thông qua Discord:{' '}
             <strong className="font-semibold text-slate-700 dark:text-slate-300">akona_e</strong>{' '}
             (hoặc qua <a href="https://discord.com/users/734403880208564235" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">link này</a>).
+          </div>
           </div>
         </div>
       </div>

@@ -267,29 +267,55 @@ async def grade_submission_ctt(db: AsyncSession, submission_id: int) -> ExamResu
         exam_result = ExamResult(exam_submission_id=submission_id)
         db.add(exam_result)
 
-    exam_result.ctt_score_part1 = part_scores[1]
-    exam_result.ctt_score_part2 = part_scores[2]
-    exam_result.ctt_score_part3 = part_scores[3]
-    exam_result.ctt_score_part4 = part_scores[4]
-    exam_result.raw_total_score = sum(part_scores.values())
+    exam_result.ctt_score_part1 = part_scores[1] * 10
+    exam_result.ctt_score_part2 = part_scores[2] * 10
+    exam_result.ctt_score_part3 = part_scores[3] * 10
+    exam_result.ctt_score_part4 = part_scores[4] * 10
+    exam_result.raw_total_score = sum(part_scores.values()) * 10
     exam_result.item_scores = item_scores
     exam_result.item_subitem_scores = item_subitem_scores
     exam_result.item_types = item_types
     exam_result.item_points = item_points
     exam_result.correct_answers = correct_answers
     exam_result.selected_answers = selected_answers
-    exam_result.total_points = sum(item_points.values()) if item_points else None
+    exam_result.total_points = sum(item_points.values()) * 10 if item_points else None
     exam_result.score_method = "CTT"
 
     await db.commit()
     await db.refresh(exam_result)
+
+    # Hook: cập nhật hồ sơ tiến độ học sinh (activity + knowledge mastery)
+    try:
+        from app.services.grading.profile_hook import update_student_profile_after_grading
+        await update_student_profile_after_grading(db, submission_id)
+    except Exception as e:
+        # Log nhưng không fail toàn bộ quá trình chấm điểm
+        import logging
+        logging.getLogger(__name__).warning(f"Profile hook failed for submission {submission_id}: {e}")
+
     return exam_result
 
 
 @shared_task(bind=True)
 def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
+    from contextlib import asynccontextmanager
+    
+    @asynccontextmanager
+    async def isolated_session():
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+        from sqlalchemy.pool import NullPool
+        from app.core.config import settings
+        
+        local_engine = create_async_engine(settings.DATABASE_URL, poolclass=NullPool)
+        local_session_maker = async_sessionmaker(local_engine, expire_on_commit=False)
+        try:
+            async with local_session_maker() as db:
+                yield db
+        finally:
+            await local_engine.dispose()
+
     async def process_irt() -> dict[str, Any]:
-        async with AsyncSessionLocal() as db:
+        async with isolated_session() as db:
             # 1. Mark as started
             result = await db.execute(
                 select(IrtTask).where(IrtTask.celery_task_id == self.request.id)
@@ -494,4 +520,14 @@ def run_irt_calibration_task(self: Any, exam_id: int) -> dict[str, Any]:
             }
 
     # Run the async logic synchronously in Celery
-    return asyncio.run(process_irt())
+    # Use asgiref.sync.async_to_sync which is robust against event loop issues in Celery threads
+    try:
+        from asgiref.sync import async_to_sync
+        return async_to_sync(process_irt)()
+    except ImportError:
+        # Fallback if asgiref is not available
+        import concurrent.futures
+        def _run_async():
+            return asyncio.run(process_irt())
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(_run_async).result()

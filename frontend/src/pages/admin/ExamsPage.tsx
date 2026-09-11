@@ -57,6 +57,7 @@ export default function ExamsPage() {
     { 
       key: "name", 
       header: "Tên kỳ thi",
+      fixed: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-500/10">
@@ -67,6 +68,7 @@ export default function ExamsPage() {
       )
     },
     { key: "duration_minutes", header: "Thời gian (phút)", render: (row) => row.duration_minutes !== null ? `${row.duration_minutes} phút` : "Không giới hạn" },
+    { key: "submission_count", header: "Số bài làm", render: (row) => <span className="font-bold text-primary-600">{row.submission_count || 0}</span> },
     {
       key: "status",
       header: "Trạng thái",
@@ -87,12 +89,17 @@ export default function ExamsPage() {
     {
       key: "actions",
       header: "Thao tác",
-      width: "150px",
+      width: "200px",
       render: (row) => (
         <div className="flex items-center gap-1.5">
           <Link to={`/admin/exams/${row.id}`}>
             <Button variant="outline" size="sm" className="h-8">
               Chi tiết
+            </Button>
+          </Link>
+          <Link to={`/admin/submissions?exam_id=${row.id}`}>
+            <Button variant="outline" size="sm" className="h-8 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+              Xem bài làm
             </Button>
           </Link>
           {row.status !== "PUBLISHED" && (
@@ -139,7 +146,7 @@ export default function ExamsPage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
+      <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
         <div className="p-6 border-b border-slate-200 dark:border-slate-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -165,6 +172,7 @@ export default function ExamsPage() {
             columns={columns}
             keyExtractor={(item) => item.id}
             isLoading={isLoading}
+            compact={true}
             emptyMessage="Chưa có kỳ thi nào được tạo."
           />
         </div>

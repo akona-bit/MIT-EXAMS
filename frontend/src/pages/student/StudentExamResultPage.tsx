@@ -7,12 +7,14 @@ import {
   CheckCircle2,
   Clock,
   EyeOff,
-  Loader2,
   ListChecks,
   Lock,
   XCircle,
+  Trophy,
+  Info
 } from "lucide-react";
 import Button from "../../components/ui/Button";
+import LoadingScreen from "../../components/ui/LoadingScreen";
 import {
   getStudentExamResult,
   type ReviewQuestion,
@@ -90,34 +92,27 @@ export default function StudentExamResultPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-          Đang tải kết quả của bạn...
-        </p>
-      </div>
-    );
+    return <LoadingScreen message="Đang tải kết quả của bạn..." />;
   }
 
   if (error || !result) {
     const blockedWhileExam = errorStatus === 403;
     return (
-      <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10">
+      <div className="min-h-screen text-slate-900 bg-slate-50 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border border-slate-100 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 mb-6">
             {blockedWhileExam ? (
-              <Clock className="h-7 w-7 text-amber-500" />
+              <Clock className="h-8 w-8 text-amber-500" />
             ) : (
-              <AlertTriangle className="h-7 w-7 text-amber-500" />
+              <AlertTriangle className="h-8 w-8 text-amber-500" />
             )}
           </div>
-          <h1 className="text-xl font-bold">
+          <h1 className="text-xl font-bold mb-3 text-slate-800">
             {blockedWhileExam ? "Bài thi chưa được nộp" : "Không xem được kết quả"}
           </h1>
-          <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{error}</p>
+          <p className="text-sm leading-relaxed text-slate-500 mb-8">{error}</p>
           <Link to="/student">
-            <Button variant="outline">Quay lại trang chủ</Button>
+            <Button className="w-full bg-slate-800 hover:bg-slate-900 text-white">Quay lại trang chủ</Button>
           </Link>
         </div>
       </div>
@@ -125,7 +120,7 @@ export default function StudentExamResultPage() {
   }
 
   return (
-    <div className="student-shell min-h-screen text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen text-slate-900 bg-slate-50">
       <ResultContent
         result={result}
         reviewFilter={reviewFilter}
@@ -134,7 +129,6 @@ export default function StudentExamResultPage() {
     </div>
   );
 }
-
 
 function ResultContent({
   result,
@@ -145,8 +139,67 @@ function ResultContent({
   reviewFilter: ReviewFilter;
   onFilterChange: (f: ReviewFilter) => void;
 }) {
-  const { raw_scores, true_score } = result;
+  const { raw_scores, true_score, can_view_answers } = result;
 
+  // Nếu thí sinh chưa có quyền xem điểm (không có can_view_answers), ta CHỈ HIỂN THỊ màn hình chờ kết quả
+  if (!can_view_answers) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white rounded-3xl p-8 shadow-2xl shadow-indigo-500/10 border border-slate-100 text-center"
+        >
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/30 mb-6">
+            <CheckCircle2 className="h-10 w-10 text-white" />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">
+            Nộp bài thành công!
+          </h1>
+          
+          <div className="bg-slate-50 rounded-2xl p-4 my-6 border border-slate-100 text-left">
+            <div className="flex gap-3 text-slate-600 text-sm mb-2">
+              <span className="font-semibold w-24 shrink-0">Kỳ thi:</span>
+              <span>{result.exam_name}</span>
+            </div>
+            <div className="flex gap-3 text-slate-600 text-sm">
+              <span className="font-semibold w-24 shrink-0">Trạng thái:</span>
+              <span className={result.is_suspended ? "text-rose-600 font-semibold" : "text-emerald-600 font-semibold"}>
+                {result.is_suspended ? "Bị đình chỉ" : "Đã nộp bài"}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-8 text-left relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <Lock className="w-16 h-16 text-indigo-900" />
+            </div>
+            <div className="flex items-start gap-3 relative z-10">
+              <Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-indigo-900 text-sm mb-1">Chờ kết quả & đáp án</h3>
+                <p className="text-indigo-800 text-sm leading-relaxed">
+                  Hệ thống đang lưu trữ bài làm của bạn. Điểm thi chi tiết và đáp án sẽ được cập nhật sau.
+                </p>
+                <p className="text-indigo-600 text-xs mt-3 font-medium bg-indigo-100/50 inline-block px-2 py-1 rounded">
+                  * Dành riêng cho thí sinh đã thanh toán lệ phí thi.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Link to="/student">
+            <Button size="lg" className="w-full bg-slate-900 hover:bg-black text-white shadow-xl shadow-slate-900/20">
+              Quay lại trang chủ
+            </Button>
+          </Link>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // --- Nếu CÓ quyền xem điểm ---
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-6 lg:px-8">
@@ -154,17 +207,17 @@ function ResultContent({
           {/* Tiêu đề + trạng thái */}
           <motion.div variants={itemAnim} className="mb-6">
             <h1 className="text-2xl font-black tracking-tight lg:text-3xl">Kết quả bài thi</h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-500">
               {result.exam_name || `Kỳ thi #${result.exam_id}`}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {result.is_suspended ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-danger-500/20 bg-danger-500/10 px-3 py-1 text-xs font-bold text-danger-600 dark:text-danger-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-xs font-bold text-rose-600">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   Phiên thi bị đình chỉ — điểm phần đã làm
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-success-500/20 bg-success-500/10 px-3 py-1 text-xs font-bold text-success-600 dark:text-success-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Đã nộp bài
                 </span>
@@ -176,7 +229,7 @@ function ResultContent({
           {/* Điểm tổng (điểm thô) */}
           <motion.div
             variants={itemAnim}
-            className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+            className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
           >
             <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -184,20 +237,20 @@ function ResultContent({
                   Tổng điểm thô
                 </p>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-5xl font-black tracking-tighter text-primary-500">
+                  <span className="text-5xl font-black tracking-tighter text-primary-600">
                     {formatNumber(raw_scores.total)}
                   </span>
                   <span className="text-lg font-bold text-slate-400">/ {raw_scores.max_total}</span>
                 </div>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-2 text-sm text-slate-500">
                   Đã trả lời {raw_scores.answered_count}/{raw_scores.total_questions} câu
                 </p>
               </div>
-              <div className="rounded-2xl bg-primary-500/5 px-5 py-3 text-center">
+              <div className="rounded-2xl bg-primary-50 px-5 py-3 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                   Phương pháp
                 </p>
-                <p className="mt-1 text-2xl font-black text-primary-600 dark:text-primary-400">
+                <p className="mt-1 text-2xl font-black text-primary-700">
                   {raw_scores.method}
                 </p>
               </div>
@@ -215,7 +268,7 @@ function ResultContent({
               {raw_scores.parts.map((part) => (
                 <div
                   key={part.part}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Phần {part.part} · {part.label}
@@ -225,7 +278,7 @@ function ResultContent({
                     <span className="text-sm font-bold text-slate-400">/{part.max_raw_score}</span>
                   </p>
                   {true_score.available && part.irt_score !== null ? (
-                    <p className="mt-1 text-xs font-semibold text-primary-600 dark:text-primary-400">
+                    <p className="mt-1 text-xs font-semibold text-primary-600">
                       Quy đổi IRT: {formatNumber(part.irt_score)}/300
                     </p>
                   ) : null}
@@ -244,21 +297,10 @@ function ResultContent({
               <ListChecks className="h-5 w-5 text-primary-500" />
               Xem lại bài làm
             </h2>
-            {!result.can_view_answers ? (
-              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-                <Lock className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
-                <div>
-                  <p className="text-sm font-semibold">Tính năng xem đáp án chưa được mở</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-                    Quyền xem đáp án và giải thích do ban tổ chức kỳ thi cấp cho từng tài khoản.
-                    Vui lòng liên hệ giáo viên nếu bạn cần xem lại bài làm chi tiết.
-                  </p>
-                </div>
-              </div>
-            ) : !result.review ? (
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+            {!result.review ? (
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-5">
                 <EyeOff className="h-5 w-5 text-slate-400" />
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-slate-500">
                   Chưa có dữ liệu xem lại cho bài làm này.
                 </p>
               </div>
@@ -284,38 +326,38 @@ function TrueScoreSection({ trueScore }: { trueScore: StudentExamResult["true_sc
   return (
     <motion.div
       variants={itemAnim}
-      className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+      className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
     >
       <h2 className="flex items-center gap-2 text-lg font-bold">
-        <BookOpenCheck className="h-5 w-5 text-primary-500" />
+        <Trophy className="h-5 w-5 text-amber-500" />
         Điểm thực (quy đổi 0–1200)
       </h2>
 
       {trueScore.available ? (
         <div className="mt-4">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-4xl font-black tracking-tighter text-primary-600 dark:text-primary-400">
+            <span className="text-4xl font-black tracking-tighter text-amber-600">
               {formatNumber(trueScore.irt_total ?? 0)}
             </span>
             <span className="text-sm font-bold text-slate-400">/ 1200</span>
           </div>
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-success-500/20 bg-success-500/10 px-3 py-1 text-xs font-bold text-success-600 dark:text-success-400">
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600">
             <CheckCircle2 className="h-3.5 w-3.5" />
             Điểm chính thức theo IRT
           </p>
         </div>
       ) : (
-        <div className="mt-3 flex items-start gap-3 rounded-2xl bg-amber-500/5 p-4">
+        <div className="mt-3 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 border border-amber-100">
           <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+            <p className="text-sm font-semibold text-amber-800">
               {trueScore.state === "computing"
                 ? "Đang chờ tính toán"
                 : trueScore.state === "not_enough_data"
                   ? "Kỳ thi chưa đủ dữ liệu"
                   : "Chưa có điểm thực"}
             </p>
-            <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
               {trueScore.message}
             </p>
           </div>
@@ -327,23 +369,23 @@ function TrueScoreSection({ trueScore }: { trueScore: StudentExamResult["true_sc
 
 const STATUS_STYLES: Record<ReviewQuestion["status"], { ring: string; badge: string; label: string }> = {
   correct: {
-    ring: "border-success-500/40",
-    badge: "bg-success-500/10 text-success-600 dark:text-success-400",
+    ring: "border-emerald-500/40",
+    badge: "bg-emerald-500/10 text-emerald-600",
     label: "Đúng",
   },
   wrong: {
-    ring: "border-danger-500/40",
-    badge: "bg-danger-500/10 text-danger-600 dark:text-danger-400",
+    ring: "border-rose-500/40",
+    badge: "bg-rose-500/10 text-rose-600",
     label: "Sai",
   },
   penalized: {
-    ring: "border-danger-500/40",
-    badge: "bg-danger-500/10 text-danger-600 dark:text-danger-400",
+    ring: "border-rose-500/40",
+    badge: "bg-rose-500/10 text-rose-600",
     label: "Trừ điểm",
   },
   skipped: {
-    ring: "border-slate-200 dark:border-slate-700",
-    badge: "bg-slate-500/10 text-slate-500 dark:text-slate-400",
+    ring: "border-slate-200",
+    badge: "bg-slate-100 text-slate-500",
     label: "Bỏ trống",
   },
 };
@@ -385,13 +427,13 @@ function ReviewList({
             onClick={() => onFilterChange(f.key)}
             className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
               filter === f.key
-                ? "bg-primary-500 text-white shadow-md shadow-primary-500/25"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                ? "bg-slate-900 text-white shadow-md shadow-slate-900/25"
+                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
             {f.label}
             {f.count !== undefined && (
-              <span className="rounded-full bg-black/10 px-1.5 text-xs dark:bg-white/10">
+              <span className="rounded-full bg-black/10 px-1.5 text-xs">
                 {f.count}
               </span>
             )}
@@ -404,7 +446,7 @@ function ReviewList({
           <QuestionReviewCard key={q.position} question={q} />
         ))}
         {filtered.length === 0 && (
-          <p className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          <p className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
             Không có câu nào trong mục này.
           </p>
         )}
@@ -432,7 +474,7 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
 
   return (
     <div
-      className={`rounded-2xl border bg-white/70 p-4 backdrop-blur-xl dark:bg-slate-900/70 ${style.ring}`}
+      className={`rounded-2xl border bg-white p-5 shadow-sm ${style.ring}`}
     >
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -453,12 +495,12 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
       </div>
 
       {question.content && (
-        <p className="mt-2 line-clamp-2 text-sm leading-relaxed">{question.content}</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-800 font-medium">{question.content}</p>
       )}
 
       {/* ─── Câu có ý con: TRUE_FALSE / COMPOSITE ─── */}
       {isSubItemQuestion && (
-        <div className="mt-3 space-y-2.5">
+        <div className="mt-4 space-y-3">
           {Array.from(
             new Map(
               question.options
@@ -475,37 +517,37 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
             return (
               <div
                 key={subItemId}
-                className="rounded-xl border border-slate-200 px-3 py-2.5 dark:border-slate-700"
+                className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"
               >
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                <p className="text-sm font-medium text-slate-700">
                   {head.sub_item_label && (
-                    <span className="mr-1.5 font-bold">{head.sub_item_label})</span>
+                    <span className="mr-1.5 font-bold text-slate-900">{head.sub_item_label})</span>
                   )}
                   {head.sub_item_prompt || "..."}
                 </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   {subOptions.map((opt) => {
                     const isSelected = subSelection.has(opt.answer_id);
                     return (
                       <span
                         key={opt.answer_id}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
                           opt.is_correct
-                            ? "bg-success-500/10 text-success-700 dark:text-success-400"
+                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                             : isSelected
-                              ? "bg-danger-500/10 text-danger-700 dark:text-danger-400"
-                              : "text-slate-500 dark:text-slate-400"
+                              ? "bg-rose-100 text-rose-700 border border-rose-200"
+                              : "bg-white border border-slate-200 text-slate-500"
                         }`}
                       >
                         {opt.content}
-                        {opt.is_correct && " · đúng"}
-                        {!opt.is_correct && isSelected && " · bạn chọn"}
+                        {opt.is_correct && " ✓"}
+                        {!opt.is_correct && isSelected && " ✗"}
                       </span>
                     );
                   })}
                 </div>
                 {!anySelected && (
-                  <p className="mt-1 text-xs italic text-slate-400">Bỏ trống</p>
+                  <p className="mt-2 text-xs italic text-slate-400">Bỏ trống</p>
                 )}
               </div>
             );
@@ -515,27 +557,23 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
 
       {/* ─── FILL_IN_BLANK: đáp án text của thí sinh + đáp án đúng ─── */}
       {!isSubItemQuestion && question.question_type === "FILL_IN_BLANK" && (
-        <div className="mt-3 space-y-1.5">
+        <div className="mt-4 space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
           <p className="text-sm">
-            <span className="font-semibold text-slate-500 dark:text-slate-400">
-              Câu trả lời của bạn:{" "}
-            </span>
+            <span className="text-slate-500">Câu trả lời của bạn: </span>
             <span
               className={
                 question.status === "correct"
-                  ? "font-bold text-success-700 dark:text-success-400"
-                  : "font-bold text-danger-700 dark:text-danger-400"
+                  ? "font-bold text-emerald-600"
+                  : "font-bold text-rose-600"
               }
             >
               {question.text_answer || "(bỏ trống)"}
             </span>
           </p>
           {question.status !== "correct" && (
-            <p className="text-sm">
-              <span className="font-semibold text-slate-500 dark:text-slate-400">
-                Đáp án đúng:{" "}
-              </span>
-              <span className="font-bold text-success-700 dark:text-success-400">
+            <p className="text-sm border-t border-slate-200 pt-2 mt-2">
+              <span className="text-slate-500">Đáp án đúng: </span>
+              <span className="font-bold text-emerald-600">
                 {question.options
                   .filter((opt) => opt.is_correct)
                   .map((opt) => opt.content)
@@ -548,27 +586,29 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
 
       {/* ─── Trắc nghiệm thường ─── */}
       {!isSubItemQuestion && question.question_type !== "FILL_IN_BLANK" && (
-      <div className="mt-3 grid gap-1.5">
+      <div className="mt-4 grid gap-2">
         {question.options.map((opt) => {
           const isSelected = selectedIds.has(opt.answer_id);
           return (
             <div
               key={opt.answer_id}
-              className={`flex items-start gap-2 rounded-xl px-3 py-1.5 text-sm ${
+              className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${
                 opt.is_correct
-                  ? "bg-success-500/10 font-semibold text-success-700 dark:text-success-400"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
                   : isSelected
-                    ? "bg-danger-500/10 text-danger-700 dark:text-danger-400"
-                    : "text-slate-600 dark:text-slate-300"
+                    ? "bg-rose-50 border-rose-200 text-rose-900"
+                    : "bg-white border-slate-100 text-slate-600"
               }`}
             >
-              <span className="font-bold">{opt.label}.</span>
-              <span className="line-clamp-1">{opt.content}</span>
+              <span className={`font-bold flex items-center justify-center w-6 h-6 rounded-full text-xs shrink-0 ${
+                opt.is_correct ? "bg-emerald-200 text-emerald-800" : isSelected ? "bg-rose-200 text-rose-800" : "bg-slate-100 text-slate-500"
+              }`}>{opt.label}</span>
+              <span className="mt-0.5">{opt.content}</span>
               {opt.is_correct && (
-                <span className="ml-auto shrink-0 text-xs font-bold">Đáp án đúng</span>
+                <span className="ml-auto shrink-0 text-xs font-bold text-emerald-600 mt-1">Đúng</span>
               )}
               {!opt.is_correct && isSelected && (
-                <span className="ml-auto shrink-0 text-xs font-bold">Bạn chọn</span>
+                <span className="ml-auto shrink-0 text-xs font-bold text-rose-600 mt-1">Bạn chọn</span>
               )}
             </div>
           );
@@ -578,4 +618,3 @@ function QuestionReviewCard({ question }: { question: ReviewQuestion }) {
     </div>
   );
 }
-

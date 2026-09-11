@@ -31,9 +31,13 @@ export interface User {
   username: string | null;
   email: string | null;
   full_name?: string | null;
+  gender?: string | null;
   is_active: boolean;
+  can_view_answers?: boolean;
   role_id: number;
   role: Role;
+  verification_image_url?: string | null;
+  verification_status?: string;
   created_at: string;
   updated_at: string;
 }
@@ -204,7 +208,9 @@ export interface Exam {
   duration_minutes: number | null;
   show_score_mode: string;
   show_answer_mode: string;
+  allow_omr?: boolean;
   created_at: string;
+  submission_count?: number;
 }
 
 export interface ExamForm {

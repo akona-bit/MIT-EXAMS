@@ -18,8 +18,9 @@ class NotificationType(str, enum.Enum):
 
 class Notification(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    recipient_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    recipient_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), index=True, nullable=True)
     sender_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), nullable=True)
+    is_global: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     type: Mapped[NotificationType] = mapped_column(SQLAlchemyEnum(NotificationType), default=NotificationType.SYSTEM)
     title: Mapped[str] = mapped_column(String(255))
     message: Mapped[str] = mapped_column(Text)

@@ -317,3 +317,42 @@ async def calibrate_layout(
             },
         }
     }
+
+
+# ─── Grade Student Submission ────────────────────────────────────────────────
+@router.post("/grade-submission/{submission_id}")
+async def grade_student_submission(
+    request: Request,
+    submission_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(RequireRole(["ADMIN", "TEACHER"])),
+):
+    """
+    Chấm điểm OMR cho một bài làm của học sinh đã nộp ảnh OMR.
+    """
+    from app.models.exam import ExamSubmission
+    from app.services.omr.tasks import grade_student_omr_task
+
+    # Validate
+    result = await db.execute(select(ExamSubmission).where(ExamSubmission.id == submission_id))
+    submission = result.scalars().first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    if not submission.omr_image_url:
+        raise HTTPException(status_code=400, detail="Submission does not have an OMR image")
+
+    # Trigger task
+    task = grade_student_omr_task.delay(submission_id)
+
+    capture(request, "grade_student_submission_started", {
+        "submission_id": submission_id,
+        "task_id": task.id
+    })
+
+    return {
+        "data": {
+            "task_id": task.id,
+            "message": "Đang chấm điểm bài OMR, vui lòng đợi."
+        }
+    }

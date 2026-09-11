@@ -27,7 +27,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
 /* ── Types ────────────────────────────────────────────────── */
 
-type ResourceTab = "van-ban" | "bang" | "anh" | "pdf" | "viet-tay";
+type ResourceTab = "van-ban" | "anh" | "pdf" | "viet-tay";
 
 interface TabDef {
   id: ResourceTab;
@@ -38,11 +38,10 @@ interface TabDef {
 }
 
 const tabs: TabDef[] = [
-  { id: "van-ban", label: "Văn bản", icon: <BookOpen className="h-4 w-4" />, description: "Đoạn văn, bài đọc hiểu dùng chung", createLabel: "Thêm văn bản" },
+  { id: "van-ban", label: "Văn bản", icon: <BookOpen className="h-4 w-4" />, description: "Đoạn văn, bài đọc hiểu, bảng biểu dùng chung", createLabel: "Thêm văn bản" },
   { id: "anh", label: "Hình ảnh", icon: <Image className="h-4 w-4" />, description: "Ảnh minh họa, biểu đồ", createLabel: "Upload hình ảnh" },
   { id: "pdf", label: "Tài liệu PDF", icon: <FileText className="h-4 w-4" />, description: "Tài liệu đính kèm dạng PDF", createLabel: "Upload PDF" },
   { id: "viet-tay", label: "Viết tay", icon: <PenTool className="h-4 w-4" />, description: "Phiếu làm bài, bài viết tay (Ảnh/PDF)", createLabel: "Upload bài viết tay" },
-  { id: "bang", label: "Bảng biểu", icon: <Table2 className="h-4 w-4" />, description: "Bảng dữ liệu (Markdown)", createLabel: "Thêm bảng biểu" },
 ];
 
 /* ── Main page ────────────────────────────────────────────── */
@@ -341,7 +340,7 @@ export default function ResourcesPage() {
                   placeholder="Nhập nội dung ngữ liệu chung ở đây (hỗ trợ Markdown, chèn ảnh...)"
                 />
               </div>
-              <p className="text-xs text-slate-400">Bạn có thể sử dụng cú pháp Markdown. Để thêm ảnh: {'![Hình 1](url){width=40% align-right}'}</p>
+              <p className="text-xs text-slate-400 mt-2">Gợi ý: Sử dụng thanh công cụ để chèn bảng hoặc chèn ảnh nhanh chóng. Bạn cũng có thể kéo thả hoặc dán ảnh trực tiếp vào khung thảo.</p>
             </div>
 
             {/* Source fields */}
@@ -523,18 +522,6 @@ function ResourceForm({ tab, draft, setDraft }: any) {
 
   return (
     <div className="space-y-5">
-      {tab === "bang" ? (
-        <>
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">Tên bảng biểu *</label>
-            <input className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-900/50" value={draft.name} onChange={(e) => setDraft((p: any) => ({ ...p, name: e.target.value }))} />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">Nội dung Markdown *</label>
-            <textarea className="w-full rounded-xl border border-slate-200 px-4 py-2.5 font-mono text-sm dark:bg-slate-900/50" rows={8} value={draft.content} onChange={(e) => setDraft((p: any) => ({ ...p, content: e.target.value }))} />
-          </div>
-        </>
-      ) : (
         <div>
           <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1.5">Tải tệp lên *</label>
           {draft.file ? (
@@ -553,7 +540,6 @@ function ResourceForm({ tab, draft, setDraft }: any) {
             </label>
           )}
         </div>
-      )}
     </div>
   );
 }

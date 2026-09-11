@@ -19,7 +19,8 @@ async def search_passages(q: str = "", limit: int = 10, db: AsyncSession = Depen
     stmt = select(Passage).where(
         or_(
             Passage.content.ilike(f"%{q}%"),
-            Passage.source_title.ilike(f"%{q}%")
+            Passage.source_title.ilike(f"%{q}%"),
+            Passage.public_code.ilike(f"%{q}%")
         )
     ).limit(limit)
     result = await db.execute(stmt)

@@ -31,6 +31,11 @@ async def update_user_me(
     """
     if req.full_name is not None:
         current_user.full_name = req.full_name
+    if req.gender is not None:
+        current_user.gender = req.gender
+    if hasattr(req, 'verification_image_url') and req.verification_image_url is not None:
+        current_user.verification_image_url = req.verification_image_url
+        current_user.verification_status = "PENDING"
         
     await db.commit()
     await db.refresh(current_user)

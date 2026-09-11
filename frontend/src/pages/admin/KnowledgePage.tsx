@@ -159,28 +159,27 @@ function GraphCanvas({
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const { clientWidth, clientHeight } = containerRef.current;
-    setDimensions({ width: clientWidth, height: clientHeight });
+    
+    // Initial dimensions
+    setDimensions({ 
+      width: containerRef.current.clientWidth || 800, 
+      height: Math.max(containerRef.current.clientHeight || 600, 600) 
+    });
 
-    const handleResize = () => {
-      if (containerRef.current) {
+    const observer = new ResizeObserver((entries) => {
+      if (entries.length > 0) {
         setDimensions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
+          width: entries[0].target.clientWidth || 800,
+          height: Math.max(entries[0].target.clientHeight, 600), // Ensure minimum height
         });
       }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
   }, []);
 
-  // Update physics configuration when graph ref mounts
-  useEffect(() => {
-    if (fgRef.current) {
-      fgRef.current.d3Force("charge")?.strength(-800);
-      fgRef.current.d3Force("link")?.distance(100);
-    }
-  }, [fgRef.current]);
+
 
   useEffect(() => {
     if (replayProgress >= 0 && replayProgress < nodes.length) {
@@ -219,15 +218,38 @@ function GraphCanvas({
     });
 
     return {
-      nodes: currentNodes.map((n) => ({
-        ...n,
-        id: n.id,
-        name: n.label,
-        val: (n.question_count || 1) * 1.5,
-      })),
+      nodes: currentNodes.map((n: any) => {
+        // Strip out x, y, fx, fy from backend data so react-force-graph 
+        // doesn't trap all nodes exactly at 0,0, preventing forces from working
+        const { x, y, fx, fy, vx, vy, ...safeNode } = n;
+        return {
+          ...safeNode,
+          id: safeNode.id,
+          name: safeNode.label,
+          val: (safeNode.question_count || 1) * 1.5,
+        };
+      }),
       links: currentEdges.map((e: any) => ({ source: e.source, target: e.target })),
     };
   }, [nodes, edges, replayProgress, chronologicalNodes]);
+
+  // Update physics configuration when graph updates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (fgRef.current) {
+        // Strong negative charge prevents wide nodes from overlapping
+        fgRef.current.d3Force("charge")?.strength(-4000)?.distanceMax(1200);
+        fgRef.current.d3Force("link")?.distance(200);
+        // Ensure center force is active so nodes don't drift away
+        fgRef.current.d3Force("center")?.strength(0.1);
+
+        if (isPhysicsActive) {
+          fgRef.current.d3ReheatSimulation();
+        }
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [graphData, isPhysicsActive]);
 
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -425,7 +447,7 @@ function GraphCanvas({
         />
 
         {replayProgress !== -1 && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 shadow-2xl flex items-center gap-4">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 px-6 py-3 rounded-full border border-slate-700 shadow-2xl flex items-center gap-4">
             <span className="text-white text-xs font-bold tracking-wider uppercase flex items-center gap-2">
               <Timer className="h-4 w-4 text-primary-400" />
               Timelapse
@@ -455,6 +477,8 @@ function GraphCanvas({
             width={dimensions.width}
             height={dimensions.height}
             graphData={graphData}
+            dagMode="lr"
+            dagLevelDistance={300}
             nodeCanvasObject={paintNode}
             nodePointerAreaPaint={(node: any, color, ctx) => {
               ctx.fillStyle = color;
@@ -547,7 +571,7 @@ function GraphCanvas({
             }}
             onEngineStop={() => {
               if (isPhysicsActive && !selectedId) {
-                fgRef.current?.zoomToFit(600, 60);
+                fgRef.current?.zoomToFit(600, 200);
               }
             }}
             d3VelocityDecay={isPhysicsActive ? 0.3 : 1}
@@ -557,7 +581,7 @@ function GraphCanvas({
 
         {/* Toolbar Overlay */}
         <div className="absolute right-4 top-4 z-20 flex flex-col gap-2">
-          <div className="flex flex-col rounded-lg border border-white/60 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/70 shadow-sm backdrop-blur p-1">
+          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1">
             <button
               type="button"
               title="Tái hiện lịch sử hình thành (Timelapse)"
@@ -577,7 +601,7 @@ function GraphCanvas({
             </button>
           </div>
 
-          <div className="flex flex-col rounded-lg border border-white/60 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/70 shadow-sm backdrop-blur p-1">
+          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1">
             <button
               type="button"
               title="Phóng to"
@@ -604,13 +628,13 @@ function GraphCanvas({
               type="button"
               title="Vừa vặn màn hình"
               className="p-1.5 text-slate-500 hover:text-primary-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-              onClick={() => fgRef.current?.zoomToFit(400, 50)}
+              onClick={() => fgRef.current?.zoomToFit(400, 200)}
             >
               <Target className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="flex flex-col rounded-lg border border-white/60 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/70 shadow-sm backdrop-blur p-1">
+          <div className="flex flex-col rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm p-1">
             <button
               type="button"
               title={isPhysicsActive ? "Dừng mô phỏng" : "Tiếp tục mô phỏng"}
@@ -643,10 +667,10 @@ function GraphCanvas({
           </div>
         </div>
 
-        <div className="absolute left-4 top-4 z-20 rounded-lg border border-white/60 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/70 px-3 py-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 shadow-sm backdrop-blur">
+        <div className="absolute left-4 top-4 z-20 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 shadow-sm">
           Graph view · {nodes.length} nodes · {edges.length} links
         </div>
-        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3 rounded-lg border border-white/60 dark:border-slate-700/50 bg-white/70 dark:bg-slate-800/70 px-3 py-2 text-[10px] font-medium text-slate-600 dark:text-slate-300 shadow-sm backdrop-blur">
+        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[10px] font-medium text-slate-600 dark:text-slate-300 shadow-sm">
           <span className="flex items-center gap-1.5">
             <i
               className="inline-block h-2.5 w-2.5 rounded-full"
@@ -832,7 +856,7 @@ export default function KnowledgePage() {
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-12rem)]">
         {/* --- Toolbar / Sidebar Left --- */}
-        <aside className="lg:col-span-1 rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
+        <aside className="lg:col-span-1 rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
               Danh sách Tri thức
@@ -884,7 +908,7 @@ export default function KnowledgePage() {
         </aside>
 
         {/* --- Graph Canvas Center --- */}
-        <div className="lg:col-span-2 relative rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
+        <div className="lg:col-span-2 relative rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
           <GraphCanvas
             nodes={allNodes}
             edges={allEdges}
@@ -900,7 +924,7 @@ export default function KnowledgePage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-50 p-6 overflow-y-auto"
+                className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 z-50 p-6 overflow-y-auto"
               >
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">Thêm Node Tri thức</h3>
@@ -954,7 +978,7 @@ export default function KnowledgePage() {
         </div>
 
         {/* --- Details Sidebar Right --- */}
-        <aside className="lg:col-span-1 rounded-3xl border border-white/60 bg-white/80 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:border-primary-900/50 dark:bg-[#0b1121]/60 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
+        <aside className="lg:col-span-1 rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
               {selectedNode ? "Chi tiết Node" : "Chi tiết"}

@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.db.database import get_db
 from app.models.exam import Exam, ExamStatus, Matrix, ExamForm, ExamParticipant
 from app.schemas.exam import ExamResponse, GenerateExamRequest, ExamPublishRequest, ExamUpdateRequest, ExamParticipantCreate, ExamParticipantResponse
-from app.schemas.exam_session import AutosaveRequest, AutosaveResponse, TrackingEventRequest, TrackingEventResponse, ExamSessionInfoResponse
+from app.schemas.exam_session import AutosaveRequest, AutosaveResponse, TrackingEventRequest, TrackingEventResponse, ExamSessionInfoResponse, SubmitExamRequest
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.services.generator import generate_original_exam, generate_shuffled_forms
@@ -30,14 +30,30 @@ async def get_exams(skip: int = 0, limit: int = 100, status: str | None = None, 
 
     total_result = await db.execute(select(func.count()).select_from(Exam).where(*filters))
     total = total_result.scalar_one()
-    result = await db.execute(
-        select(Exam)
+    from app.models.exam import ExamSubmission, ExamParticipant
+    subq = (
+        select(ExamParticipant.exam_id, func.count(ExamSubmission.id).label("submission_count"))
+        .join(ExamSubmission, ExamSubmission.exam_participant_id == ExamParticipant.id)
+        .group_by(ExamParticipant.exam_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(Exam, func.coalesce(subq.c.submission_count, 0).label("submission_count"))
+        .outerjoin(subq, Exam.id == subq.c.exam_id)
         .where(*filters)
         .order_by(Exam.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
-    return {"items": result.scalars().all(), "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
+    result = await db.execute(stmt)
+    rows = result.all()
+    items = []
+    for exam, count in rows:
+        exam.submission_count = count
+        items.append(ExamResponse.model_validate(exam))
+
+    return {"items": items, "total": total, "page": (skip // limit) + 1 if limit else 1, "size": limit}
 
 
 @router.get("/my-history", dependencies=[Depends(RequireRole(["STUDENT"]))])
@@ -63,8 +79,13 @@ async def get_my_history(db: AsyncSession = Depends(get_db), current_user: User 
         max_score = 1200
         if exam_result and exam_result.total_score is not None:
             score = exam_result.total_score
+            max_score = 1200
         elif exam_result:
             score = (exam_result.ctt_score_part1 or 0) + (exam_result.ctt_score_part2 or 0) + (exam_result.ctt_score_part3 or 0) + (exam_result.ctt_score_part4 or 0)
+            max_score = 1200
+        else:
+            score = None
+            max_score = 1200
 
         history.append({
             "id": exam.id,
@@ -135,6 +156,8 @@ async def update_exam(request: Request, exam_id: int, exam_in: ExamUpdateRequest
         exam.show_score_mode = exam_in.show_score_mode
     if exam_in.show_answer_mode is not None:
         exam.show_answer_mode = exam_in.show_answer_mode
+    if exam_in.allow_omr is not None:
+        exam.allow_omr = exam_in.allow_omr
     await db.commit()
     await db.refresh(exam)
     capture(request, "exam_updated", {"exam_id": exam_id})
@@ -276,11 +299,88 @@ async def start_exam(request: Request, exam_id: int, db: AsyncSession = Depends(
     capture(request, "exam_started", {"exam_id": exam_id, "form_code": form.code})
     return {"message": "Exam started", "form_code": form.code, "form_id": form.id}
 
+from app.core.supabase_client import supabase_client
+from app.core.security import generate_complex_password, get_password_hash
 
+@router.post("/{exam_id}/credentials", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def generate_credentials(exam_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Ensure all participants have an SBD.
+    For participants using default passwords (or without passwords), generate new complex password.
+    Return the list of participants with SBD and generated clear-text passwords (if newly generated),
+    so Admin can export them.
+    """
+    result = await db.execute(
+        select(ExamParticipant)
+        .options(selectinload(ExamParticipant.user))
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+    participants = result.scalars().all()
+    
+    from app.services.exam_session import _generate_unique_sbd
+    
+    export_data = []
+    
+    for p in participants:
+        user = p.user
+        
+        # 1. Ensure SBD exists
+        if not p.sbd:
+            p.sbd = await _generate_unique_sbd(db)
+            
+        # 2. Check if password needs to be generated
+        # Assume 'student123' is default password. If hashed_password is None, also generate.
+        needs_password = False
+        if not user.hashed_password:
+            needs_password = True
+        else:
+            from app.core.security import verify_password
+            if verify_password("student123", user.hashed_password):
+                needs_password = True
+                
+        new_password = None
+        if needs_password:
+            new_password = generate_complex_password(8)
+            user.hashed_password = get_password_hash(new_password)
+            
+            # Update Supabase if user exists there
+            if user.supabase_id:
+                try:
+                    supabase_client.auth.admin.update_user_by_id(
+                        user.supabase_id,
+                        attributes={"password": new_password}
+                    )
+                except Exception as e:
+                    print(f"Failed to update Supabase password for {user.email}: {e}")
+                    
+        export_data.append({
+            "full_name": user.full_name,
+            "email": user.email,
+            "sbd": p.sbd,
+            "password": new_password or "Dùng mật khẩu cá nhân"
+        })
+        
+    await db.commit()
+    
+    return export_data
 
-@router.get("/{exam_id}/session", response_model=ExamSessionInfoResponse, dependencies=[Depends(RequireRole(["STUDENT"]))])
+@router.get("/{exam_id}/session", dependencies=[Depends(RequireRole(["STUDENT"]))])
 async def get_session(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return await get_exam_session_info(db, exam_id, current_user.id)
+    import traceback
+    try:
+        result = await get_exam_session_info(db, exam_id, current_user.id)
+        # Manually validate against schema to get detailed error
+        try:
+            ExamSessionInfoResponse(**result)
+        except Exception as val_err:
+            logger.error(f"Schema validation error: {val_err}")
+            # Return raw dict without validation
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Session endpoint error: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{exam_id}/autosave", response_model=AutosaveResponse, dependencies=[Depends(RequireRole(["STUDENT"]))])
 async def autosave(exam_id: int, req: AutosaveRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -290,10 +390,22 @@ async def autosave(exam_id: int, req: AutosaveRequest, db: AsyncSession = Depend
 
 @router.post("/{exam_id}/submit", dependencies=[Depends(RequireRole(["STUDENT"]))])
 @limiter.limit("5/minute")
-async def submit(request: Request, exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    await submit_exam(db, exam_id, current_user.id)
-    capture(request, "exam_submitted", {"exam_id": exam_id})
-    return {"message": "Exam submitted successfully"}
+async def submit(request: Request, exam_id: int, req: SubmitExamRequest = None, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    omr_url = req.omr_image_url if req else None
+    res = await submit_exam(db, exam_id, current_user.id, omr_image_url=omr_url)
+    if res.get("status") == "needs_verification":
+        return {"status": "needs_verification", "message": "Bạn cần chứng thực học sinh trước khi nộp bài."}
+        
+    capture(request, "exam_submitted", {"exam_id": exam_id, "omr": bool(omr_url)})
+    return {"status": "success", "message": "Exam submitted successfully"}
+
+@router.post("/{exam_id}/finalize-submission", dependencies=[Depends(RequireRole(["STUDENT"]))])
+@limiter.limit("5/minute")
+async def finalize_submission(request: Request, exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # User calls this after uploading their verification. We bypass the check to enforce submission.
+    res = await submit_exam(db, exam_id, current_user.id, bypass_verification=True)
+    capture(request, "exam_submitted", {"exam_id": exam_id, "finalized_after_verification": True})
+    return {"status": "success", "message": "Exam submitted successfully"}
 
 @router.post("/{exam_id}/track", response_model=TrackingEventResponse, dependencies=[Depends(RequireRole(["STUDENT"]))])
 async def track_event(exam_id: int, req: TrackingEventRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -345,3 +457,79 @@ async def export_exam_latex(exam_id: int, form_code: str | None = None, db: Asyn
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{exam_id}/leaderboard", dependencies=[Depends(RequireRole(["STUDENT"]))])
+async def get_student_leaderboard(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.models.exam import ExamParticipant, ExamSubmission
+    from app.models.grading import ExamResult
+    
+    # 1. Get current student's participant record to find assigned_form_id
+    stmt = select(ExamParticipant).where(
+        ExamParticipant.exam_id == exam_id,
+        ExamParticipant.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    participant = result.scalars().first()
+    
+    if not participant:
+        raise HTTPException(status_code=403, detail="Chưa tham gia kỳ thi này")
+        
+    form_id = participant.assigned_form_id
+    if not form_id:
+        raise HTTPException(status_code=400, detail="Chưa được gán mã đề")
+        
+    # 2. Query all participants who took the same form_id and have submitted
+    stmt_lb = (
+        select(ExamResult, User)
+        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .join(User, User.id == ExamParticipant.user_id)
+        .where(
+            ExamParticipant.exam_id == exam_id,
+            ExamParticipant.assigned_form_id == form_id,
+            ExamParticipant.status == "SUBMITTED"
+        )
+    )
+    res_lb = await db.execute(stmt_lb)
+    records = res_lb.all()
+    
+    if not records:
+        return {"status": "no_data"}
+        
+    # 3. Sort by total_score (IRT) or raw_total_score if IRT not available
+    students = []
+    for r, u in records:
+        # User total score: use total_score if available (IRT), else fallback to CTT parts
+        if r.total_score is not None:
+            score = r.total_score
+        else:
+            score = (r.ctt_score_part1 or 0) + (r.ctt_score_part2 or 0) + (r.ctt_score_part3 or 0) + (r.ctt_score_part4 or 0)
+            
+        students.append({
+            "user_id": u.id,
+            "name": u.full_name or u.username,
+            "score": round(score, 2),
+            "submit_time": r.created_at.isoformat() if r.created_at else None
+        })
+        
+    # Sort by score descending
+    students.sort(key=lambda x: x["score"], reverse=True)
+    
+    # Calculate rank for current_user
+    current_user_rank = -1
+    for i, s in enumerate(students):
+        if s["user_id"] == current_user.id:
+            current_user_rank = i + 1
+            break
+            
+    # Return top 10
+    top_10 = students[:10]
+    for i, s in enumerate(top_10):
+        s["rank"] = i + 1
+        
+    return {
+        "status": "success",
+        "top_10": top_10,
+        "current_user_rank": current_user_rank,
+        "total_participants_in_form": len(students)
+    }

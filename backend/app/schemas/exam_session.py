@@ -32,11 +32,12 @@ class TrackingEventResponse(BaseModel):
 class SessionQuestionOption(BaseModel):
     id: int
     content: str
+    position: Optional[int] = None
 
 class SessionSubItemOption(BaseModel):
     id: int
     content: str
-    position: int
+    position: Optional[int] = None
 
 class SessionSubItem(BaseModel):
     """Một ý con của câu TRUE_FALSE / COMPOSITE (không gửi is_correct cho thí sinh)."""
@@ -49,7 +50,7 @@ class SessionSubItem(BaseModel):
 class SessionQuestion(BaseModel):
     exam_form_question_id: int
     question_id: int
-    public_code: str
+    public_code: Optional[str] = None
     content: str
     type: str
     part: int
@@ -67,3 +68,6 @@ class ExamSessionInfoResponse(BaseModel):
     participant_status: str
     questions: List[SessionQuestion] = []
     saved_answers: List[AnswerItem] = []
+
+class SubmitExamRequest(BaseModel):
+    omr_image_url: Optional[str] = None

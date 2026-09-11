@@ -37,7 +37,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
       {/* Backdrop */}
       <div 
         ref={overlayRef}
-        className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 transition-opacity"
         onClick={(e) => {
           if (e.target === overlayRef.current) onClose();
         }}

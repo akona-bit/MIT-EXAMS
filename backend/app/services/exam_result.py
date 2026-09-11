@@ -133,6 +133,7 @@ async def _build_review(
     participant: ExamParticipant,
     submission: ExamSubmission,
     exam_result: Optional[ExamResult],
+    can_view_answers: bool = False,
 ) -> list[dict[str, Any]]:
     """Xây danh sách xem lại từng câu — CHỈ gọi khi có quyền xem đáp án."""
     form_questions_result = await db.execute(
@@ -221,7 +222,7 @@ async def _build_review(
                     "answer_id": fa.answer_id,
                     "label": _answer_label(fa.new_position),
                     "content": ans.content if ans else None,
-                    "is_correct": bool(ans.is_correct) if ans else False,
+                    "is_correct": bool(ans.is_correct) if (ans and can_view_answers) else False,
                     "sub_item_id": ans.sub_item_id if ans else None,
                     "sub_item_label": sub.label if sub else None,
                     "sub_item_prompt": sub.prompt if sub else None,
@@ -316,7 +317,7 @@ async def get_student_exam_result(
             "raw_score": getattr(exam_result, f"ctt_score_part{i + 1}", 0.0)
             if exam_result
             else 0.0,
-            "max_raw_score": 30,
+            "max_raw_score": 300,
             "irt_score": (
                 getattr(exam_result, f"irt_score_part{i + 1}", None)
                 if exam_result
@@ -359,11 +360,10 @@ async def get_student_exam_result(
                 "message": "Điểm thực đang chờ tính toán cho bài làm của bạn. Vui lòng quay lại sau.",
             }
 
-    # 6. Xem lại đáp án — theo đúng permission "Quyền xem đáp án" hiện có
-    can_view_answers = bool(getattr(current_user, "can_view_answers", False))
-    review: Optional[list[dict[str, Any]]] = None
-    if can_view_answers:
-        review = await _build_review(db, participant, submission, exam_result)
+    # 6. Xem lại đáp án — check qua access grant table
+    from app.services.student_profile_service import can_view_answers as check_can_view
+    can_view = await check_can_view(db, current_user, user_id, exam_id)
+    review = await _build_review(db, participant, submission, exam_result, can_view)
 
     answered_count = 0
     if exam_result:
@@ -382,7 +382,7 @@ async def get_student_exam_result(
         "raw_scores": {
             "parts": parts,
             "total": raw_total,
-            "max_total": 120,
+            "max_total": 1200,
             "answered_count": answered_count,
             "total_questions": 120,
             "method": exam_result.score_method if exam_result else "CTT",
@@ -396,7 +396,7 @@ async def get_student_exam_result(
                 exam_result.total_score if irt_scores_available and exam_result else None
             ),
         },
-        "can_view_answers": can_view_answers,
+        "can_view_answers": can_view,
         "review": review,
     }
 

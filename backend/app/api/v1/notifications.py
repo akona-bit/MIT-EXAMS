@@ -21,6 +21,7 @@ class NotificationResponse(BaseModel):
     detail: Optional[str] = None
     link: Optional[str] = None
     is_read: bool
+    is_global: bool = False
     created_at: Optional[str] = None
     sender_name: Optional[str] = None
 
@@ -32,12 +33,48 @@ class SendNotificationRequest(BaseModel):
     recipient_id: Optional[int] = None
     role_name: Optional[str] = None
     send_to_all: bool = False
+    is_global: bool = False
     type: NotificationType = NotificationType.SYSTEM
     title: str = Field(..., min_length=1, max_length=255)
     message: str = Field(..., min_length=1)
     detail: Optional[str] = None
     link: Optional[str] = None
 
+
+@router.get("/public")
+async def get_public_notifications(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Notification).where(Notification.is_global == True).order_by(Notification.created_at.desc())
+    
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    notifications = result.scalars().all()
+    
+    items = []
+    for n in notifications:
+        sender_name = None
+        if n.sender_id:
+            sender = await db.get(User, n.sender_id)
+            sender_name = sender.full_name or sender.username if sender else None
+        items.append({
+            "id": n.id,
+            "type": n.type.value if hasattr(n.type, "value") else n.type,
+            "title": n.title,
+            "message": n.message,
+            "detail": n.detail,
+            "link": n.link,
+            "is_read": True,
+            "is_global": True,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+            "sender_name": sender_name,
+        })
+    return {"total": total, "items": items}
 
 @router.get("/", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER", "STUDENT"]))])
 async def get_notifications(
@@ -73,6 +110,7 @@ async def get_notifications(
             "detail": n.detail,
             "link": n.link,
             "is_read": n.is_read,
+            "is_global": n.is_global,
             "created_at": n.created_at.isoformat() if n.created_at else None,
             "sender_name": sender_name,
         })
@@ -156,6 +194,21 @@ async def send_notification(
 ):
     """Admin sends notification to user(s)."""
     recipients = []
+
+    if req.is_global:
+        n = Notification(
+            recipient_id=None,
+            sender_id=current_user.id,
+            is_global=True,
+            type=req.type,
+            title=req.title,
+            message=req.message,
+            detail=req.detail,
+            link=req.link,
+        )
+        db.add(n)
+        await db.commit()
+        return {"message": "Sent global notification", "count": 1}
 
     if req.send_to_all:
         result = await db.execute(select(User.id))

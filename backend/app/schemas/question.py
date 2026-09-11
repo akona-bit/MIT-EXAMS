@@ -100,6 +100,7 @@ class QuestionBase(BaseModel):
     content: str
     level: int = 1
     type: QuestionType = QuestionType.SINGLE_CHOICE
+    render_style: str = "standard"
     knowledge_node_id: int
     resource_id: Optional[int] = None
     passage_id: Optional[int] = None
@@ -115,6 +116,7 @@ class QuestionUpdate(BaseModel):
     content: Optional[str] = None
     level: Optional[int] = None
     type: Optional[QuestionType] = None
+    render_style: Optional[str] = None
     knowledge_node_id: Optional[int] = None
     resource_id: Optional[int] = None
     passage_id: Optional[int] = None
@@ -131,7 +133,7 @@ class QuestionReviewRequest(BaseModel):
 
 class QuestionResponse(QuestionBase):
     id: int
-    public_code: str
+    public_code: Optional[str] = None
     status: QuestionStatus
     reject_reason: Optional[str] = None
     creator_id: int

@@ -46,14 +46,14 @@ export default function StudentShell({ children, backTo, backLabel }: StudentShe
           <div className="flex items-center gap-3">
             <NotificationBell />
             {!backTo && (
-              <div className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 px-4 py-1.5 shadow-sm">
-                <div className="h-6 w-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xs font-bold text-primary-600 dark:text-primary-400">
+              <Link to="/student/profile" className="hidden items-center gap-3 sm:flex rounded-full border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 px-4 py-1.5 shadow-sm hover:border-primary-300 dark:hover:border-primary-700 transition-colors cursor-pointer group">
+                <div className="h-6 w-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-xs font-bold text-primary-600 dark:text-primary-400 group-hover:bg-primary-200 dark:group-hover:bg-primary-800/40 transition-colors">
                   {user?.username?.[0]?.toUpperCase() || "S"}
                 </div>
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                   {user?.username || user?.email}
                 </span>
-              </div>
+              </Link>
             )}
             <button
               onClick={logout}

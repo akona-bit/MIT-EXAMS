@@ -324,7 +324,7 @@ export default function MatrixFormPage() {
       </div>
 
       {isFetching ? (
-        <div className="flex items-center justify-center h-64 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-white/60 dark:border-white/10 backdrop-blur-xl">
+        <div className="flex items-center justify-center h-64 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
         </div>
       ) : (
@@ -361,7 +361,7 @@ export default function MatrixFormPage() {
              {/* LEFT COLUMN: Main Info & Actions */}
              <div className="lg:col-span-2 space-y-8">
                 {/* General Info Card */}
-                <div className="bg-white/80 dark:bg-[#0b1121]/60 backdrop-blur-2xl border border-white/60 dark:border-primary-900/50 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)]">
+                <div className="bg-white dark:bg-[#0b1121] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)]">
                    <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
                       <Settings className="w-5 h-5 text-primary-500" />
                       Thông tin cơ bản
@@ -391,7 +391,7 @@ export default function MatrixFormPage() {
                 </div>
 
                 {/* Rules Builder Workspace */}
-                <div className="bg-slate-100/50 dark:bg-[#0b1121]/40 border border-slate-200/80 dark:border-primary-900/50 rounded-3xl p-6 backdrop-blur-xl shadow-inner dark:shadow-black/10">
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-inner dark:shadow-black/10">
                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                       <div>
                          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -555,7 +555,7 @@ export default function MatrixFormPage() {
              {/* RIGHT COLUMN: Sidebar (Health & Visualization) */}
              <div className="space-y-6">
                 {/* Health Score Panel (Sticky) */}
-                <div className="sticky top-24 bg-white/80 dark:bg-[#0b1121]/60 backdrop-blur-2xl border border-white/60 dark:border-primary-900/50 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)]">
+                <div className="sticky top-24 bg-white dark:bg-[#0b1121] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)]">
                    <div className="flex items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-800/50 pb-4">
                       <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                          <Activity className={`w-5 h-5 ${isCheckingFeasibility ? 'text-slate-400 animate-spin' : 'text-emerald-500'}`} />

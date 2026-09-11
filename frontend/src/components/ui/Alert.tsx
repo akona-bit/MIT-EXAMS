@@ -45,7 +45,7 @@ export default function Alert({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 p-4 rounded-xl border backdrop-blur-md',
+        'flex items-start gap-3 p-4 rounded-xl border',
         COLOR_MAP[variant],
         className
       )}

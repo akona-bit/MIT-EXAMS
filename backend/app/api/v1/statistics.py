@@ -56,9 +56,14 @@ async def get_dashboard_overview(
         .order_by(ExamResult.created_at.desc())
         .limit(1000)
     )
-    scores = [float(raw_score) for raw_score, _ in score_result.all()]
+    scores = []
+    for raw_score, total_score in score_result.all():
+        if total_score is not None:
+            scores.append(float(total_score))
+        else:
+            scores.append(float(raw_score))
     distribution: List[Dict[str, Any]] = []
-    bucket_size = 12
+    bucket_size = 120
     for bucket in range(10):
         lower = bucket * bucket_size
         upper = (bucket + 1) * bucket_size
@@ -66,8 +71,8 @@ async def get_dashboard_overview(
             "range": f"{lower}-{upper}",
             "count": sum(1 for score in scores if lower <= score < upper),
         })
-    if any(score >= 120 for score in scores):
-        distribution[-1]["count"] += sum(1 for score in scores if score >= 120)
+    if any(score >= 1200 for score in scores):
+        distribution[-1]["count"] += sum(1 for score in scores if score >= 1200)
 
     return {
         "total_questions": question_count,
@@ -191,7 +196,7 @@ async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):
     
     total_scores = []
     for r in exam_results:
-        # Nếu chưa có IRT score, tính tạm raw ctt score
+        # Cả IRT total_score lẫn CTT raw đều trên thang 1200
         if r.total_score is not None:
             total_scores.append(r.total_score)
         else:
@@ -202,15 +207,13 @@ async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):
         
     avg_score = sum(total_scores) / len(total_scores)
     
-    # Tính phổ điểm (distribution)
-    # Ví dụ chia 10 bucket: 0-12, 12-24, ... (nếu 120 điểm), hoặc 0-120, 120-240 (nếu 1200 điểm)
-    # Ở đây giả định max 120 điểm cho đơn giản
-    buckets = {f"{i*12}-{(i+1)*12}": 0 for i in range(10)}
+    # Phổ điểm trên thang 1200: 10 bucket mỗi bucket 120 điểm
+    buckets = {f"{i*120}-{(i+1)*120}": 0 for i in range(10)}
     for score in total_scores:
-        idx = int(score // 12)
+        idx = int(score // 120)
         if idx >= 10:
             idx = 9
-        buckets[f"{idx*12}-{(idx+1)*12}"] += 1
+        buckets[f"{idx*120}-{(idx+1)*120}"] += 1
         
     distribution = [{"range": k, "count": v} for k, v in buckets.items()]
     
@@ -236,9 +239,9 @@ async def get_exam_item_analysis(exam_id: int, db: AsyncSession = Depends(get_db
     q_res = await db.execute(
         select(Question).join(ExamFormQuestion, ExamFormQuestion.question_id == Question.id)
         .where(ExamFormQuestion.exam_form_id.in_(form_ids))
-        .distinct()
     )
-    questions = q_res.scalars().all()
+    raw_questions = q_res.scalars().all()
+    questions = list({q.id: q for q in raw_questions}.values())
     
     analysis = []
     for q in questions:

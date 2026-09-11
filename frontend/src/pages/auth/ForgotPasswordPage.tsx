@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         <div className="relative w-full max-w-5xl mx-auto px-4 py-12 flex flex-col items-center">
-          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-3xl p-8 w-full max-w-md">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 w-full max-w-md shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-green-100 text-green-500 rounded-full flex items-center justify-center">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

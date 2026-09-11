@@ -10,7 +10,10 @@ import sys
 from typing import Any
 from sqlalchemy import select
 from supabase import Client, create_client
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from dotenv import load_dotenv
+
+load_dotenv()
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from app.core.security import get_password_hash
 from app.db.database import AsyncSessionLocal
 from app.models.user import Role, User
@@ -38,15 +41,20 @@ async def insert_app_user(data: dict[str, str], auth_id: str) -> int:
         if role is None:
             raise RuntimeError(f"Role {data['role']} does not exist; run seed_roles first")
         email = data["email"].strip().lower()
-        if (await db.execute(select(User).where(User.email == email))).scalar_one_or_none():
-            raise RuntimeError(f"Application user {email} already exists")
-        user = User(
-            username=email.split("@", 1)[0], email=email,
-            full_name=data.get("full_name"), supabase_id=auth_id,
-            hashed_password=get_password_hash(data["password"]),
-            role_id=role.id, is_active=True,
-        )
-        db.add(user)
+        existing_user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+        if existing_user:
+            existing_user.supabase_id = auth_id
+            existing_user.hashed_password = get_password_hash(data["password"])
+            user = existing_user
+            print(f"Updated existing Postgres user {email} with new auth_id")
+        else:
+            user = User(
+                username=email.split("@", 1)[0], email=email,
+                full_name=data.get("full_name"), supabase_id=auth_id,
+                hashed_password=get_password_hash(data["password"]),
+                role_id=role.id, is_active=True,
+            )
+            db.add(user)
         await db.commit()
         await db.refresh(user)
         return user.id
@@ -70,9 +78,9 @@ async def provision(client: Client, data: dict[str, str]) -> None:
         raise RuntimeError(f"Failed to provision {data['email']}: {error}") from error
 async def main() -> None:
     url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
     if not url or not key:
-        raise RuntimeError("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+        raise RuntimeError("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_KEY)")
     client = create_client(url, key)
     for data in USERS_TO_CREATE:
         try:

@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
 import api from "../../api/client";
 import QuestionRenderer from "../../components/student/QuestionRenderer";
 import QuestionNavStrip from "../../components/student/QuestionNavGrid";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
+import LoadingScreen from "../../components/ui/LoadingScreen";
 
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
 import { MessageSquare } from "lucide-react";
 import { toast } from '../../components/ui/Toast';
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import VerificationUploadModal from "../../components/student/VerificationUploadModal";
 import { sanitizeHtml } from '../../utils/sanitize';
+import { supabase } from "../../lib/supabase";
+import { UploadCloud } from "lucide-react";
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -24,6 +28,8 @@ export default function StudentExamShell() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const location = useLocation();
+  const examMode = location.state?.mode || 'online'; // 'online' or 'omr'
 
   const [sessionInfo, setSessionInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +40,7 @@ export default function StudentExamShell() {
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(
     new Set()
   );
-  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // Anti-cheat state
   const lastEventTime = useRef<number>(0);
@@ -46,8 +52,15 @@ export default function StudentExamShell() {
   const [passageCache, setPassageCache] = useState<Record<number, any>>({});
   // Submit confirmation dialog
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showMissingAnswersWarning, setShowMissingAnswersWarning] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [loadingPassage, setLoadingPassage] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceStatus | null>(null);
+
+  // OMR Upload State
+  const [omrImage, setOmrImage] = useState<File | null>(null);
+  const [isUploadingOmr, setIsUploadingOmr] = useState(false);
+  const [omrPreview, setOmrPreview] = useState<string | null>(null);
 
   // ─── Fetch session ───
   useEffect(() => {
@@ -138,7 +151,7 @@ export default function StudentExamShell() {
   );
 
   useEffect(() => {
-    if (sessionInfo?.participant_status !== "IN_PROGRESS") return;
+    if (sessionInfo?.participant_status !== "IN_PROGRESS" || examMode === 'omr') return;
 
     // 1. Tab switch / blur
     const onVisibilityChange = () => {
@@ -222,10 +235,43 @@ export default function StudentExamShell() {
 
   const handleAutoSubmit = async () => {
     try {
-      await api.post(`/api/v1/exams/${id}/submit`);
-      navigate(`/student/exam/${id}/result`);
+      let uploadedUrl: string | undefined = undefined;
+      if (examMode === 'omr' && omrImage) {
+         uploadedUrl = await uploadOmrImage(omrImage);
+      }
+      const res = await api.post(`/api/v1/exams/${id}/submit`, { omr_image_url: uploadedUrl });
+      if (res.data.status === "needs_verification") {
+        setShowVerificationModal(true);
+        return;
+      }
+      fetchSession();
     } catch {
       /* */
+    }
+  };
+
+  const uploadOmrImage = async (file: File): Promise<string | undefined> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}_${id}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error } = await supabase.storage
+        .from('omr-submissions')
+        .upload(filePath, file);
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('omr-submissions')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (err) {
+      console.error("Upload OMR failed:", err);
+      return undefined;
     }
   };
 
@@ -234,10 +280,11 @@ export default function StudentExamShell() {
   handleAutoSubmitRef.current = handleAutoSubmit;
 
   useEffect(() => {
-    if (sessionInfo?.participant_status !== "IN_PROGRESS" || timeLeft <= 0)
+    if (sessionInfo?.participant_status !== "IN_PROGRESS" || timeLeft === null || timeLeft <= 0)
       return;
     const timerId = setInterval(() => {
       setTimeLeft((prev) => {
+        if (prev === null) return null;
         if (prev <= 1) {
           clearInterval(timerId);
           handleAutoSubmitRef.current();
@@ -249,24 +296,64 @@ export default function StudentExamShell() {
     return () => clearInterval(timerId);
   }, [sessionInfo?.participant_status, timeLeft]);
 
+  // Auto-submit immediately if time is already up when loading the session
+  useEffect(() => {
+    if (sessionInfo?.participant_status === "IN_PROGRESS" && timeLeft !== null && timeLeft <= 0) {
+      handleAutoSubmitRef.current();
+    }
+  }, [sessionInfo?.participant_status, timeLeft]);
+
   const handleManualSubmit = async () => {
+    if (examMode === 'online' && answeredCount < totalQuestions && !showMissingAnswersWarning) {
+      setShowMissingAnswersWarning(true);
+      setShowSubmitConfirm(true);
+      return;
+    }
+    if (examMode === 'omr' && !omrImage) {
+      toast.error("Vui lòng tải lên ảnh phiếu trả lời (OMR) trước khi nộp bài");
+      return;
+    }
+    
     setShowSubmitConfirm(false);
     try {
-      await api.post(`/api/v1/exams/${id}/submit`);
-      navigate(`/student/exam/${id}/result`);
+      setIsUploadingOmr(true);
+      let uploadedUrl: string | undefined = undefined;
+      if (examMode === 'omr' && omrImage) {
+         uploadedUrl = await uploadOmrImage(omrImage);
+         if (!uploadedUrl) {
+            toast.error("Lỗi khi tải ảnh lên, vui lòng thử lại!");
+            setIsUploadingOmr(false);
+            return;
+         }
+      }
+      const res = await api.post(`/api/v1/exams/${id}/submit`, { omr_image_url: uploadedUrl });
+      if (res.data.status === "needs_verification") {
+        setShowVerificationModal(true);
+        setIsUploadingOmr(false);
+        return;
+      }
+      fetchSession();
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Lỗi khi nộp bài");
+    } finally {
+      setIsUploadingOmr(false);
     }
   };
 
-  const toggleFlag = () => {
-    if (!currentQuestion) return;
+  const toggleFlag = (qId: number) => {
     const newSet = new Set(flaggedQuestions);
-    const qId = currentQuestion.exam_form_question_id;
     if (newSet.has(qId)) newSet.delete(qId);
     else newSet.add(qId);
     setFlaggedQuestions(newSet);
   };
+
+  // Scroll to active question
+  useEffect(() => {
+    const el = document.getElementById(`question-${currentQuestionIndex}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [currentQuestionIndex]);
 
   // ─── Format helpers ───
   const formatTime = (seconds: number) => {
@@ -280,22 +367,14 @@ export default function StudentExamShell() {
 
   const answeredCount = Object.keys(savedAnswers).length;
   const totalQuestions = sessionInfo?.questions?.length || 0;
-  const isUrgent = timeLeft < 300;
+  const isUrgent = timeLeft !== null && timeLeft < 300;
 
   if (maintenance?.maintenance_mode_all || maintenance?.maintenance_mode_exam) {
     return <MaintenanceScreen />;
   }
 
-  // ─── Loading / Error / Terminal states ───
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-          <p className="mt-4 text-sm text-slate-600">Đang tải đề thi...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Đang tải đề thi..." />;
   }
 
   if (error) {
@@ -332,15 +411,16 @@ export default function StudentExamShell() {
             Bài làm của bạn đã được ghi nhận vào hệ thống.
           </p>
           <div className="flex flex-col gap-3">
-            <button
-              onClick={() => navigate(`/student/exam/${id}/result`)}
-              className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-            >
-              Xem kết quả
-            </button>
+            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-2 text-sm text-blue-800 text-left">
+              <p className="font-semibold mb-1">ℹ️ Lưu ý:</p>
+              <p>Điểm thi và đáp án sẽ được công bố sau khi ban tổ chức hoàn tất quá trình chấm điểm.</p>
+              <p className="mt-2 text-xs italic text-blue-600">
+                * Chỉ những thí sinh có quyền xem đáp án mới có thể xem chi tiết bài làm của mình.
+              </p>
+            </div>
             <button
               onClick={() => navigate("/student")}
-              className="w-full px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors"
+              className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
             >
               Quay lại trang chủ
             </button>
@@ -381,10 +461,38 @@ export default function StudentExamShell() {
   //  MAIN EXAM UI — Bộ GD&ĐT Style
   // ═══════════════════════════════════════════
 
-  const currentPassage = currentQuestion?.passage_id
-    ? passageCache[currentQuestion.passage_id]
+  // Group questions by passage
+  const questionGroups: any[] = [];
+  if (sessionInfo?.questions) {
+    sessionInfo.questions.forEach((q: any, idx: number) => {
+      const qWithIndex = { ...q, absoluteIndex: idx };
+      if (!q.passage_id) {
+        questionGroups.push({ type: 'single', questions: [qWithIndex] });
+      } else {
+        const lastGroup = questionGroups[questionGroups.length - 1];
+        if (lastGroup && lastGroup.type === 'passage' && lastGroup.passage_id === q.passage_id) {
+          lastGroup.questions.push(qWithIndex);
+        } else {
+          questionGroups.push({ type: 'passage', passage_id: q.passage_id, questions: [qWithIndex] });
+        }
+      }
+    });
+  }
+  
+  // Find which group contains the currentQuestionIndex
+  let currentGroupIndex = 0;
+  for (let i = 0; i < questionGroups.length; i++) {
+    if (questionGroups[i].questions.some((q: any) => q.absoluteIndex === currentQuestionIndex)) {
+      currentGroupIndex = i;
+      break;
+    }
+  }
+  const currentGroup = questionGroups[currentGroupIndex];
+  
+  const currentPassage = currentGroup?.passage_id
+    ? passageCache[currentGroup.passage_id]
     : null;
-  const hasPassage = !!currentQuestion?.passage_id;
+  const hasPassage = currentGroup?.type === 'passage';
 
   return (
     <div
@@ -502,7 +610,7 @@ export default function StudentExamShell() {
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              {formatTime(timeLeft)}
+              {timeLeft === null ? "Không giới hạn thời gian" : formatTime(timeLeft)}
             </div>
 
             {/* Feedback Button */}
@@ -533,10 +641,11 @@ export default function StudentExamShell() {
 
             {/* Submit button */}
             <button
-              onClick={handleManualSubmit}
-              className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-md hover:shadow-lg transition-all uppercase tracking-wide"
+              onClick={() => setShowSubmitConfirm(true)}
+              disabled={isUploadingOmr}
+              className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-md hover:shadow-lg transition-all uppercase tracking-wide disabled:opacity-50"
             >
-              NỘP BÀI
+              {isUploadingOmr ? "ĐANG TẢI LÊN..." : "NỘP BÀI"}
             </button>
           </div>
         </div>
@@ -586,139 +695,229 @@ export default function StudentExamShell() {
           </div>
         )}
 
-        {/* Right Pane: Question + Answers */}
+        {/* Right Pane: Question + Answers or OMR Upload */}
         <div
           className={`${hasPassage ? "w-full md:w-1/2" : "w-full"} flex-1 min-h-0 bg-white flex flex-col`}
         >
-          {/* Question header */}
-          <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-700">
-              Câu {currentQuestion?.position}{" "}
-              <span className="text-slate-400 font-normal">
-                (Phần {currentQuestion?.part})
-              </span>
-            </h2>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={toggleFlag}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                  flaggedQuestions.has(
-                    currentQuestion?.exam_form_question_id
-                  )
-                    ? "bg-amber-50 border-amber-300 text-amber-700"
-                    : "bg-slate-50 border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600"
-                }`}
-                title="Đánh dấu xem lại"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill={
-                    flaggedQuestions.has(
-                      currentQuestion?.exam_form_question_id
-                    )
-                      ? "currentColor"
-                      : "none"
-                  }
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                  />
-                </svg>
-                Đánh dấu
-              </button>
+          {examMode === 'omr' ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 overflow-y-auto">
+              <div className="w-full max-w-lg bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
+                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <UploadCloud className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Nộp bài thi bằng phiếu OMR</h2>
+                <p className="text-slate-500 text-sm mb-8">
+                  Bạn đang làm bài theo hình thức trên giấy. Vui lòng chụp ảnh phiếu trả lời (OMR) rõ nét và tải lên đây.
+                </p>
+
+                {omrPreview ? (
+                  <div className="relative mb-6 group">
+                    <img src={omrPreview} alt="OMR Preview" className="w-full rounded-xl border-2 border-blue-500 object-contain max-h-96" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                      <button 
+                        onClick={() => { setOmrImage(null); setOmrPreview(null); }}
+                        className="px-4 py-2 bg-white text-rose-600 font-semibold rounded-lg shadow"
+                      >
+                        Xóa và tải lại
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-blue-50 hover:border-blue-400 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <svg className="w-10 h-10 mb-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                      <p className="mb-2 text-sm text-slate-500 font-semibold">Nhấn để tải ảnh hoặc chụp ảnh</p>
+                      <p className="text-xs text-slate-500">Hỗ trợ JPG, PNG (tối đa 10MB)</p>
+                    </div>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setOmrImage(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => setOmrPreview(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+                
+                <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between text-left">
+                  <span className="text-sm font-semibold text-slate-700">Trạng thái:</span>
+                  {omrImage ? (
+                    <span className="text-sm font-bold text-emerald-600 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      Đã tải ảnh lên
+                    </span>
+                  ) : (
+                    <span className="text-sm font-bold text-amber-500">Chưa tải ảnh</span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Question body — scrollable */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 scroll-smooth" id="questions-container">
+                {currentGroup && currentGroup.questions.map((q: any) => (
+                  <div 
+                    key={q.exam_form_question_id}
+                    id={`question-${q.absoluteIndex}`}
+                    className={`mb-8 ${currentQuestionIndex === q.absoluteIndex ? 'ring-2 ring-blue-100 bg-blue-50/30 p-4 rounded-xl' : 'p-4'}`}
+                    onClick={() => {
+                       if (currentQuestionIndex !== q.absoluteIndex) {
+                          setCurrentQuestionIndex(q.absoluteIndex);
+                       }
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-sm font-bold text-slate-700">
+                        Câu {q.position}{" "}
+                        <span className="text-slate-400 font-normal">
+                          (Phần {q.part})
+                        </span>
+                      </h2>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleFlag(q.exam_form_question_id); }}
+                          className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                            flaggedQuestions.has(q.exam_form_question_id)
+                              ? "bg-amber-50 border-amber-300 text-amber-700"
+                              : "bg-white border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600"
+                          }`}
+                          title="Đánh dấu xem lại"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill={
+                              flaggedQuestions.has(q.exam_form_question_id)
+                                ? "currentColor"
+                                : "none"
+                            }
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                            />
+                          </svg>
+                          Đánh dấu
+                        </button>
+                      </div>
+                    </div>
 
-          {/* Question body — scrollable */}
-          <div className="flex-1 overflow-y-auto px-6 py-5">
-            {currentQuestion && (
-              <QuestionRenderer
-                question={currentQuestion}
-                answer={savedAnswers[currentQuestion.exam_form_question_id]}
-                onChange={(ans: any) =>
-                  handleAnswerChange(
-                    currentQuestion.exam_form_question_id,
-                    ans
-                  )
-                }
-              />
-            )}
-          </div>
+                    <QuestionRenderer
+                      question={q}
+                      answer={savedAnswers[q.exam_form_question_id]}
+                      onChange={(ans: any) =>
+                        handleAnswerChange(q.exam_form_question_id, ans)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
 
-          {/* Navigation buttons */}
-          <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-            <button
-              disabled={currentQuestionIndex === 0}
-              onClick={() => setCurrentQuestionIndex((i) => i - 1)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              Quay lại
-            </button>
-            <span className="text-xs text-slate-400">
-              {currentQuestionIndex + 1} / {totalQuestions}
-            </span>
-            <button
-              disabled={currentQuestionIndex === totalQuestions - 1}
-              onClick={() => setCurrentQuestionIndex((i) => i + 1)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Tiếp theo
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-          </div>
+              {/* Navigation buttons */}
+              <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <button
+                  disabled={currentQuestionIndex === 0}
+                  onClick={() => setCurrentQuestionIndex((i) => i - 1)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                  Quay lại
+                </button>
+                <span className="text-xs text-slate-400">
+                  {currentQuestionIndex + 1} / {totalQuestions}
+                </span>
+                <button
+                  disabled={currentQuestionIndex === totalQuestions - 1}
+                  onClick={() => setCurrentQuestionIndex((i) => i + 1)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Tiếp theo
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </main>
 
       {/* ══ FOOTER — Question Navigation Strip ══ */}
-      <footer className="relative z-20 bg-white border-t-2 border-slate-300 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] shrink-0">
-        <div className="px-4 py-3">
-          <QuestionNavStrip
-            questions={sessionInfo?.questions || []}
-            savedAnswers={savedAnswers}
-            flaggedQuestions={flaggedQuestions}
-            currentIndex={currentQuestionIndex}
-            onSelect={setCurrentQuestionIndex}
-          />
-        </div>
-      </footer>
+      {examMode === 'online' && (
+        <footer className="relative z-20 bg-white border-t-2 border-slate-300 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] shrink-0">
+          <div className="px-4 py-3">
+            <QuestionNavStrip
+              questions={sessionInfo?.questions || []}
+              savedAnswers={savedAnswers}
+              flaggedQuestions={flaggedQuestions}
+              currentIndex={currentQuestionIndex}
+              onSelect={setCurrentQuestionIndex}
+              showMissingWarning={showMissingAnswersWarning}
+            />
+          </div>
+        </footer>
+      )}
 
       <ConfirmDialog
         isOpen={showSubmitConfirm}
-        title="Nộp bài thi?"
-        message={`Bạn đã trả lời ${answeredCount}/${totalQuestions} câu. Hãy kiểm tra kỹ trước khi nộp — hành động này không thể hoàn tác.`}
-        confirmText="Nộp bài"
-        onConfirm={handleManualSubmit}
+        title={examMode === 'omr' ? "Nộp ảnh phiếu OMR" : (showMissingAnswersWarning ? "Chưa hoàn thành bài thi" : "Nộp bài thi")}
+        message={
+          examMode === 'omr' 
+            ? "Bạn có chắc chắn muốn nộp phiếu trả lời này không? Xin hãy kiểm tra ảnh rõ nét trước khi xác nhận." 
+            : (showMissingAnswersWarning
+            ? `Bạn còn ${totalQuestions - answeredCount} câu chưa chọn đáp án. Bài làm còn thiếu sót. Bạn có CHẮC CHẮN muốn nộp bài lúc này không?`
+            : "Bạn có chắc chắn muốn nộp bài? Sau khi nộp, bạn sẽ không thể thay đổi bài làm.")
+        }
+        confirmText="Xác nhận nộp bài"
+        onConfirm={() => {
+          setShowSubmitConfirm(false);
+          setShowMissingAnswersWarning(false);
+          handleManualSubmit();
+        }}
         onCancel={() => setShowSubmitConfirm(false)}
+      />
+
+      <VerificationUploadModal
+        isOpen={showVerificationModal}
+        onClose={() => setShowVerificationModal(false)}
+        examId={Number(id)}
+        onSuccess={() => {
+          setShowVerificationModal(false);
+          fetchSession();
+        }}
       />
 
       <StudentFeedbackModal

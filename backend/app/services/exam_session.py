@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.models.exam import Exam, ExamParticipant, ExamForm, ExamStatus, ParticipantStatus
+from app.models.exam import Exam, ExamParticipant, ExamForm, ExamFormQuestion, ExamFormAnswer, ExamStatus, ParticipantStatus
 from app.schemas.exam import ExamPublishRequest
 
 async def publish_exam(db: AsyncSession, exam_id: int, config: ExamPublishRequest) -> Exam:
@@ -27,6 +27,13 @@ async def publish_exam(db: AsyncSession, exam_id: int, config: ExamPublishReques
     await db.refresh(exam)
     return exam
 
+async def _generate_unique_sbd(db: AsyncSession) -> str:
+    while True:
+        sbd = f"{random.randint(1, 999999):06d}"
+        res = await db.execute(select(ExamParticipant).where(ExamParticipant.sbd == sbd))
+        if not res.scalars().first():
+            return sbd
+
 async def assign_participants(db: AsyncSession, exam_id: int, user_ids: List[int]) -> List[ExamParticipant]:
     participants = []
     for user_id in set(user_ids):
@@ -36,9 +43,11 @@ async def assign_participants(db: AsyncSession, exam_id: int, user_ids: List[int
             ExamParticipant.user_id == user_id
         ))
         if not result.scalars().first():
+            sbd = await _generate_unique_sbd(db)
             p = ExamParticipant(
                 exam_id=exam_id,
                 user_id=user_id,
+                sbd=sbd,
                 status=ParticipantStatus.NOT_STARTED
             )
             db.add(p)
@@ -65,21 +74,28 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
         if exam.status != ExamStatus.PUBLISHED:
             raise HTTPException(status_code=403, detail="Not a participant of this exam")
 
+        sbd = await _generate_unique_sbd(db)
         participant = ExamParticipant(
             exam_id=exam_id,
             user_id=user_id,
+            sbd=sbd,
             status=ParticipantStatus.NOT_STARTED
         )
         db.add(participant)
         await db.flush()
 
     if participant.exam_form_id:
+        if participant.status == ParticipantStatus.NOT_STARTED:
+            participant.status = ParticipantStatus.IN_PROGRESS
+            participant.start_time = datetime.now(timezone.utc)
+            await db.commit()
+            
         result = await db.execute(select(ExamForm).options(
             selectinload(ExamForm.questions)
         ).where(ExamForm.id == participant.exam_form_id))
         return result.scalars().first()
         
-    # Assign new form (excluding original)
+    # Assign new form (excluding original if shuffled ones exist)
     result = await db.execute(select(ExamForm).where(
         ExamForm.exam_id == exam_id,
         ExamForm.is_original == False
@@ -87,7 +103,14 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
     forms = result.scalars().all()
     
     if not forms:
-        raise HTTPException(status_code=500, detail="No shuffled forms available for this exam")
+        # Fallback to original form if no shuffled forms were generated
+        result = await db.execute(select(ExamForm).where(
+            ExamForm.exam_id == exam_id
+        ))
+        forms = result.scalars().all()
+        
+    if not forms:
+        raise HTTPException(status_code=500, detail="No forms available for this exam")
         
     selected_form = random.choice(forms)
     participant.exam_form_id = selected_form.id
@@ -282,8 +305,8 @@ async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: Au
     await db.commit()
     return saved_count
 
-async def submit_exam(db: AsyncSession, exam_id: int, user_id: int):
-    result = await db.execute(select(ExamParticipant).where(
+async def submit_exam(db: AsyncSession, exam_id: int, user_id: int, bypass_verification: bool = False, omr_image_url: str = None):
+    result = await db.execute(select(ExamParticipant).options(selectinload(ExamParticipant.user)).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
     ).with_for_update())
@@ -294,11 +317,23 @@ async def submit_exam(db: AsyncSession, exam_id: int, user_id: int):
     if participant.is_banned:
         raise HTTPException(status_code=403, detail="You are banned from this exam")
         
+    if not bypass_verification:
+        if not participant.user.verification_status or participant.user.verification_status == "UNVERIFIED":
+            return {"status": "needs_verification"}
+            
     participant.status = ParticipantStatus.SUBMITTED
     participant.submit_time = datetime.now(timezone.utc)
     
+    if omr_image_url:
+        result_sub = await db.execute(select(ExamSubmission).where(ExamSubmission.exam_participant_id == participant.id))
+        submission = result_sub.scalars().first()
+        if not submission:
+            submission = ExamSubmission(exam_participant_id=participant.id)
+            db.add(submission)
+        submission.omr_image_url = omr_image_url
+    
     await db.commit()
-    return True
+    return {"status": "success"}
 
 async def log_tracking_event(db: AsyncSession, exam_id: int, user_id: int, req: TrackingEventRequest):
     result = await db.execute(select(ExamParticipant).where(

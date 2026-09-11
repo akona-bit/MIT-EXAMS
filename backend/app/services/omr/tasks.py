@@ -295,3 +295,98 @@ def confirm_omr_sheet_task(
         _confirm_sheet_async(sheet_id, user_id, answers_override)
     )
     return {"status": "SUCCESS", "sheet_id": sheet_id, "submission_id": submission_id}
+
+
+@shared_task(bind=True)
+def grade_student_omr_task(self, submission_id: int, enable_gemini: bool = True):
+    """
+    Celery task để tự động chấm bài OMR do học sinh upload.
+    Dùng form_code có sẵn từ ExamParticipant.
+    """
+    async def _run():
+        async with async_session_maker() as db:
+            from sqlalchemy.orm import selectinload
+            from app.models.exam import ExamSubmissionAnswer
+            from app.models.question import Answer
+
+            # Load submission
+            result = await db.execute(
+                select(ExamSubmission)
+                .options(selectinload(ExamSubmission.participant))
+                .where(ExamSubmission.id == submission_id)
+            )
+            submission = result.scalars().first()
+            if not submission or not submission.omr_image_url:
+                raise ValueError(f"Submission {submission_id} not found or has no OMR image")
+
+            participant = submission.participant
+            if not participant.exam_form_id:
+                raise ValueError("Participant does not have an assigned exam_form_id")
+
+            # Load layout
+            layout = SheetLayout()
+            engine = HybridOMREngine(layout=layout, enable_gemini=enable_gemini)
+
+            # Process OMR
+            omr_result = engine.process_url(submission.omr_image_url)
+
+            # Load ExamFormQuestions and Answers
+            efq_result = await db.execute(
+                select(ExamFormQuestion).where(ExamFormQuestion.exam_form_id == participant.exam_form_id)
+            )
+            form_questions = {efq.position: efq for efq in efq_result.scalars().all()}
+
+            answer_map = {}
+            for fq in form_questions.values():
+                ans_result = await db.execute(
+                    select(ExamFormAnswer, Answer)
+                    .join(Answer, Answer.id == ExamFormAnswer.answer_id)
+                    .where(ExamFormAnswer.exam_form_question_id == fq.id)
+                )
+                letter_to_id = {}
+                for efa, ans in ans_result.all():
+                    letter = chr(ord("A") + efa.new_position - 1)
+                    letter_to_id[letter] = ans.id
+                answer_map[fq.question_id] = letter_to_id
+            
+            # Map answers
+            for q in omr_result.questions:
+                q_no = q.get("question_no")
+                selected = q.get("selected")
+
+                if q_no is None or q_no not in form_questions:
+                    continue
+
+                fq = form_questions[q_no]
+                selected_answer_id = None
+
+                if selected and selected.upper() in ("A", "B", "C", "D"):
+                    letter = selected.upper()
+                    letter_ids = answer_map.get(fq.question_id, {})
+                    selected_answer_id = letter_ids.get(letter)
+
+                # Upsert answer
+                ans_check = await db.execute(
+                    select(ExamSubmissionAnswer).where(
+                        ExamSubmissionAnswer.exam_submission_id == submission_id,
+                        ExamSubmissionAnswer.exam_form_question_id == fq.id
+                    )
+                )
+                existing = ans_check.scalars().first()
+                if existing:
+                    existing.selected_answer_id = selected_answer_id
+                else:
+                    db.add(ExamSubmissionAnswer(
+                        exam_submission_id=submission_id,
+                        exam_form_question_id=fq.id,
+                        selected_answer_id=selected_answer_id
+                    ))
+
+            await db.commit()
+
+            # Grade
+            from app.services.grading.scorer import grade_submission_ctt
+            await grade_submission_ctt(db, submission_id)
+            return submission_id
+
+    return asyncio.run(_run())

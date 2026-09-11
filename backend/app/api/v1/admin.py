@@ -124,6 +124,8 @@ async def get_exam_participants_detail(
             },
             "raw_total": er.raw_total_score if er else None,
             "total_score": er.total_score if er else None,
+            "submission_id": sub.id if sub is not None else None,
+            "omr_image_url": sub.omr_image_url if sub is not None else None,
         })
 
     return {"sections": sections, "total": total, "items": items}
@@ -613,3 +615,108 @@ async def delete_feedback(
     await log_audit(db, current_user.id, AuditAction.OTHER, "Feedback", feedback_id, "Deleted feedback")
     
     return {"message": "Feedback deleted"}
+# ─── Answer Access Control ──────────────────────────────────────────────
+
+from app.models.access import AnswerAccessGrant
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+class AnswerAccessCreate(BaseModel):
+    student_id: int
+    exam_id: Optional[int] = None
+    source: str = "manual"
+    note: Optional[str] = None
+    expires_at: Optional[datetime] = None
+
+class AnswerAccessUpdate(BaseModel):
+    granted: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+@router.get("/answer-access", dependencies=[Depends(RequireRole(["ADMIN", "SUPERADMIN"]))])
+async def list_answer_access(
+    student_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(AnswerAccessGrant)
+    if student_id:
+        query = query.where(AnswerAccessGrant.student_id == student_id)
+    query = query.order_by(AnswerAccessGrant.granted_at.desc())
+    result = await db.execute(query)
+    
+    grants = []
+    for g in result.scalars().all():
+        grants.append({
+            "id": g.id,
+            "student_id": g.student_id,
+            "exam_id": g.exam_id,
+            "granted": g.granted,
+            "source": g.source,
+            "granted_by": g.granted_by,
+            "payment_ref": g.payment_ref,
+            "granted_at": g.granted_at,
+            "expires_at": g.expires_at,
+            "note": g.note
+        })
+    return {"items": grants}
+
+@router.post("/answer-access", dependencies=[Depends(RequireRole(["ADMIN", "SUPERADMIN"]))])
+async def create_answer_access(
+    data: AnswerAccessCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    grant = AnswerAccessGrant(
+        student_id=data.student_id,
+        exam_id=data.exam_id,
+        granted=True,
+        source=data.source,
+        granted_by=current_user.id,
+        expires_at=data.expires_at,
+        note=data.note
+    )
+    db.add(grant)
+    await db.commit()
+    await db.refresh(grant)
+    
+    await log_audit(
+        db=db,
+        user_id=current_user.id,
+        action=AuditAction.UPDATE,
+        entity_type="AnswerAccessGrant",
+        entity_id=grant.id,
+        details=f"Cấp quyền xem đáp án cho student {data.student_id}" + (f" (Exam {data.exam_id})" if data.exam_id else " (Toàn cục)")
+    )
+    return {"status": "success", "id": grant.id}
+
+@router.patch("/answer-access/{grant_id}", dependencies=[Depends(RequireRole(["ADMIN", "SUPERADMIN"]))])
+async def update_answer_access(
+    grant_id: int,
+    data: AnswerAccessUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    grant = (await db.execute(select(AnswerAccessGrant).where(AnswerAccessGrant.id == grant_id))).scalar_one_or_none()
+    if not grant:
+        raise HTTPException(status_code=404, detail="Grant not found")
+        
+    if data.granted != None:
+        grant.granted = data.granted
+    if data.expires_at is not None:
+        grant.expires_at = data.expires_at
+    if data.note is not None:
+        grant.note = data.note
+        
+    await db.commit()
+    
+    action_str = "Thu hồi" if data.granted is False else "Cập nhật"
+    await log_audit(
+        db=db,
+        user_id=current_user.id,
+        action=AuditAction.UPDATE,
+        entity_type="AnswerAccessGrant",
+        entity_id=grant.id,
+        details=f"{action_str} quyền xem đáp án của student {grant.student_id}"
+    )
+    return {"status": "success"}

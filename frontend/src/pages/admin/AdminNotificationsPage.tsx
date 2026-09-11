@@ -56,6 +56,7 @@ export default function AdminNotificationsPage() {
   const [message, setMessage] = useState("");
   const [detail, setDetail] = useState("");
   const [link, setLink] = useState("");
+  const [isGlobal, setIsGlobal] = useState(false);
 
   useEffect(() => {
     loadNotifications();
@@ -105,12 +106,14 @@ export default function AdminNotificationsPage() {
         message: message.trim(),
         detail: detail.trim() || undefined,
         link: link.trim() || undefined,
+        is_global: isGlobal,
       });
       toast.success(`Đã gửi thông báo đến ${result.count} người`);
       setTitle("");
       setMessage("");
       setDetail("");
       setLink("");
+      setIsGlobal(false);
       loadNotifications();
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Gửi thông báo thất bại");
@@ -246,6 +249,19 @@ export default function AdminNotificationsPage() {
                 onChange={(e) => setLink(e.target.value)}
                 placeholder="/admin/exams"
               />
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="isGlobal"
+                  checked={isGlobal}
+                  onChange={(e) => setIsGlobal(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                <label htmlFor="isGlobal" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Hiển thị công khai ở trang Đăng nhập
+                </label>
+              </div>
 
               <Button
                 onClick={handleSend}

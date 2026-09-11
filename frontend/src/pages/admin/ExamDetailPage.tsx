@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getExam, publishExam, getExamForms } from '../../api/exams';
+import { getExam, publishExam, getExamForms, updateExam } from '../../api/exams';
 import { runIrtCalibration, getIrtTaskStatus } from '../../api/grading';
 import { getExamOverview, getExamItemsAnalysis, type ExamOverview, type ExamItemAnalysis } from '../../api/statistics';
+import { generateCredentials } from '../../api/exams';
 import type { Exam } from '../../types';
 import Button from '../../components/ui/Button';
 import GenerateExamModal from '../../components/admin/GenerateExamModal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { toast } from '../../components/ui/Toast';
+import Modal from '../../components/ui/Modal';
 
 export default function ExamDetailPage() {
   const { id } = useParams();
@@ -25,6 +27,10 @@ export default function ExamDetailPage() {
 
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'publish' | 'irt' | null>(null);
+
+  const [isGeneratingCredentials, setIsGeneratingCredentials] = useState(false);
+  const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
+  const [credentialsList, setCredentialsList] = useState<any[]>([]);
 
   const fetchExamData = async () => {
     if (!id) return;
@@ -161,6 +167,30 @@ export default function ExamDetailPage() {
                   <p className="text-slate-500 dark:text-slate-400">ID Ma trận</p>
                   <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.matrix_id || <span className="text-danger-500 italic">Chưa cấu hình</span>}</p>
                 </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 dark:text-slate-400">Hình thức làm bài</p>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      Làm trên máy {exam.allow_omr ? "& trên giấy (OMR)" : "chỉ trực tuyến"}
+                    </span>
+                    {exam.status === 'DRAFT' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateExam(exam.id, { allow_omr: !exam.allow_omr });
+                            fetchExamData();
+                            toast.success(`Đã ${!exam.allow_omr ? 'bật' : 'tắt'} chức năng nộp bài OMR`);
+                          } catch (err) {
+                            toast.error("Không thể cập nhật cấu hình OMR");
+                          }
+                        }}
+                        className="text-xs px-2 py-1 bg-primary-50 text-primary-600 rounded-md hover:bg-primary-100 transition-colors"
+                      >
+                        {exam.allow_omr ? "Tắt OMR" : "Bật OMR"}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -261,7 +291,29 @@ export default function ExamDetailPage() {
                 </Button>
             )}
             {exam.status === 'PUBLISHED' && (
-              <Button variant="secondary" disabled className="w-full justify-center">Đang diễn ra</Button>
+              <>
+                <Button variant="secondary" disabled className="w-full justify-center">Đang diễn ra</Button>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!id) return;
+                    setIsGeneratingCredentials(true);
+                    try {
+                      const data = await generateCredentials(parseInt(id));
+                      setCredentialsList(data);
+                      setIsCredentialsModalOpen(true);
+                    } catch (error) {
+                      toast.error("Không thể cấp SBD và mật khẩu.");
+                    } finally {
+                      setIsGeneratingCredentials(false);
+                    }
+                  }}
+                  disabled={isGeneratingCredentials}
+                  className="w-full justify-center"
+                >
+                  {isGeneratingCredentials ? "Đang xử lý..." : "Cấp SBD & Mật khẩu"}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -288,6 +340,60 @@ export default function ExamDetailPage() {
         onConfirm={confirmActionExecute}
         onCancel={() => setConfirmAction(null)}
       />
+
+      {/* Credentials Modal */}
+      <Modal isOpen={isCredentialsModalOpen} onClose={() => setIsCredentialsModalOpen(false)}>
+        <div className="p-6">
+          <h3 className="text-xl font-bold mb-4">Danh sách SBD và Mật khẩu</h3>
+          <p className="text-sm text-slate-500 mb-4">
+            Vui lòng tải xuống hoặc copy danh sách này để gửi cho học sinh. Các học sinh không có mật khẩu mới sẽ sử dụng mật khẩu cá nhân của họ.
+          </p>
+          <div className="max-h-96 overflow-auto border border-slate-200 rounded-lg mb-4">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2">Họ Tên</th>
+                  <th className="px-4 py-2">Email</th>
+                  <th className="px-4 py-2">SBD</th>
+                  <th className="px-4 py-2">Mật khẩu</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {credentialsList.map((c: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td className="px-4 py-2">{c.full_name}</td>
+                    <td className="px-4 py-2">{c.email}</td>
+                    <td className="px-4 py-2 font-mono">{c.sbd}</td>
+                    <td className="px-4 py-2 font-mono text-primary-600">{c.password}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsCredentialsModalOpen(false)}>Đóng</Button>
+            <Button 
+              onClick={() => {
+                const csvRows = [
+                  ['Ho Ten', 'Email', 'SBD', 'Mat khau'],
+                  ...credentialsList.map((c: any) => [c.full_name, c.email, c.sbd, c.password])
+                ];
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+                  + csvRows.map(e => e.join(",")).join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `SBD_${exam.id}.csv`);
+                document.body.appendChild(link);
+                link.click();
+              }}
+            >
+              Tải file CSV
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }

@@ -151,7 +151,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Phổ điểm tổng quan</CardTitle>
-                <CardDescription>Biểu đồ phân bố điểm theo thang IRT (0-300)</CardDescription>
+                <CardDescription>Biểu đồ phân bố điểm tổng (0-1200)</CardDescription>
               </div>
               <Badge variant="outline" className="hidden sm:inline-flex">Real-time</Badge>
             </div>

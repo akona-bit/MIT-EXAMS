@@ -17,6 +17,7 @@ interface AuthContextType {
   login: (data: LoginRequest) => Promise<User>;
   loginWithToken: (token: string) => Promise<User>;
   logout: () => Promise<void>;
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -26,14 +27,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('access_token'));
   const [isLoading, setIsLoading] = useState(true);
 
+  const fetchUser = useCallback(async () => {
+    try {
+      const u = await getMe();
+      setUser(u);
+    } catch (e) {
+      console.error("Failed to fetch user:", e);
+    }
+  }, []);
+
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('access_token');
       if (storedToken) {
         try {
           setToken(storedToken);
-          const u = await getMe();
-          setUser(u);
+          await fetchUser();
         } catch {
           localStorage.removeItem('access_token');
           setToken(null);
@@ -43,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     };
     initAuth();
-  }, []);
+  }, [fetchUser]);
 
   const login = useCallback(async (data: LoginRequest) => {
     setIsLoading(true);
@@ -119,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         loginWithToken,
         logout,
+        fetchUser,
       }}
     >
       {children}

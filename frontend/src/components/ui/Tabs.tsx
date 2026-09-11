@@ -32,7 +32,7 @@ export function TabList({ children, className }: TabListProps) {
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-md border border-white/40 dark:border-white/5',
+        'inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/5',
         className
       )}
     >

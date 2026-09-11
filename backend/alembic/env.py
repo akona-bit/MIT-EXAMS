@@ -28,7 +28,8 @@ from app.models.obsidian import ObsidianSyncRun, ObsidianFile
 from app.models.passage import Passage
 from app.models.system import SystemSetting
 from app.models.feedback import Feedback
-
+from app.models.student_profile import StudentActivityDaily, StudentTopicMastery
+from app.models.access import AnswerAccessGrant
 from app.models.notification import Notification, NotificationType
 target_metadata = Base.metadata
 

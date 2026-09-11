@@ -87,6 +87,7 @@ class ExamUpdateRequest(BaseModel):
     duration_minutes: Optional[int] = None
     show_score_mode: Optional[str] = None
     show_answer_mode: Optional[str] = None
+    allow_omr: Optional[bool] = None
 
 # --- Matrix Import Schemas ---
 class MatrixImportPreviewRequest(BaseModel):
@@ -121,7 +122,9 @@ class ExamResponse(BaseModel):
     duration_minutes: Optional[int] = None
     show_score_mode: str
     show_answer_mode: str
+    allow_omr: bool = False
     status: ExamStatus
+    submission_count: int = 0
     model_config = ConfigDict(from_attributes=True)
 
 # --- Exam Participant ---

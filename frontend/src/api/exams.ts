@@ -83,9 +83,14 @@ export async function completeExam(id: number): Promise<Exam> {
 
 export async function assignParticipants(
   id: number,
-  userIds: number[],
-): Promise<any> {
+  userIds: number[]
+): Promise<any[]> {
   const response = await client.post(`/api/v1/exams/${id}/assign`, userIds);
+  return response.data;
+}
+
+export async function generateCredentials(examId: number): Promise<any[]> {
+  const response = await client.post(`/api/v1/exams/${examId}/credentials`);
   return response.data;
 }
 

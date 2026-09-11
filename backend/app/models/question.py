@@ -83,6 +83,7 @@ class Question(Base):
     content: Mapped[str] = mapped_column(Text)
     level: Mapped[int] = mapped_column(Integer, default=1) # 1: Nhan biet, 2: Thong hieu, 3: Van dung
     type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), default=QuestionType.SINGLE_CHOICE)
+    render_style: Mapped[str] = mapped_column(String(50), default="standard", server_default="standard")
     status: Mapped[QuestionStatus] = mapped_column(Enum(QuestionStatus), default=QuestionStatus.DRAFT)
     reject_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

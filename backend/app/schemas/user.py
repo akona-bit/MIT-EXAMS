@@ -7,6 +7,9 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     username: Optional[str] = None
     email: Optional[EmailStr] = None
+    gender: Optional[str] = None
+    verification_image_url: Optional[str] = None
+    verification_status: Optional[str] = "UNVERIFIED"
     is_active: bool = True
     role_id: int
 
@@ -25,6 +28,8 @@ class UserUpdate(BaseModel):
 
 class UserUpdateMe(BaseModel):
     full_name: Optional[str] = None
+    gender: Optional[str] = None
+    verification_image_url: Optional[str] = None
 
 class UserPasswordUpdate(BaseModel):
     current_password: str
@@ -42,6 +47,7 @@ class RoleResponse(BaseModel):
 # Properties to return to client
 class UserResponse(UserBase):
     id: int
+    can_view_answers: bool = False
     role: RoleResponse
     created_at: datetime
     updated_at: datetime

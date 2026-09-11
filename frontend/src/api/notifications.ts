@@ -10,6 +10,7 @@ export interface NotificationItem {
   is_read: boolean;
   created_at?: string;
   sender_name?: string;
+  is_global?: boolean;
 }
 
 export interface SendNotificationPayload {
@@ -21,12 +22,20 @@ export interface SendNotificationPayload {
   message: string;
   detail?: string;
   link?: string;
+  is_global?: boolean;
 }
 
 export async function getNotifications(skip = 0, limit = 20, unreadOnly = false): Promise<{ total: number; items: NotificationItem[] }> {
   const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
   if (unreadOnly) params.append("unread_only", "true");
   const { data } = await client.get(`/api/v1/notifications/?${params}`);
+  return data;
+}
+
+export async function getPublicNotifications(skip = 0, limit = 20): Promise<{ total: number; items: NotificationItem[] }> {
+  const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+  // Bỏ qua interceptor tự động gắn Auth header nếu được, nhưng client mặc định vẫn gọi không sao vì endpoint là public
+  const { data } = await client.get(`/api/v1/notifications/public?${params}`);
   return data;
 }
 

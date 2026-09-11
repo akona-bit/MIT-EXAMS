@@ -5,7 +5,7 @@
 ## Trạng thái tổng quan
 
 **Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND) + UI REDESIGN
-**Cập nhật lần cuối:** 2026-09-09
+**Cập nhật lần cuối:** 2026-09-11
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -91,6 +91,31 @@
 - [x] Hệ thống Feedback (Góp ý/Báo lỗi)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-11` — **Trang Hồ Sơ Học Sinh dùng chung (Admin ⇄ Student) + Kiểm soát quyền xem đáp án**:
+  - [x] **Backend - Database & Model**: Tạo bảng `AnswerAccessGrant` (`student_id`, `exam_id`, `granted`, `source`, v.v.) quản lý việc cấp quyền xem lại đáp án theo từng người hoặc kỳ thi. Chuyển đổi mô hình `StudentKnowledgeMastery` sang `StudentTopicMastery`.
+  - [x] **Backend - API & Service**: Tạo service `can_view_answers` check bảng grant. Cập nhật `get_student_exam_result` và `get_knowledge_node_detail` gọi logic check quyền, nếu không có quyền tự động trả `correct_answer = null` và `is_correct = false`. Xóa mã thừa trong `scorer.py` do đã tích hợp hook chuẩn vào luồng CTT grading.
+  - [x] **Frontend - UI / Components**: Tạo trang `StudentProfilePage` mới trong `features/student-profile/components/` dùng chung 2 layout (Admin và Học sinh). Cập nhật `AccessControlPage` tích hợp endpoint mới `adminAccessApi` để cấp/thu hồi quyền xem đáp án (POST source = manual) và bổ sung cột "Chi tiết" link tới `/admin/students/:id`.
+  - [x] Cập nhật lại các route trong `App.tsx` trỏ đúng vào page mới, check code build thành công 100%.
+
+
+- `2026-09-10` — **Tùy chọn hình thức thi OMR (Online/Offline)**:
+  - [x] **Database & Schema**: Bổ sung cờ `allow_omr` vào bảng `Exam` (đã thực hiện trước đó) và update `ExamUpdateRequest`, `ExamResponse` trong `app/schemas/exam.py`.
+  - [x] **Backend API**: Cập nhật endpoint `PUT /api/v1/exams/{exam_id}` để cho phép admin cập nhật `allow_omr`.
+  - [x] **Frontend Admin**: Tích hợp nút bật/tắt "Làm trên máy & trên giấy (OMR)" / "chỉ trực tuyến" vào thẻ "Thông tin chung" trong `ExamDetailPage.tsx`.
+  - [x] **Frontend Thí sinh**: Nâng cấp UI modal trước khi vào thi tại `StudentHomePage.tsx`. Hiển thị 2 lựa chọn: Làm trên máy (có hiển thị trực quan thông báo Có tính giờ hay Không tính giờ luyện tập dựa vào `duration_minutes`) và Làm trên giấy (OMR). Đồng bộ gửi `mode` sang `StudentExamShell.tsx`.
+
+- `2026-09-10` — **Giao đề trực tiếp cho học sinh (Assign Participants)**:
+  - [x] **Frontend Modal**: Xây dựng component `AssignStudentsModal.tsx` hỗ trợ tìm kiếm học sinh theo tên/SBD/email (sử dụng API `/api/v1/admin/students`), chọn nhiều học sinh cùng lúc (multi-select) và hiển thị trạng thái loading.
+  - [x] **Frontend Integration**: Tích hợp vào trang `StudentManagementPage.tsx` — thêm nút "Giao đề" bên trong bảng danh sách thí sinh. Sau khi chọn và giao đề thành công, bảng sẽ tự động reload. Kế thừa endpoint `POST /api/v1/exams/{exam_id}/assign` đã có sẵn tại backend.
+  - Tính năng cho phép Giáo viên/Admin chủ động chọn học sinh từ hệ thống thay vì phụ thuộc hoàn toàn vào luồng self-enrollment của Học sinh.
+
+- `2026-09-10` — **Hồ sơ tiến độ & Mạng lưới kiến thức học sinh (V-ACT Progress)**:
+  - [x] **Database & Models**: Thêm `StudentActivityDaily` (ghi nhận hoạt động heatmap, số phút học, số bài nộp) và `StudentKnowledgeMastery` (mạng lưới kiến thức, lưu correct/wrong/blank count theo node_id). Không tạo bảng lưu điểm phần thi vì `ExamResult.irt_score_partX` đã có sẵn. Đã sync trực tiếp lên DB qua metadata.create_all (bỏ qua alembic lỗi cũ).
+  - [x] **Backend Logic**: Thêm 4 read-only API endpoint mới trong router `v1/student_profile.py` (`/vact-progress`, `/vact-radar`, `/activity-heatmap`, `/knowledge-network`). Áp dụng RBAC: STUDENT chỉ xem được chính mình, ADMIN xem được mọi người.
+  - [x] **Hook Chấm điểm (Scorer)**: Inject logic `update_student_profile_after_grading` vào `scorer.py` chạy ngầm sau khi CTT grading commit để cập nhật daily activity và tính/phân loại mastery (correct/wrong/blank) từ item_scores của submission.
+  - [x] **Frontend UI**: Xây dựng lại trang `/admin/students/:id` bằng 4 thẻ thông tin: `VActProgressCard` (Area chart lịch sử điểm số 4 môn), `VActRadarCard` (Radar chart so sánh 2 lần thi gần nhất), `ActivityHeatmapCard` (GitHub-style heatmap N tuần, dùng các màu riêng biệt cho từng hành động), và `KnowledgeNetworkCard` (danh sách tiến độ theo môn/chủ đề với thanh % 3 màu đúng-sai-trống).
+  - [x] **Đồng bộ Frontend**: Thêm route `/students/:id` cho Admin, thêm nút "Xem hồ sơ" link thẳng từ danh sách học sinh (StudentManagementPage). Build pass.
 
 - `2026-09-08` — **Đồng nhất UI Blueprint Modal + Kiểm chứng IRT/CTT/OMR (verify script)**:
   - [x] **Redesign `DgnlBlueprintModal`**: đồng bộ màu 4 phần thi theo chuẩn `ui-tokens.md` (TV=primary, TA=danger, Toán=warning, TDK=success — trước đó dùng sai emerald/sky/indigo/rose); thay banner tự chế bằng component `Alert`; hiển thị `structure_errors` bằng Alert warning (trước chỉ disable nút ngầm); glass style (rounded-2xl + border-slate-200/60 + bg-white/70) đồng nhất với các trang admin; sửa class không tồn tại `dark:hover:bg-slate-750`; nút CTA dùng Button mặc định của hệ thống.
@@ -385,6 +410,15 @@
   - Batch 2 (6 bugs): `ParticipantStatus.COMPLETED` → `SUBMITTED`, `process_file()` → `process_url()` (cv2.imread không đọc URL), `needs_review` dead attribute → `needs_review_count=120`, `time.time()` → `datetime.now(timezone.utc)`, frontend unwrap `{data:...}` envelope, API review endpoint chỉ nhận `NEEDS_REVIEW`
   - Xoá `pipeline.py` dead code
   - Deploy Render thành công.
+
+- **2026-09-11 — Thống nhất thang điểm 1200 cho toàn bộ hệ thống:**
+  - Quy tắc: điểm thô = số câu đúng × 10, thang điểm toàn bộ 1200 (4 phần × 300/phần)
+  - Backend `exam_result.py`: `max_raw_score` 30→300, `max_total` 120→1200
+  - Backend `exams.py` (`my-history`): `max_score` thống nhất 1200 cho cả CTT lẫn IRT
+  - Backend `submissions.py`: `max_score` CTT fallback 120→1200
+  - Backend `statistics.py`: bỏ normalize `/10`, bucket_size 12→120, threshold 120→1200
+  - Backend `advanced_analytics.py`: bỏ `* 10` double-multiply trên `ctt_score_partX` (DB đã lưu ×10 sẵn)
+  - Frontend không cần sửa — dùng `max_raw_score`/`max_total` từ API
 
 ## Vấn đề đang mở / cần quyết định
 

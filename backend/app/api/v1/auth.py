@@ -67,16 +67,21 @@ async def read_current_user(
 async def resolve_sbd(req: ResolveSBDRequest, db: AsyncSession = Depends(get_db)):
     """
     Resolve SBD to Email for login.
+    Uses the latest ExamParticipant record matching the SBD.
     """
-    result = await db.execute(select(User).where(User.registration_number == req.sbd))
+    from app.models.exam import ExamParticipant
+    result = await db.execute(
+        select(User)
+        .join(ExamParticipant, ExamParticipant.user_id == User.id)
+        .where(ExamParticipant.sbd == req.sbd)
+        .order_by(ExamParticipant.id.desc())
+        .limit(1)
+    )
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="Số báo danh không tồn tại")
     
-    # Mask email: show only first 2 chars + domain
-    email = user.email
-    masked = email[:2] + "***@" + email.split("@")[1] if "@" in email else "***"
-    return {"email": masked}
+    return {"email": user.email}
 
 @router.put("/me", response_model=UserResponse)
 async def update_current_user(

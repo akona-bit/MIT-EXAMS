@@ -199,12 +199,35 @@ async def create_question(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    import re
     # Validation for SINGLE_CHOICE
     if q_in.type == QuestionType.SINGLE_CHOICE:
-        if not q_in.answers or len(q_in.answers) != 4:
-            raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 4 đáp án.")
-        if sum(1 for a in q_in.answers if a.is_correct) != 1:
-            raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 1 đáp án đúng.")
+        if q_in.render_style == "error_detection":
+            pattern = r'\[(.*?)\]\{\.answer-error\}'
+            matches = list(re.finditer(pattern, q_in.content))
+            spans = [m.group(1) for m in matches]
+            if len(spans) != 4:
+                raise HTTPException(status_code=400, detail=f"Câu hỏi Tìm lỗi sai bắt buộc phải có đúng 4 cụm từ lỗi (hiện có {len(spans)}).")
+            
+            # Extract the correct index from incoming dummy answers
+            correct_idx = 0
+            if q_in.answers:
+                for idx, a in enumerate(q_in.answers):
+                    if a.is_correct:
+                        correct_idx = idx
+                        break
+            
+            # Generate the 4 answers from the spans
+            from app.schemas.question import AnswerCreate
+            q_in.answers = [
+                AnswerCreate(content=span_text, is_correct=(idx == correct_idx), position=idx + 1)
+                for idx, span_text in enumerate(spans)
+            ]
+        else:
+            if not q_in.answers or len(q_in.answers) != 4:
+                raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 4 đáp án.")
+            if sum(1 for a in q_in.answers if a.is_correct) != 1:
+                raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 1 đáp án đúng.")
 
     # Validate knowledge node type is SKILL and it's a leaf
     kn_result = await db.execute(select(KnowledgeNode).where(KnowledgeNode.id == q_in.knowledge_node_id))
@@ -283,6 +306,7 @@ async def update_question(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    import re
     # Find existing question
     result = await db.execute(
         select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.knowledge_node)).where(Question.id == question_id)
@@ -292,13 +316,45 @@ async def update_question(
     if not existing_q:
         raise HTTPException(status_code=404, detail="Question not found")
         
+    target_type = q_in.type if q_in.type is not None else existing_q.type
+    target_render_style = q_in.render_style if q_in.render_style is not None else existing_q.render_style
+    target_content = q_in.content if q_in.content is not None else existing_q.content
+
+    # If updating to error_detection, we parse the content for spans
+    if target_type == QuestionType.SINGLE_CHOICE and target_render_style == "error_detection":
+        pattern = r'\[(.*?)\]\{\.answer-error\}'
+        matches = list(re.finditer(pattern, target_content))
+        spans = [m.group(1) for m in matches]
+        if len(spans) != 4:
+            raise HTTPException(status_code=400, detail=f"Câu hỏi Tìm lỗi sai bắt buộc phải có đúng 4 cụm từ lỗi (hiện có {len(spans)}).")
+        
+        # Override q_in.answers with spans
+        correct_idx = 0
+        if q_in.answers:
+            for idx, a in enumerate(q_in.answers):
+                if hasattr(a, 'is_correct') and a.is_correct or isinstance(a, dict) and a.get('is_correct'):
+                    correct_idx = idx
+                    break
+        elif existing_q.answers:
+            for idx, a in enumerate(existing_q.answers):
+                if a.is_correct:
+                    correct_idx = idx
+                    break
+
+        from app.schemas.question import AnswerCreate
+        q_in.answers = [
+            AnswerCreate(content=span_text, is_correct=(idx == correct_idx), position=idx + 1)
+            for idx, span_text in enumerate(spans)
+        ]
+        
     # VERSIONING RULE: If APPROVED or used in an exam, clone it.
     if existing_q.status == QuestionStatus.APPROVED:
         # Clone into a new question
         new_q = Question(
-            content=q_in.content if q_in.content is not None else existing_q.content,
+            content=target_content,
             level=q_in.level if q_in.level is not None else existing_q.level,
-            type=q_in.type if q_in.type is not None else existing_q.type,
+            type=target_type,
+            render_style=target_render_style,
             resource_id=q_in.resource_id if q_in.resource_id is not None else existing_q.resource_id,
             source_author=q_in.source_author if q_in.source_author is not None else existing_q.source_author,
             source_title=q_in.source_title if q_in.source_title is not None else existing_q.source_title,
@@ -321,8 +377,7 @@ async def update_question(
         ]
         
         # Validation for SINGLE_CHOICE
-        target_type = q_in.type if q_in.type is not None else existing_q.type
-        if target_type == QuestionType.SINGLE_CHOICE:
+        if target_type == QuestionType.SINGLE_CHOICE and target_render_style != "error_detection":
             if not answers_to_use or len(answers_to_use) != 4:
                 raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 4 đáp án.")
             
@@ -363,9 +418,10 @@ async def update_question(
         return res.scalars().first()
     else:
         # Just update in place for DRAFT or PENDING
-        if q_in.content is not None: existing_q.content = q_in.content
+        existing_q.content = target_content
+        existing_q.type = target_type
+        existing_q.render_style = target_render_style
         if q_in.level is not None: existing_q.level = q_in.level
-        if q_in.type is not None: existing_q.type = q_in.type
         if q_in.resource_id is not None: existing_q.resource_id = q_in.resource_id
         if q_in.source_author is not None: existing_q.source_author = q_in.source_author
         if q_in.source_title is not None: existing_q.source_title = q_in.source_title
@@ -380,11 +436,9 @@ async def update_question(
                 
             existing_q.knowledge_node_id = q_in.knowledge_node_id
                 
-        target_type = existing_q.type
-        
         if q_in.answers is not None:
             # Validation for SINGLE_CHOICE (when updating answers)
-            if target_type == QuestionType.SINGLE_CHOICE:
+            if target_type == QuestionType.SINGLE_CHOICE and target_render_style != "error_detection":
                 if len(q_in.answers) != 4:
                     raise HTTPException(status_code=400, detail="Câu hỏi SINGLE_CHOICE bắt buộc phải có đúng 4 đáp án.")
                 if sum(1 for a in q_in.answers if a.is_correct) != 1:
@@ -397,9 +451,9 @@ async def update_question(
             for ans in q_in.answers:
                 db_ans = Answer(
                     question_id=existing_q.id,
-                    content=ans.content,
-                    is_correct=ans.is_correct,
-                    position=ans.position
+                    content=ans.content if hasattr(ans, 'content') else ans['content'],
+                    is_correct=ans.is_correct if hasattr(ans, 'is_correct') else ans['is_correct'],
+                    position=ans.position if hasattr(ans, 'position') else ans['position']
                 )
                 db.add(db_ans)
                 

@@ -15,6 +15,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import get_settings
 from app.core.error_log import log_error
 from app.schemas.user import TokenPayload
+from app.worker import celery_app
 
 logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
@@ -157,6 +158,8 @@ from app.api.v1 import vector
 from app.api.v1 import system
 from app.api.v1 import feedbacks
 from app.api.v1 import notifications
+from app.api.v1 import submissions
+from app.api.v1 import student_profile
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -199,6 +202,8 @@ app.include_router(vector.router, prefix="/api/v1/vector", tags=["Vector / Seman
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 app.include_router(feedbacks.router, prefix="/api/v1/feedbacks", tags=["Feedbacks"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
+app.include_router(submissions.router, prefix="/api/v1/submissions", tags=["Submissions"])
+app.include_router(student_profile.router, prefix="/api/v1", tags=["Student Profile"])
 
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)
@@ -233,9 +238,10 @@ class ConnectionManager:
         await self.broadcast_online_users()
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        # We can't await broadcast here because it's sync, we'll schedule it
-        asyncio.create_task(self.broadcast_online_users())
+        if websocket in self.active_connections:
+            self.active_connections.discard(websocket)
+            # We can't await broadcast here because it's sync, we'll schedule it
+            asyncio.create_task(self.broadcast_online_users())
 
     async def broadcast_online_users(self):
         count = len(self.active_connections)
@@ -279,6 +285,7 @@ class ConnectionManager:
             import logging
             logging.getLogger(__name__).error(f"Error fetching fraud alerts: {e}")
 
+        dead_connections = set()
         for connection in list(self.active_connections):
             try:
                 await connection.send_json({
@@ -286,7 +293,10 @@ class ConnectionManager:
                     "fraud_alerts": fraud_alerts
                 })
             except Exception:
-                pass
+                dead_connections.add(connection)
+                
+        for dead in dead_connections:
+            self.active_connections.discard(dead)
 
 manager = ConnectionManager()
 
@@ -295,6 +305,16 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
+            from starlette.websockets import WebSocketState
+            if websocket.application_state == WebSocketState.DISCONNECTED:
+                break
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    except RuntimeError as e:
+        if "WebSocket is not connected" in str(e):
+            pass
+        else:
+            raise
+    finally:
         manager.disconnect(websocket)

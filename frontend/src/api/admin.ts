@@ -109,6 +109,8 @@ export interface ExamParticipantRow {
   irt_scores: Record<string, number | null>;
   raw_total: number | null;
   total_score: number | null; // IRT scaled 0-1200 (nếu có)
+  submission_id: number | null;
+  omr_image_url: string | null;
 }
 
 export interface ExamParticipantsResponse {

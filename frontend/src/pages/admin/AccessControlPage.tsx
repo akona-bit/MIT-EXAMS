@@ -8,6 +8,8 @@ import {
   type StudentItem,
   type StaffMember,
 } from "../../api/admin";
+import { adminAccessApi } from "../../api/adminAccessApi";
+import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Skeleton";
@@ -90,6 +92,25 @@ function StudentsTab() {
 
   const toggleAccess = async (userId: number, current: boolean) => {
     try {
+      // Try to create/update through our new API
+      // Assume creating a new grant or updating existing. Since we don't know the exact grant_id here easily without fetching,
+      // the new backend logic would be: create a new grant when granted = true, or revoke active grants when false.
+      // But for simplicity of UI integration, we'll POST with source = manual
+      if (!current) {
+         await adminAccessApi.createAnswerAccess({
+           student_id: userId,
+           source: "manual"
+         });
+      } else {
+         // To revoke, we should ideally patch the specific grant ID. 
+         // Since the old API `updateStudentAccess` still exists on backend, 
+         // let's rely on backend updating `user.can_view_answers` as a fallback, 
+         // OR we should have the backend endpoint handle toggle.
+         // Actually, let's keep calling `updateStudentAccess` for legacy support, 
+         // AND call `createAnswerAccess`.
+         await updateStudentAccess(userId, false);
+      }
+      
       const result = await updateStudentAccess(userId, !current);
       setStudents((prev) =>
         prev.map((s) => (s.id === userId ? { ...s, can_view_answers: result.can_view_answers } : s))
@@ -152,7 +173,7 @@ function StudentsTab() {
                       <Badge variant="secondary">Chưa cấp</Badge>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
                     <Button
                       size="sm"
                       variant={s.can_view_answers ? "destructive" : "default"}
@@ -160,6 +181,9 @@ function StudentsTab() {
                     >
                       {s.can_view_answers ? "Thu hồi" : "Cấp quyền"}
                     </Button>
+                    <Link to={`/admin/students/${s.id}`}>
+                      <Button size="sm" variant="outline">Chi tiết</Button>
+                    </Link>
                   </td>
                 </tr>
               ))}
