@@ -324,17 +324,31 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                 select(IrtTask).where(IrtTask.celery_task_id == task_id)
             )
             task = result.scalars().first()
-            if task:
-                task.status = "STARTED"
-                task.logs = [{"time": datetime.now(timezone.utc).isoformat(), "msg": "Bắt đầu tiến trình phân tích IRT..."}]
+            
+            # Buffer log giữ trong biến local (KHÔNG mutate task.logs in-place —
+            # bẫy JSON SQLAlchemy: old-value == new-value do cùng tham chiếu list
+            # khiến ORM bỏ qua UPDATE). Persist bằng direct UPDATE từng lần ghi.
+            log_buffer: list[dict] = []
+
+            async def append_log(msg: str):
+                if not task:
+                    return
+                log_buffer.append({
+                    "time": datetime.now(timezone.utc).isoformat(),
+                    "msg": msg,
+                })
+                from sqlalchemy import update as sa_update
+                await db.execute(
+                    sa_update(IrtTask)
+                    .where(IrtTask.id == task.id)
+                    .values(logs=list(log_buffer))
+                )
                 await db.commit()
             
-            async def append_log(msg: str):
-                if task:
-                    logs = task.logs or []
-                    logs.append({"time": datetime.now(timezone.utc).isoformat(), "msg": msg})
-                    task.logs = list(logs)
-                    await db.commit()
+            if task:
+                task.status = "STARTED"
+                await db.commit()
+                await append_log("Bắt đầu tiến trình phân tích IRT...")
             
             # 2. Get ALL unique question_ids used in this exam's forms
             form_q_result = await db.execute(
