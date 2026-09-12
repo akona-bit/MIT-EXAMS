@@ -7,7 +7,7 @@ import {
   getMatrixUsage,
   createMatrixVersion,
   checkMatrixFeasibilityLocal,
-
+  parseStructureFile
 } from "../../api/matrix";
 import { getKnowledgeTree } from "../../api/knowledge";
 import { passageApi, PassageSearchResponse } from "../../api/passages";
@@ -71,6 +71,10 @@ export default function MatrixFormPage() {
   // DGNL Blueprint state
   const [isBlueprintOpen, setIsBlueprintOpen] = useState(false);
   
+  // File Upload State
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const handleApplyBlueprint = (data: { rules: any[]; groups: any[] }) => {
     setRules(data.rules);
     setGroups(data.groups);
@@ -250,9 +254,37 @@ export default function MatrixFormPage() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await parseStructureFile(formData);
+      
+      const newRules = res.rules.map((r: any) => ({
+        knowledge_node_id: r.knowledge_node_id,
+        question_type: r.question_type || undefined,
+        level: r.level || undefined,
+        count: r.count,
+        part: r.part,
+        note: r.note || "",
+      }));
 
-
+      setRules((prev) => [...prev, ...newRules]);
+      toast.success(`Đã import thành công ${newRules.length} rules từ file.`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Có lỗi xảy ra khi đọc file ma trận. Vui lòng kiểm tra lại định dạng.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   const updateRule = (index: number, field: keyof MatrixRule, value: any) => {
     const newRules = [...rules];
@@ -312,9 +344,21 @@ export default function MatrixFormPage() {
         </div>
         <div className="flex items-center gap-3">
            {!isEditMode && (
-             <Button variant="outline" onClick={() => setIsBlueprintOpen(true)} className="font-semibold">
-               <Blocks className="w-4 h-4 mr-2" /> Blueprint ĐGNL 120 câu
-             </Button>
+             <>
+               <input
+                 type="file"
+                 ref={fileInputRef}
+                 className="hidden"
+                 accept=".csv, .xlsx, .xls, .tsv"
+                 onChange={handleFileUpload}
+               />
+               <Button variant="outline" onClick={() => fileInputRef.current?.click()} isLoading={isUploading} className="font-semibold text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100">
+                 <Blocks className="w-4 h-4 mr-2" /> Import từ File
+               </Button>
+               <Button variant="outline" onClick={() => setIsBlueprintOpen(true)} className="font-semibold">
+                 <Blocks className="w-4 h-4 mr-2" /> Blueprint ĐGNL 120 câu
+               </Button>
+             </>
            )}
            <Button variant="ghost" onClick={() => navigate(-1)} className="font-semibold">Hủy bỏ</Button>
            <Button onClick={handleSubmit} isLoading={isLoading} size="lg" className="bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-500/25 px-8 rounded-xl font-bold">
@@ -538,6 +582,17 @@ export default function MatrixFormPage() {
                                              value={rule.count || 1}
                                            />
                                          </div>
+                                       </div>
+
+                                       <div className="col-span-2 space-y-1.5 mt-2 md:mt-0">
+                                         <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Chú thích (Ghi chú)</label>
+                                         <input
+                                           type="text"
+                                           placeholder="Nhập chú thích..."
+                                           className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
+                                           value={rule.note || ""}
+                                           onChange={(e) => updateRule(idx, "note", e.target.value)}
+                                         />
                                        </div>
                                      </div>
                                    </div>

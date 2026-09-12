@@ -219,7 +219,8 @@ async def create_matrix(request: Request, matrix_in: MatrixCreate, db: AsyncSess
             count=r.count,
             part=r.part,
             target_irt_b=r.target_irt_b,
-            group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
+            group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None,
+            note=r.note
         )
         db.add(rule)
 
@@ -285,7 +286,8 @@ async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSessio
             count=r.count,
             part=r.part,
             target_irt_b=r.target_irt_b,
-            group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None
+            group_id=local_to_group_id.get(r.group_local_id) if r.group_local_id else None,
+            note=r.note
         ))
 
     await db.commit()
@@ -647,6 +649,36 @@ async def execute_matrix_import(matrix_id: int, req: MatrixImportExecuteRequest,
         strategy=req.strategy
     )
     return {"message": "Import successful", "total_questions_added": total_count}
+
+@router.post("/parse-structure-file", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def parse_structure_file(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    content_bytes = await file.read()
+    content = content_bytes.decode('utf-8-sig', errors='ignore')
+    
+    preview = await MatrixImportService.preview_import(
+        db=db,
+        content=content,
+        level_ratios={}, # Simple rule
+        type_ratios={}   # Simple rule
+    )
+    
+    rules = []
+    for row in preview:
+        if row.get("node_id"):
+            for rule_data in row.get("distributed_rules", []):
+                rules.append({
+                    "knowledge_node_id": row["node_id"],
+                    "question_type": rule_data.get("question_type") or None,
+                    "level": rule_data.get("level") or None,
+                    "count": rule_data.get("count", 1),
+                    "part": rule_data.get("part", 1),
+                    "note": rule_data.get("note", "")
+                })
+    
+    return {"rules": rules, "preview_details": preview}
 
 
 

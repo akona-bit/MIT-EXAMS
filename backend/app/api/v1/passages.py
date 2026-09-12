@@ -154,6 +154,31 @@ async def create_questions_bulk(public_code: str, req: QuestionBulkCreateRequest
             )
             db.add(new_a)
 
+        # Add sub_items
+        if q_req.sub_items:
+            from app.models.question import QuestionSubItem
+            for sub in q_req.sub_items:
+                new_sub = QuestionSubItem(
+                    question_id=new_q.id,
+                    label=sub.label,
+                    prompt=sub.prompt,
+                    position=sub.position,
+                    point_weight=sub.point_weight,
+                    kind=sub.kind
+                )
+                db.add(new_sub)
+                await db.flush()
+                if sub.answers:
+                    for sub_ans in sub.answers:
+                        new_sub_a = Answer(
+                            question_id=new_q.id,
+                            sub_item_id=new_sub.id,
+                            content=sub_ans.content,
+                            is_correct=sub_ans.is_correct,
+                            position=sub_ans.position
+                        )
+                        db.add(new_sub_a)
+
         created_codes.append(q_code)
 
     await db.commit()
@@ -205,11 +230,17 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
             upd_q.source_title = q_req.source_title
             upd_q.knowledge_node_id = q_req.primary_knowledge_node_id
 
-            # Xóa answers cũ
+            # Xóa answers và sub_items cũ
             ans_stmt = select(Answer).where(Answer.question_id == upd_q.id)
             ans_res = await db.execute(ans_stmt)
             for a in ans_res.scalars().all():
                 await db.delete(a)
+
+            from app.models.question import QuestionSubItem
+            sub_stmt = select(QuestionSubItem).where(QuestionSubItem.question_id == upd_q.id)
+            sub_res = await db.execute(sub_stmt)
+            for s in sub_res.scalars().all():
+                await db.delete(s)
 
             await db.flush()
 
@@ -222,6 +253,30 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
                     position=ans.position
                 )
                 db.add(new_a)
+                
+            # Thêm sub_items mới
+            if q_req.sub_items:
+                for sub in q_req.sub_items:
+                    new_sub = QuestionSubItem(
+                        question_id=upd_q.id,
+                        label=sub.label,
+                        prompt=sub.prompt,
+                        position=sub.position,
+                        point_weight=sub.point_weight,
+                        kind=sub.kind
+                    )
+                    db.add(new_sub)
+                    await db.flush()
+                    if sub.answers:
+                        for sub_ans in sub.answers:
+                            new_sub_a = Answer(
+                                question_id=upd_q.id,
+                                sub_item_id=new_sub.id,
+                                content=sub_ans.content,
+                                is_correct=sub_ans.is_correct,
+                                position=sub_ans.position
+                            )
+                            db.add(new_sub_a)
 
             created_codes.append(upd_q.public_code)
 
@@ -251,6 +306,30 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
                     position=ans.position
                 )
                 db.add(new_a)
+                
+            if q_req.sub_items:
+                from app.models.question import QuestionSubItem
+                for sub in q_req.sub_items:
+                    new_sub = QuestionSubItem(
+                        question_id=new_q.id,
+                        label=sub.label,
+                        prompt=sub.prompt,
+                        position=sub.position,
+                        point_weight=sub.point_weight,
+                        kind=sub.kind
+                    )
+                    db.add(new_sub)
+                    await db.flush()
+                    if sub.answers:
+                        for sub_ans in sub.answers:
+                            new_sub_a = Answer(
+                                question_id=new_q.id,
+                                sub_item_id=new_sub.id,
+                                content=sub_ans.content,
+                                is_correct=sub_ans.is_correct,
+                                position=sub_ans.position
+                            )
+                            db.add(new_sub_a)
 
             created_codes.append(q_code)
 

@@ -30,15 +30,18 @@ class MatrixRuleBase(BaseModel):
     part: int = 1
     target_irt_b: Optional[float] = None
     position: int = 0
+    note: Optional[str] = None
 
 class MatrixRuleCreate(MatrixRuleBase):
     group_local_id: Optional[str] = None
+    note: Optional[str] = None
 
 class MatrixRuleResponse(MatrixRuleBase):
     id: int
     matrix_id: int
     group_id: Optional[int] = None
     knowledge_node: Optional[Dict[str, Any]] = None
+    note: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 # --- Matrix Schemas ---
@@ -102,6 +105,7 @@ class MatrixImportPreviewRow(BaseModel):
     original_count: int
     status: str
     node_id: Optional[int] = None
+    note: Optional[str] = None
     suggestions: List[Dict[str, Any]] = []
     distributed_rules: List[Dict[str, Any]] = []
 

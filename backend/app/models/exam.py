@@ -48,6 +48,7 @@ class MatrixRule(Base):
     target_irt_b: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
     group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("matrix_rule_group.id"), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     matrix: Mapped["Matrix"] = relationship(back_populates="rules")
     group: Mapped[Optional["MatrixRuleGroup"]] = relationship(back_populates="rules")

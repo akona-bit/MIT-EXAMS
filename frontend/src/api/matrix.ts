@@ -154,3 +154,12 @@ export async function getDgnlBlueprintTemplate(): Promise<{ rules: any[]; groups
   const response = await client.get<{ rules: any[]; groups: any[] }>('/api/v1/matrix/dgnl-blueprint/template');
   return response.data;
 }
+
+export async function parseStructureFile(formData: FormData): Promise<{ rules: any[]; preview_details: any[] }> {
+  const response = await client.post('/api/v1/matrix/parse-structure-file', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+}

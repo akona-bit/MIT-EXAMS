@@ -22,39 +22,79 @@ class MatrixImportService:
             dialect = csv.Sniffer().sniff(sample, delimiters=",\t")
         except csv.Error:
             dialect = csv.excel_tab
-        reader = csv.reader(io.StringIO(content), dialect)
+            
+        reader = list(csv.reader(io.StringIO(content), dialect))
+        if not reader:
+            return []
+            
+        first_row = [p.strip() for p in reader[0]]
+        header_str = " ".join(first_row).casefold()
+        is_dgnl = "mã" in header_str and "kiến thức" in header_str
+        start_idx = 1 if (is_dgnl or any(word in header_str for word in ("topic", "chủ đề", "concept", "skill"))) else 0
+
         rows = []
-        for raw_parts in reader:
+        current_topic = ""
+        current_concept = ""
+        
+        for raw_parts in reader[start_idx:]:
             parts = [part.strip() for part in raw_parts]
             if not parts or not any(parts):
                 continue
-            header = " ".join(parts[:4]).casefold()
-            if not rows and any(word in header for word in ("topic", "chủ đề", "concept", "skill")):
-                continue
-            if len(parts) >= 5:
+                
+            if is_dgnl:
+                code = parts[0] if len(parts) > 0 else ""
+                if len(parts) > 1 and parts[1]:
+                    current_topic = parts[1]
+                if len(parts) > 2 and parts[2]:
+                    skill = parts[2]
+                else:
+                    skill = current_topic
+                    
+                count_str = parts[3] if len(parts) > 3 and parts[3] else "0"
+                note_str = parts[4] if len(parts) > 4 else ""
+                
+                part = 1
+                if code.startswith('B'): part = 2
+                elif code.startswith('C'): part = 3
+                elif code.startswith('D'): part = 4
+                
                 rows.append({
-                    "topic": parts[0],
-                    "concept": parts[1],
-                    "skill": parts[2],
-                    "count": parts[3],
-                    "part": parts[4],
+                    "topic": current_topic,
+                    "concept": "",
+                    "skill": skill,
+                    "count": count_str,
+                    "part": str(part),
+                    "note": note_str,
+                    "code": code
                 })
-            elif len(parts) == 4:
-                rows.append({
-                    "topic": parts[0],
-                    "concept": parts[1],
-                    "skill": parts[2],
-                    "count": parts[3],
-                    "part": "1",
-                })
-            elif len(parts) == 3:
-                rows.append({
-                    "topic": parts[0],
-                    "concept": parts[1],
-                    "skill": parts[2],
-                    "count": "1",
-                    "part": "1",
-                })
+            else:
+                if len(parts) >= 5:
+                    rows.append({
+                        "topic": parts[0],
+                        "concept": parts[1],
+                        "skill": parts[2],
+                        "count": parts[3],
+                        "part": parts[4],
+                        "note": parts[5] if len(parts) > 5 else ""
+                    })
+                elif len(parts) == 4:
+                    rows.append({
+                        "topic": parts[0],
+                        "concept": parts[1],
+                        "skill": parts[2],
+                        "count": parts[3],
+                        "part": "1",
+                        "note": ""
+                    })
+                elif len(parts) == 3:
+                    rows.append({
+                        "topic": parts[0],
+                        "concept": parts[1],
+                        "skill": parts[2],
+                        "count": "1",
+                        "part": "1",
+                        "note": ""
+                    })
         return rows
 
     @staticmethod
@@ -105,7 +145,7 @@ class MatrixImportService:
             concept_name = row["concept"]
             skill_name = row["skill"]
             try:
-                count = max(0, int(row["count"]))
+                count = max(0, int(float(row["count"])))
                 part = int(row["part"])
             except (TypeError, ValueError):
                 count = 0
@@ -168,6 +208,7 @@ class MatrixImportService:
                             "question_type": question_type,
                             "count": question_count,
                             "part": part,
+                            "note": row.get("note", "")
                         })
             if not distributed_rules and count > 0:
                 distributed_rules.append({
@@ -175,6 +216,7 @@ class MatrixImportService:
                     "question_type": list(type_ratios.keys())[0] if type_ratios else "SINGLE_CHOICE",
                     "count": count,
                     "part": part,
+                    "note": row.get("note", "")
                 })
 
             preview.append({
@@ -184,6 +226,7 @@ class MatrixImportService:
                 "original_count": count,
                 "status": "match" if node_id else "new",
                 "node_id": node_id,
+                "note": row.get("note", ""),
                 "suggestions": suggestions,
                 "distributed_rules": distributed_rules,
             })
@@ -264,6 +307,7 @@ class MatrixImportService:
                             level=rule_data.get("level", 1),
                             count=count,
                             part=rule_data.get("part", 1),
+                            note=rule_data.get("note") or None
                         ))
                 else:
                     db.add(MatrixRule(
@@ -273,6 +317,7 @@ class MatrixImportService:
                         level=rule_data.get("level", 1),
                         count=count,
                         part=rule_data.get("part", 1),
+                        note=rule_data.get("note") or None
                     ))
                 total_added += count
 

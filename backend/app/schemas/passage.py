@@ -40,13 +40,14 @@ class QuestionBulkItem(QuestionCreate):
     @field_validator('answers')
     @classmethod
     def validate_answers(cls, v, info):
-        # We only validate strictly for SINGLE_CHOICE right now
-        # But assuming all bulk items here are SINGLE_CHOICE as per prompt
-        if len(v) != 4:
-            raise ValueError("Must have exactly 4 answers")
-        correct_count = sum(1 for a in v if a.is_correct)
-        if correct_count != 1:
-            raise ValueError("Must have exactly 1 correct answer")
+        q_type = info.data.get('type')
+        from .question import QuestionType
+        if q_type == QuestionType.SINGLE_CHOICE:
+            if len(v) != 4:
+                raise ValueError("Must have exactly 4 answers for SINGLE_CHOICE")
+            correct_count = sum(1 for a in v if a.is_correct)
+            if correct_count != 1:
+                raise ValueError("Must have exactly 1 correct answer for SINGLE_CHOICE")
         return v
 
 class QuestionBulkCreateRequest(BaseModel):
@@ -58,11 +59,14 @@ class QuestionBulkUpdateItem(QuestionCreate):
     @field_validator('answers')
     @classmethod
     def validate_answers(cls, v, info):
-        if len(v) != 4:
-            raise ValueError("Must have exactly 4 answers")
-        correct_count = sum(1 for a in v if a.is_correct)
-        if correct_count != 1:
-            raise ValueError("Must have exactly 1 correct answer")
+        q_type = info.data.get('type')
+        from .question import QuestionType
+        if q_type == QuestionType.SINGLE_CHOICE:
+            if len(v) != 4:
+                raise ValueError("Must have exactly 4 answers for SINGLE_CHOICE")
+            correct_count = sum(1 for a in v if a.is_correct)
+            if correct_count != 1:
+                raise ValueError("Must have exactly 1 correct answer for SINGLE_CHOICE")
         return v
 
 class QuestionBulkUpdateRequest(BaseModel):
