@@ -400,6 +400,45 @@ export default function MatrixFormPage() {
             </div>
           )}
 
+          {/* Matrix Visualization Dashboard (Full Width) */}
+          {rules.length > 0 && (
+            <div className="mb-8">
+               <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-bold text-lg text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                     <BarChart2 className="w-5 h-5 text-indigo-500" /> Dashboard Cấu trúc Ma trận
+                  </h4>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowVisualization(!showVisualization)}
+                    className="text-sm font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-800/40 px-4 py-2 rounded-xl transition-colors"
+                  >
+                    {showVisualization ? "Thu gọn Biểu đồ" : "Mở Biểu đồ Phân tích"}
+                  </button>
+               </div>
+               
+               <AnimatePresence>
+                  {showVisualization && (
+                     <motion.div 
+                       initial={{ height: 0, opacity: 0 }}
+                       animate={{ height: "auto", opacity: 1 }}
+                       exit={{ height: 0, opacity: 0 }}
+                       className="overflow-hidden"
+                     >
+                        <div className="mb-2">
+                          <MatrixVisualization 
+                            data={rules.map(r => ({
+                              ...r,
+                              knowledge_node: nodes.find(n => n.id === r.knowledge_node_id)
+                            }))} 
+                            groups={groups}
+                          />
+                        </div>
+                     </motion.div>
+                  )}
+               </AnimatePresence>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
              
              {/* LEFT COLUMN: Main Info & Actions */}
@@ -650,40 +689,7 @@ export default function MatrixFormPage() {
                      </div>
                    )}
 
-                   <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex justify-between items-center mb-4">
-                         <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                            <BarChart2 className="w-4 h-4 text-slate-400" /> Biểu đồ cấu trúc
-                         </h4>
-                         <button 
-                           type="button" 
-                           onClick={() => setShowVisualization(!showVisualization)}
-                           className="text-xs font-bold text-primary-600 hover:text-primary-700 bg-primary-50 px-2 py-1 rounded"
-                         >
-                           {showVisualization ? "Ẩn đi" : "Hiện thị"}
-                         </button>
-                      </div>
-                      
-                      <AnimatePresence>
-                         {showVisualization && rules.length > 0 && (
-                            <motion.div 
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                               <div className="bg-slate-50 dark:bg-[#0f172a]/80 border border-slate-200 dark:border-slate-700/50 rounded-xl p-2 min-h-[200px]">
-                                 <MatrixVisualization 
-                                   data={rules.map(r => ({
-                                     ...r,
-                                     knowledge_node: nodes.find(n => n.id === r.knowledge_node_id)
-                                   }))} 
-                                 />
-                               </div>
-                            </motion.div>
-                         )}
-                      </AnimatePresence>
-                   </div>
+
                 </div>
              </div>
           </div>
