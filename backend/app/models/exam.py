@@ -80,12 +80,17 @@ class ParticipantStatus(str, enum.Enum):
     SUBMITTED = "SUBMITTED"
     SUSPENDED = "SUSPENDED"
 
+class ExamMode(str, enum.Enum):
+    ONLINE = "ONLINE"
+    PAPER = "PAPER"
+
 class Exam(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     matrix_id: Mapped[int] = mapped_column(ForeignKey("matrix.id"))
     allow_omr: Mapped[bool] = mapped_column(Boolean, default=False)
+    exam_pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -112,6 +117,8 @@ class ExamParticipant(Base):
     suspended_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), nullable=True)
     device_fingerprint: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    exam_mode: Mapped[Optional[ExamMode]] = mapped_column(SQLAlchemyEnum(ExamMode), nullable=True, default=None)
+    exam_mode_changed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     exam: Mapped["Exam"] = relationship(back_populates="participants")
     user = relationship("User", foreign_keys=[user_id])

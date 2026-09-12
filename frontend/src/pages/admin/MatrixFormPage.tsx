@@ -17,7 +17,8 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import DgnlBlueprintModal from "../../components/admin/matrix/DgnlBlueprintModal";
 import MatrixVisualization from "../../components/matrix/MatrixVisualization";
-import { Layers, Link2, AlertTriangle, Activity, Settings, BarChart2, CheckCircle2, Blocks, Lock } from "lucide-react";
+import { Layers, Link2, AlertTriangle, Activity, Settings, BarChart2, CheckCircle2, Blocks, Lock, Printer } from "lucide-react";
+import { PrintPreviewModal, MatrixSpecPreview, QuestionStatsPreview } from "../../components/print";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "../../components/ui/Toast";
 import MatrixNodeSelector from "../../components/admin/matrix/MatrixNodeSelector";
@@ -70,6 +71,10 @@ export default function MatrixFormPage() {
   
   // DGNL Blueprint state
   const [isBlueprintOpen, setIsBlueprintOpen] = useState(false);
+
+  // Print Preview state
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printType, setPrintType] = useState<"spec" | "stats">("spec");
   
   // File Upload State
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -220,6 +225,9 @@ export default function MatrixFormPage() {
           count: Number(r.count || 1),
           part: Number(r.part || 1),
           group_local_id: r.group_local_id,
+          target_irt_b: r.target_irt_b != null ? Number(r.target_irt_b) : null,
+          position: r.position != null ? Number(r.position) : 0,
+          note: r.note || r._note || null,
         })),
         groups: groups.map(g => {
           let pid = g.required_passage_id;
@@ -364,9 +372,17 @@ export default function MatrixFormPage() {
                <Button variant="outline" onClick={() => fileInputRef.current?.click()} isLoading={isUploading} className="font-semibold text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100">
                  <Blocks className="w-4 h-4 mr-2" /> Import từ File
                </Button>
-               <Button variant="outline" onClick={() => setIsBlueprintOpen(true)} className="font-semibold">
-                 <Blocks className="w-4 h-4 mr-2" /> Blueprint ĐGNL 120 câu
-               </Button>
+                <Button variant="outline" onClick={() => setIsBlueprintOpen(true)} className="font-semibold">
+                  <Blocks className="w-4 h-4 mr-2" /> Blueprint ĐGNL 120 câu
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setPrintType("spec"); setIsPrintModalOpen(true); }}
+                  disabled={rules.length === 0}
+                  className="font-semibold text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100"
+                >
+                  <Printer className="w-4 h-4 mr-2" /> Xem trước khi in
+                </Button>
              </>
            )}
            <Button variant="ghost" onClick={() => navigate(-1)} className="font-semibold">Hủy bỏ</Button>
@@ -753,6 +769,50 @@ export default function MatrixFormPage() {
           onClose={() => setIsBlueprintOpen(false)}
           onApply={handleApplyBlueprint}
         />
+
+        <PrintPreviewModal
+          open={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          title={printType === "spec" ? "Ma trận đặc tả - Xem trước khi in" : "Thống kê câu hỏi - Xem trước khi in"}
+        >
+          {printType === "spec" ? (
+            <MatrixSpecPreview
+              name={name || "Ma trận chưa tên"}
+              description={description || undefined}
+              rules={rules.map(r => ({
+                id: r.id || 0,
+                knowledge_node_id: Number(r.knowledge_node_id),
+                question_type: r.question_type || null,
+                level: r.level || null,
+                count: Number(r.count || 1),
+                part: Number(r.part || 1),
+                knowledge_node: r.knowledge_node,
+                group_local_id: r.group_local_id,
+                note: r.note || r._note || null,
+                position: r.position,
+              }))}
+              groups={groups}
+            />
+          ) : (
+            <QuestionStatsPreview
+              rules={rules.map(r => ({
+                id: r.id || 0,
+                knowledge_node_id: Number(r.knowledge_node_id),
+                question_type: r.question_type || null,
+                level: r.level || null,
+                count: Number(r.count || 1),
+                part: Number(r.part || 1),
+                knowledge_node: r.knowledge_node,
+                group_local_id: r.group_local_id,
+                note: r.note || r._note || null,
+                position: r.position,
+              }))}
+              groups={groups}
+              matrixName={name || undefined}
+              matrixDescription={description || undefined}
+            />
+          )}
+        </PrintPreviewModal>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, status, BackgroundTasks, File, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.db.database import get_db
 from app.models.exam import Exam, ExamStatus, Matrix, ExamForm, ExamParticipant
 from app.schemas.exam import ExamResponse, GenerateExamRequest, ExamPublishRequest, ExamUpdateRequest, ExamParticipantCreate, ExamParticipantResponse
-from app.schemas.exam_session import AutosaveRequest, AutosaveResponse, TrackingEventRequest, TrackingEventResponse, ExamSessionInfoResponse, SubmitExamRequest
+from app.schemas.exam_session import AutosaveRequest, AutosaveResponse, TrackingEventRequest, TrackingEventResponse, ExamSessionInfoResponse, SubmitExamRequest, UpdateExamModeRequest
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
 from app.services.generator import generate_original_exam, generate_shuffled_forms
@@ -162,6 +162,44 @@ async def update_exam(request: Request, exam_id: int, exam_in: ExamUpdateRequest
     await db.refresh(exam)
     capture(request, "exam_updated", {"exam_id": exam_id})
     return exam
+
+
+@router.put("/{exam_id}/upload-pdf", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def upload_exam_pdf(
+    request: Request,
+    exam_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    exam = await db.get(Exam, exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    
+    from app.core.supabase_client import supabase_client
+    from uuid import uuid4
+    
+    file_ext = file.filename.split('.')[-1]
+    stored_name = f"exam_{exam_id}_{uuid4().hex[:8]}.{file_ext}"
+    
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(status_code=400, detail="File too large (max 50MB)")
+    
+    try:
+        supabase_client.storage.from_("exam-pdfs").upload(stored_name, content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    
+    public_url = supabase_client.storage.from_("exam-pdfs").get_public_url(stored_name)
+    exam.exam_pdf_url = public_url
+    await db.commit()
+    await db.refresh(exam)
+    
+    capture(request, "exam_pdf_uploaded", {"exam_id": exam_id, "filename": stored_name})
+    return {"success": True, "url": public_url, "filename": stored_name}
 
 
 @router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN"]))])
@@ -386,6 +424,13 @@ async def get_session(exam_id: int, db: AsyncSession = Depends(get_db), current_
     except Exception as e:
         logger.error(f"Session endpoint error: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{exam_id}/exam-mode", dependencies=[Depends(RequireRole(["STUDENT"]))])
+async def update_mode(exam_id: int, req: UpdateExamModeRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Update exam mode (ONLINE/PAPER). Only allowed once per participant."""
+    from app.services.exam_session import update_exam_mode
+    result = await update_exam_mode(db, exam_id, current_user.id, req.exam_mode)
+    return result
 
 @router.post("/{exam_id}/autosave", response_model=AutosaveResponse, dependencies=[Depends(RequireRole(["STUDENT"]))])
 async def autosave(exam_id: int, req: AutosaveRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):

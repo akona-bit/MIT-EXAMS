@@ -5,7 +5,8 @@ import type { Matrix } from "../../types";
 import Button from "../../components/ui/Button";
 import DataTable, { type Column } from "../../components/ui/DataTable";
 import MatrixDistributionCharts from "../../components/admin/MatrixDistributionCharts";
-import { CheckCircle, XCircle, Loader2, ShieldCheck } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, ShieldCheck, Printer } from "lucide-react";
+import { PrintPreviewModal, MatrixSpecPreview, QuestionStatsPreview } from "../../components/print";
 
 export default function MatrixDetailPage() {
   const { id } = useParams();
@@ -16,6 +17,10 @@ export default function MatrixDetailPage() {
   // Feasibility check state
   const [isChecking, setIsChecking] = useState(false);
   const [feasibilityResult, setFeasibilityResult] = useState<{ feasible: boolean; message: string; shortages?: string[] } | null>(null);
+
+  // Print Preview state
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printType, setPrintType] = useState<"spec" | "stats">("spec");
 
   useEffect(() => {
     if (!id) return;
@@ -47,26 +52,26 @@ export default function MatrixDetailPage() {
   };
 
   const columns: Column<any>[] = [
-    { key: "knowledge_node_id", header: "Kiến thức", render: (val) => `Node #${val}` },
+    { key: "knowledge_node_id", header: "Kiến thức", render: (row) => `Node #${row.knowledge_node_id}` },
     {
       key: "level",
       header: "Mức độ",
-      render: (val) => {
+      render: (row) => {
         const levels: Record<number, string> = { 1: "NB", 2: "TH", 3: "VD", 4: "VDC" };
-        return levels[val] || val || "—";
+        return levels[row.level] || row.level || "—";
       },
     },
-    { key: "question_type", header: "Dạng câu", render: (val) => val || "—" },
+    { key: "question_type", header: "Dạng câu", render: (row) => row.question_type || "—" },
     { key: "count", header: "Số câu" },
     {
       key: "part",
       header: "Phần",
-      render: (val) => {
+      render: (row) => {
         const parts: Record<number, string> = { 1: "Tiếng Việt", 2: "Tiếng Anh", 3: "Toán học", 4: "Tư duy khoa học" };
-        return parts[val] || `Phần ${val}`;
+        return parts[row.part] || `Phần ${row.part}`;
       },
     },
-    { key: "group_id", header: "Nhóm", render: (val) => val ? `#${val}` : "—" },
+    { key: "group_id", header: "Nhóm", render: (row) => row.group_id ? `#${row.group_id}` : "—" },
   ];
 
   if (isLoading) {
@@ -101,6 +106,13 @@ export default function MatrixDetailPage() {
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => navigate(`/admin/matrix/${id}/edit`)}>
             Sửa ma trận
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => { setPrintType("spec"); setIsPrintModalOpen(true); }}
+            className="text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100"
+          >
+            <Printer className="w-4 h-4 mr-2" /> Xem trước khi in
           </Button>
           <Button variant="ghost" onClick={() => navigate("/admin/matrix")}>
             Quay lại
@@ -183,6 +195,28 @@ export default function MatrixDetailPage() {
           <DataTable data={matrix.rules} columns={columns} keyExtractor={(item) => item.id} />
         </div>
       </div>
+
+      <PrintPreviewModal
+        open={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title={printType === "spec" ? "Ma trận đặc tả - Xem trước khi in" : "Thống kê câu hỏi - Xem trước khi in"}
+      >
+        {printType === "spec" ? (
+          <MatrixSpecPreview
+            name={matrix.name}
+            description={matrix.description || undefined}
+            rules={matrix.rules || []}
+            groups={matrix.groups}
+          />
+        ) : (
+          <QuestionStatsPreview
+            rules={matrix.rules || []}
+            groups={matrix.groups}
+            matrixName={matrix.name}
+            matrixDescription={matrix.description || undefined}
+          />
+        )}
+      </PrintPreviewModal>
     </div>
   );
 }

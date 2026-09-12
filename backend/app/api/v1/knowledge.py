@@ -276,12 +276,16 @@ async def get_knowledge_graph(subject: Optional[str] = None, db: AsyncSession = 
     graph_edges = []
     
     for node in filtered_nodes:
-        node_type_str = node.node_type.value.lower() if node.node_type else "skill"
+        node_type_str = node.node_type.value.upper() if node.node_type else "SKILL"
         graph_nodes.append(GraphNode(
             id=str(node.id),
+            entity_id=node.id,
             label=node.name,
             type=node_type_str,
-            question_count=question_count_by_node.get(node.id, 0)
+            path=node.path_code,
+            question_count=question_count_by_node.get(node.id, 0),
+            description=node.description,
+            note=node.note
         ))
         
         if node.parent_id and node.parent_id in valid_ids:

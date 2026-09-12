@@ -15,7 +15,8 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import VerificationUploadModal from "../../components/student/VerificationUploadModal";
 import { sanitizeHtml } from '../../utils/sanitize';
 import { supabase } from "../../lib/supabase";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud, Download, Printer } from "lucide-react";
+import { PrintPreviewModal, AnswerSheetPreview } from "../../components/print";
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -41,6 +42,7 @@ export default function StudentExamShell() {
     new Set()
   );
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [examEndTime, setExamEndTime] = useState<string | null>(null);
 
   // Anti-cheat state
   const lastEventTime = useRef<number>(0);
@@ -61,6 +63,9 @@ export default function StudentExamShell() {
   const [omrImage, setOmrImage] = useState<File | null>(null);
   const [isUploadingOmr, setIsUploadingOmr] = useState(false);
   const [omrPreview, setOmrPreview] = useState<string | null>(null);
+
+  // Print Preview State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // ─── Fetch session ───
   useEffect(() => {
@@ -87,7 +92,18 @@ export default function StudentExamShell() {
       const res = await api.get(`/api/v1/exams/${id}/session`);
       const data = res.data;
       setSessionInfo(data);
-      setTimeLeft(data.remaining_seconds);
+      setExamEndTime(data.exam_end_time);
+      
+      // OMR mode: calculate timeLeft from exam_end_time
+      if (examMode === 'omr' && data.exam_end_time) {
+        const endUtc = new Date(data.exam_end_time).getTime();
+        const nowUtc = new Date(data.server_time).getTime();
+        const diff = Math.max(0, Math.floor((endUtc - nowUtc) / 1000));
+        setTimeLeft(diff);
+      } else {
+        setTimeLeft(data.remaining_seconds);
+      }
+      
       const answersMap: any = {};
       data.saved_answers?.forEach((sa: any) => {
         answersMap[sa.exam_form_question_id] = sa;
@@ -367,7 +383,7 @@ export default function StudentExamShell() {
 
   const answeredCount = Object.keys(savedAnswers).length;
   const totalQuestions = sessionInfo?.questions?.length || 0;
-  const isUrgent = timeLeft !== null && timeLeft < 300;
+  const isUrgent = examMode !== 'omr' && timeLeft !== null && timeLeft < 300;
 
   if (maintenance?.maintenance_mode_all || maintenance?.maintenance_mode_exam) {
     return <MaintenanceScreen />;
@@ -610,7 +626,10 @@ export default function StudentExamShell() {
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              {timeLeft === null ? "Không giới hạn thời gian" : formatTime(timeLeft)}
+              {examMode === 'omr' && examEndTime 
+                ? `Hạn nộp: ${new Date(examEndTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+                : timeLeft === null ? "Không giới hạn thời gian" : formatTime(timeLeft)
+              }
             </div>
 
             {/* Feedback Button */}
@@ -706,9 +725,31 @@ export default function StudentExamShell() {
                   <UploadCloud className="w-8 h-8" />
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Nộp bài thi bằng phiếu OMR</h2>
-                <p className="text-slate-500 text-sm mb-8">
+                <p className="text-slate-500 text-sm mb-4">
                   Bạn đang làm bài theo hình thức trên giấy. Vui lòng chụp ảnh phiếu trả lời (OMR) rõ nét và tải lên đây.
                 </p>
+                
+                {/* Answer Sheet Actions */}
+                <div className="flex gap-3 justify-center mb-6">
+                  <button
+                    onClick={() => setIsPrintModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition-colors font-medium text-sm"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Xem phiếu trả lời
+                  </button>
+                  {sessionInfo?.exam_pdf_url && (
+                    <a
+                      href={sessionInfo.exam_pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg border border-green-200 transition-colors font-medium text-sm"
+                    >
+                      <Download className="w-4 h-4" />
+                      Tải đề thi PDF
+                    </a>
+                  )}
+                </div>
 
                 {omrPreview ? (
                   <div className="relative mb-6 group">
@@ -925,6 +966,18 @@ export default function StudentExamShell() {
         onClose={() => setIsFeedbackOpen(false)}
         examSessionId={id}
       />
+
+      {/* Print Preview Modal for Answer Sheet */}
+      <PrintPreviewModal
+        open={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title="Phiếu trả lời trắc nghiệm"
+      >
+        <AnswerSheetPreview
+          schoolName={sessionInfo?.exam_name}
+          examTitle={sessionInfo?.exam_name}
+        />
+      </PrintPreviewModal>
     </div>
   );
 }

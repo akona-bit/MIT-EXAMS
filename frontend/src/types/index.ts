@@ -172,18 +172,22 @@ export interface MatrixRuleGroup {
   local_id: string;
   label?: string | null;
   required_passage_id?: number | null;
+  group_mode?: string;
 }
 
 export interface MatrixRule {
   id: number;
   knowledge_node_id: number;
-  question_type: string;
-  level: number;
+  question_type: string | null;
+  level: number | null;
   count: number;
   part: number;
   knowledge_node?: KnowledgeNode;
   group_id?: number | null;
   group_local_id?: string;
+  target_irt_b?: number | null;
+  position?: number;
+  note?: string | null;
 }
 
 export interface Matrix {
@@ -209,6 +213,7 @@ export interface Exam {
   show_score_mode: string;
   show_answer_mode: string;
   allow_omr?: boolean;
+  exam_pdf_url?: string | null;
   created_at: string;
   submission_count?: number;
 }

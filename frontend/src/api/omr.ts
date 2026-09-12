@@ -11,6 +11,11 @@ export interface OmrSheet {
     exam_submission_id?: number | null;
 }
 
+export interface OmrSheetDetail extends OmrSheet {
+    job_id: number;
+    answers: Record<string, string>;
+}
+
 export interface OmrJob {
     id: number;
     exam_id: number;
@@ -40,7 +45,12 @@ export async function getOmrJob(jobId: number): Promise<OmrJobDetail> {
     return response.data.data;
 }
 
-export async function confirmOmrSheet(sheetId: number): Promise<{ task_id: string; message: string }> {
-    const response = await client.post(`/api/v1/omr/sheets/${sheetId}/review`);
+export async function getOmrSheet(sheetId: number): Promise<OmrSheetDetail> {
+    const response = await client.get(`/api/v1/omr/sheets/${sheetId}`);
+    return response.data.data;
+}
+
+export async function confirmOmrSheet(sheetId: number, answersOverride?: Record<number, string | null>): Promise<{ task_id: string; message: string }> {
+    const response = await client.post(`/api/v1/omr/sheets/${sheetId}/review`, answersOverride || {});
     return response.data.data;
 }

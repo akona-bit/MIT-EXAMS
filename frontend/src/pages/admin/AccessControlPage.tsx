@@ -40,11 +40,11 @@ export default function AccessControlPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1 w-fit">
+      <div className="flex gap-1 rounded-xl border border-slate-200 dark:border-primary-900/50 bg-slate-100/50 dark:bg-[#0b1121]/60 backdrop-blur-sm p-1 w-fit">
         <button
           onClick={() => setTab("students")}
           className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${tab === "students"
-            ? "bg-white dark:bg-slate-900 text-primary-600 shadow-sm"
+            ? "bg-white dark:bg-slate-800 text-primary-600 shadow-sm"
             : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
             }`}
         >
@@ -53,7 +53,7 @@ export default function AccessControlPage() {
         <button
           onClick={() => setTab("staff")}
           className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${tab === "staff"
-            ? "bg-white dark:bg-slate-900 text-primary-600 shadow-sm"
+            ? "bg-white dark:bg-slate-800 text-primary-600 shadow-sm"
             : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
             }`}
         >
@@ -134,7 +134,7 @@ function StudentsTab() {
         <span className="text-xs text-slate-400 whitespace-nowrap">{total} thí sinh</span>
       </div>
 
-      <div className="overflow-hidden bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
+      <div className="overflow-hidden bg-white dark:bg-[#0b1121]/60 shadow-lg border border-slate-200 dark:border-primary-900/50 rounded-xl backdrop-blur-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
@@ -320,7 +320,7 @@ function StaffTab() {
         <Button onClick={() => setIsInviteModalOpen(true)}>+ Mời người dùng</Button>
       </div>
 
-      <div className="overflow-hidden bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 rounded-2xl">
+      <div className="overflow-hidden bg-white dark:bg-[#0b1121]/60 shadow-lg border border-slate-200 dark:border-primary-900/50 rounded-xl backdrop-blur-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">

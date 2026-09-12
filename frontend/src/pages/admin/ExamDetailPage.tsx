@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getExam, publishExam, getExamForms, updateExam } from '../../api/exams';
+import { getExam, publishExam, getExamForms, updateExam, uploadExamPdf } from '../../api/exams';
 import { runIrtCalibration, getIrtTaskStatus } from '../../api/grading';
 import { getExamOverview, getExamItemsAnalysis, type ExamOverview, type ExamItemAnalysis } from '../../api/statistics';
 import { generateCredentials } from '../../api/exams';
@@ -11,6 +11,8 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { toast } from '../../components/ui/Toast';
 import Modal from '../../components/ui/Modal';
 import IrtTerminalModal from '../../components/admin/IrtTerminalModal';
+import { Printer, Upload, FileText, ExternalLink } from 'lucide-react';
+import { PrintPreviewModal, AnswerSheetPreview } from '../../components/print';
 
 export default function ExamDetailPage() {
   const { id } = useParams();
@@ -26,15 +28,21 @@ export default function ExamDetailPage() {
   
   const [overview, setOverview] = useState<ExamOverview | null>(null);
   const [itemsAnalysis, setItemsAnalysis] = useState<ExamItemAnalysis[] | null>(null);
-  const [activeTab, setActiveTab] = useState<'info' | 'irt'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'irt' | 'files'>('info');
 
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'publish' | 'irt' | null>(null);
+  const [formsCount, setFormsCount] = useState(0);
 
   const [isGeneratingCredentials, setIsGeneratingCredentials] = useState(false);
-const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
+  const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
   const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
   const [credentialsList, setCredentialsList] = useState<any[]>([]);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Print Preview state
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const fetchExamData = async () => {
     if (!id) return;
@@ -45,6 +53,7 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
       
       const forms = await getExamForms(parseInt(id));
       setHasExistingForms(forms.length > 0);
+      setFormsCount(forms.length);
       
       if (examData.status === 'FINISHED' || examData.status === 'PUBLISHED') {
          try {
@@ -108,6 +117,28 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
     setConfirmAction('publish');
   };
 
+  const handleUploadPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !exam) return;
+    
+    if (!file.name.endsWith('.pdf')) {
+      toast.error("Chỉ chấp nhận file PDF");
+      return;
+    }
+    
+    setIsUploadingPdf(true);
+    try {
+      const result = await uploadExamPdf(exam.id, file);
+      setExam({ ...exam, exam_pdf_url: result.url });
+      toast.success("Tải file PDF bài thi thành công!");
+    } catch (error) {
+      toast.error("Lỗi khi tải file PDF lên");
+    } finally {
+      setIsUploadingPdf(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleRunIrt = () => {
     setConfirmAction('irt');
   };
@@ -151,6 +182,12 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
           Thông tin chung
         </button>
         <button
+          className={`px-4 py-3 font-semibold text-sm transition-colors ${activeTab === 'files' ? 'text-primary-600 border-b-2 border-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+          onClick={() => setActiveTab('files')}
+        >
+          File thi
+        </button>
+        <button
           className={`px-4 py-3 font-semibold text-sm transition-colors ${activeTab === 'irt' ? 'text-primary-600 border-b-2 border-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
           onClick={() => setActiveTab('irt')}
         >
@@ -160,7 +197,7 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
-          {activeTab === 'info' ? (
+          {activeTab === 'info' && (
             <div className="p-6">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Chi tiết kỳ thi</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
@@ -175,6 +212,10 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
                 <div className="space-y-1">
                   <p className="text-slate-500 dark:text-slate-400">ID Ma trận</p>
                   <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.matrix_id || <span className="text-danger-500 italic">Chưa cấu hình</span>}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 dark:text-slate-400">Số mã đề đã tạo</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">{formsCount > 0 ? `${formsCount} mã đề` : <span className="text-danger-500 italic">Chưa sinh đề</span>}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-slate-500 dark:text-slate-400">Hình thức làm bài</p>
@@ -202,7 +243,69 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'files' && (
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">File bài thi</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleUploadPdf}
+                    className="hidden"
+                  />
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingPdf}
+                    className="flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {isUploadingPdf ? "Đang tải lên..." : "Tải file PDF lên"}
+                  </Button>
+                  <span className="text-xs text-slate-500">Chỉ chấp nhận file PDF, tối đa 50MB</span>
+                </div>
+
+                {exam.exam_pdf_url ? (
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900 dark:text-white">PDF bài thi</p>
+                          <p className="text-xs text-slate-500">Đã tải lên</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={exam.exam_pdf_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Mở
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center">
+                    <FileText className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                    <p className="text-slate-500 dark:text-slate-400">Chưa có file PDF bài thi</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Tải lên file PDF để thí sinh có thể xem đề thi khi làm bài OMR</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'irt' && (
             <div className="space-y-6">
               <div className="p-6">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Tổng quan</h3>
@@ -327,6 +430,15 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
                   {isExportingLaTeX ? 'Đang xuất đề (LaTeX)...' : 'Xuất Đề (LaTeX)'}
                 </Button>
             )}
+            {hasExistingForms && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPrintModalOpen(true)}
+                  className="w-full justify-center text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100"
+                >
+                  <Printer className="w-4 h-4 mr-2" /> Phiếu trả lời
+                </Button>
+            )}
             {exam.status === 'PUBLISHED' && (
               <>
                 <Button variant="secondary" disabled className="w-full justify-center">Đang diễn ra</Button>
@@ -440,6 +552,18 @@ const [isExportingLaTeX, setIsExportingLaTeX] = useState(false);
           logs={irtLogs}
         />
       )}
+
+      {/* Print Preview Modal */}
+      <PrintPreviewModal
+        open={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title="Phiếu trả lời trắc nghiệm - Xem trước khi in"
+      >
+        <AnswerSheetPreview
+          schoolName={exam?.name}
+          examTitle={exam?.name}
+        />
+      </PrintPreviewModal>
 
     </div>
   );

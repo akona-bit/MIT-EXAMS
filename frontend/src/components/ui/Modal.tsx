@@ -37,14 +37,14 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
       {/* Backdrop */}
       <div 
         ref={overlayRef}
-        className="absolute inset-0 bg-slate-900/40 dark:bg-slate-900/60 transition-opacity"
+        className="absolute inset-0 bg-slate-900/20 dark:bg-[#0b1121]/80 backdrop-blur-md transition-opacity"
         onClick={(e) => {
           if (e.target === overlayRef.current) onClose();
         }}
       />
       
-      {/* Modal panel — nền ĐẶC (không trong suốt), bo góc, viền rõ */}
-      <div className={`relative w-full ${maxWidth} m-4 max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200`}>
+      {/* Modal panel */}
+      <div className={`relative w-full ${maxWidth} m-4 max-h-[90vh] flex flex-col bg-white dark:bg-[#0b1121] border border-slate-200 dark:border-primary-900/50 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200`}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">

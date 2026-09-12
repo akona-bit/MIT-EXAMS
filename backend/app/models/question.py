@@ -42,6 +42,7 @@ class KnowledgeNodeType(str, enum.Enum):
     CONCEPT = "CONCEPT"
     SKILL = "SKILL"
     SUB_SKILL = "SUB_SKILL"
+    KNOWLEDGE = "KNOWLEDGE"
 
 class KnowledgeNode(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

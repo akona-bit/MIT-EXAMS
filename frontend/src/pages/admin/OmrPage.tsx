@@ -11,6 +11,7 @@ import type { Exam } from "../../types";
 import Button from "../../components/ui/Button";
 import { ScanLine } from "lucide-react";
 import { toast } from '../../components/ui/Toast';
+import OmrSheetDetailModal from "../../components/admin/OmrSheetDetailModal";
 
 const SHEET_STATUS_STYLES: Record<string, string> = {
     PENDING: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
@@ -37,6 +38,7 @@ export default function OmrPage() {
     const [job, setJob] = useState<OmrJobDetail | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [selectedSheetId, setSelectedSheetId] = useState<number | null>(null);
 
     useEffect(() => {
         getExams(0, 100)
@@ -97,8 +99,20 @@ export default function OmrPage() {
             await confirmOmrSheet(sheet.id);
             const data = await getOmrJob(job.job.id);
             setJob(data);
+            setSelectedSheetId(null);
         } catch (err: any) {
             toast.error(err.response?.data?.detail || "Không thể xác nhận phiếu này.");
+        }
+    };
+
+    const handleSheetConfirmed = async () => {
+        if (!job) return;
+        try {
+            const data = await getOmrJob(job.job.id);
+            setJob(data);
+            setSelectedSheetId(null);
+            toast.success("Đã xác nhận và chấm xong!");
+        } catch {
         }
     };
 
@@ -193,13 +207,18 @@ export default function OmrPage() {
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                                 {job.sheets.map((s) => (
-                                    <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                    <tr
+                                        key={s.id}
+                                        className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                        onClick={() => setSelectedSheetId(s.id)}
+                                    >
                                         <td className="px-4 py-3">
                                             {s.image_path ? (
                                                 <a
                                                     href={s.image_path}
                                                     target="_blank"
                                                     rel="noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
                                                     className="text-primary-600 hover:underline dark:text-primary-400"
                                                 >
                                                     Xem ảnh #{s.id}
@@ -217,7 +236,7 @@ export default function OmrPage() {
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             {s.status === "NEEDS_REVIEW" && (
-                                                <Button size="sm" onClick={() => handleConfirm(s)}>
+                                                <Button size="sm" onClick={(e) => { e.stopPropagation(); handleConfirm(s); }}>
                                                     Xác nhận & chấm
                                                 </Button>
                                             )}
@@ -238,6 +257,13 @@ export default function OmrPage() {
                     </p>
                 </div>
             )}
+
+            {/* Sheet Detail Modal */}
+            <OmrSheetDetailModal
+                sheetId={selectedSheetId}
+                onClose={() => setSelectedSheetId(null)}
+                onConfirmed={handleSheetConfirmed}
+            />
         </div>
     );
 }

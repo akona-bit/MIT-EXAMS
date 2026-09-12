@@ -215,7 +215,70 @@ export default function MarkdownEditor({
       <ImageSelectorModal 
         isOpen={isImageModalOpen} 
         onClose={() => setIsImageModalOpen(false)}
-        onSelect={(url) => editor.chain().focus().setImage({ src: url }).run()}
+        onSelect={(configs: any[], layout: 'horizontal' | 'vertical' = 'vertical') => {
+          let chain = editor.chain().focus();
+          
+          if (configs.some(c => c.format === 'latex') && layout === 'horizontal') {
+             let latexCode = `\n\\begin{figure}[H]\n\\centering\n`;
+             configs.forEach((conf, idx) => {
+                let widthStr = '';
+                if (conf.width && conf.width !== '100%') {
+                   if (conf.width.endsWith('%')) {
+                      const wVal = parseFloat(conf.width);
+                      widthStr = `[width=${(wVal/100).toFixed(2)}\\linewidth]`;
+                   } else {
+                      widthStr = `[width=${conf.width}]`;
+                   }
+                }
+                latexCode += `\\includegraphics${widthStr}{${conf.url}}\n`;
+                if (idx < configs.length - 1) latexCode += `\\hfill\n`;
+             });
+             const altTexts = configs.map(c => c.alt).filter(Boolean);
+             if (altTexts.length > 0) latexCode += `\\caption{${altTexts.join(' - ')}}\n`;
+             latexCode += `\\end{figure}\n\n`;
+             chain = chain.insertContent(latexCode);
+          } else {
+            configs.forEach((conf, idx) => {
+              if (conf.format === 'latex') {
+                 let widthStr = '';
+                 if (conf.width && conf.width !== '100%') {
+                    if (conf.width.endsWith('%')) {
+                       const wVal = parseFloat(conf.width);
+                       widthStr = `[width=${(wVal/100).toFixed(2)}\\linewidth]`;
+                    } else {
+                       widthStr = `[width=${conf.width}]`;
+                    }
+                 }
+                 const latexCode = `\n\\begin{figure}[H]\n\\centering\n\\includegraphics${widthStr}{${conf.url}}\n${conf.alt ? `\\caption{${conf.alt}}\n` : ''}\\end{figure}\n\n`;
+                 chain = chain.insertContent(latexCode);
+              } else {
+                const titleParts = [];
+                if (conf.width && conf.width !== '100%') titleParts.push(`width=${conf.width}`);
+                
+                // If horizontal, we must force the image to be inline. 
+                // Any align='center' will make it a block element and break the row!
+                if (layout === 'vertical' && conf.align && conf.align !== 'center') {
+                   titleParts.push(`align=${conf.align}`);
+                }
+                
+                chain = chain.setImage({ 
+                  src: conf.url, 
+                  alt: conf.alt || 'image', 
+                  title: titleParts.length > 0 ? titleParts.join(' ') : null
+                });
+                if (layout === 'vertical') {
+                  chain = chain.insertContent('\n\n');
+                } else if (idx < configs.length - 1) {
+                  chain = chain.insertContent(' ');
+                }
+              }
+            });
+            if (layout === 'horizontal' && !configs.some(c => c.format === 'latex')) {
+               chain = chain.insertContent('\n\n');
+            }
+          }
+          chain.run();
+        }}
       />
     </div>
   );

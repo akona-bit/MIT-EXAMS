@@ -45,6 +45,8 @@ const levelLabels: Record<string, string> = {
   TOPIC: "Chủ đề",
   CONCEPT: "Khái niệm",
   SKILL: "Kỹ năng",
+  SUB_SKILL: "Kỹ năng con",
+  KNOWLEDGE: "Kiến thức",
 };
 
 const levelColors: Record<string, string> = {
@@ -52,6 +54,7 @@ const levelColors: Record<string, string> = {
   CONCEPT: "#8b5cf6", // Violet-500 — tím mát
   SKILL: "#10b981", // Emerald-500 — xanh lá tươi
   SUB_SKILL: "#06b6d4", // Cyan-500 — xanh cyan
+  KNOWLEDGE: "#ec4899", // Pink-500 — hồng cánh sen
 };
 
 const DEFAULT_NODE_COLOR = "#64748b"; // Slate-500 fallback
@@ -237,11 +240,11 @@ function GraphCanvas({
   useEffect(() => {
     const timer = setTimeout(() => {
       if (fgRef.current) {
-        // Strong negative charge prevents wide nodes from overlapping
-        fgRef.current.d3Force("charge")?.strength(-4000)?.distanceMax(1200);
-        fgRef.current.d3Force("link")?.distance(200);
-        // Ensure center force is active so nodes don't drift away
-        fgRef.current.d3Force("center")?.strength(0.1);
+        // Classic Left-to-Right Layout
+        fgRef.current.d3Force("charge")?.strength(-8000)?.distanceMax(4000)?.distanceMin(60);
+        fgRef.current.d3Force("link")?.distance(60);
+        // Remove center force entirely to allow vertical spreading
+        fgRef.current.d3Force("center", null);
 
         if (isPhysicsActive) {
           fgRef.current.d3ReheatSimulation();
@@ -251,163 +254,110 @@ function GraphCanvas({
     return () => clearTimeout(timer);
   }, [graphData, isPhysicsActive]);
 
+  // Pan to node when selected from outside (sidebar)
+  useEffect(() => {
+    if (selectedId && fgRef.current && graphData.nodes.length > 0) {
+      const node = graphData.nodes.find((n: any) => n.id === selectedId);
+      if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) {
+        fgRef.current.centerAt(node.x, node.y, 800);
+        // Don't zoom in too aggressively, just center it nicely
+        fgRef.current.zoom(2.5, 800);
+      }
+    }
+  }, [selectedId, graphData.nodes]);
+
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+      
       const isSelected = node.id === selectedId;
       const isHovered = node.id === hoverNode;
       const label = node.name;
       const hasNote = !!node.description;
-      const fontSize = 12 / globalScale;
       const nodeColor = getNodeColor(node.type);
 
-      // --- Measure main label ---
-      ctx.font = `${isSelected || isHovered ? "600 " : "500 "}${fontSize}px Inter, system-ui, sans-serif`;
+      // --- Classic Card Style ---
+      const baseFontSize = 14;
+      const fontSize = (isSelected || isHovered ? baseFontSize + 2 : baseFontSize) / globalScale;
+      ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
       const textWidth = ctx.measureText(label).width;
+      
+      const paddingX = 14 / globalScale;
+      const paddingY = 10 / globalScale;
+      const hasNoteSpace = hasNote ? 14 / globalScale : 0;
+      
+      const width = textWidth + paddingX * 2 + hasNoteSpace;
+      const height = fontSize + paddingY * 2;
+      const radius = 6 / globalScale;
+      
+      const x = node.x - width / 2;
+      const y = node.y - height / 2;
 
-      // --- Measure description (truncated) ---
-      const descFontSize = fontSize * 0.78;
-      let descText = "";
-      let descWidth = 0;
-      if (hasNote) {
-        const raw =
-          node.description.length > 40
-            ? node.description.slice(0, 38) + "…"
-            : node.description;
-        descText = raw;
-        ctx.font = `400 ${descFontSize}px Inter, system-ui, sans-serif`;
-        descWidth = ctx.measureText(descText).width;
-      }
-
-      // --- Node pill dimensions ---
-      const paddingX = fontSize * 1.6;
-      const paddingY = fontSize * 0.8;
-      const accentWidth = 4 / globalScale;
-      const contentWidth = Math.max(textWidth, descWidth);
-      const badgeSpace = node.question_count > 0 ? fontSize * 2.5 : 0;
-      const totalWidth = contentWidth + paddingX * 2 + accentWidth + badgeSpace;
-      const lineSpacing = hasNote ? descFontSize * 1.4 : 0;
-      const totalHeight = fontSize + paddingY * 2 + lineSpacing;
-      const radius = 8 / globalScale;
-      const x = node.x - totalWidth / 2;
-      const y = node.y - totalHeight / 2;
-
-      // Save dimensions for pointer hit area
-      node.__bckgDimensions = [totalWidth, totalHeight];
-
-      // --- Shadow / Glow ---
-      if (isSelected) {
-        ctx.shadowColor = nodeColor;
-        ctx.shadowBlur = 24 / globalScale;
-      } else if (isHovered) {
-        ctx.shadowColor = isDarkMode
-          ? "rgba(255,255,255,0.12)"
-          : "rgba(0,0,0,0.1)";
-        ctx.shadowBlur = 14 / globalScale;
-      } else {
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = "transparent";
-      }
-
-      // --- Background pill ---
+      // Card Background
       ctx.beginPath();
-      ctx.roundRect(x, y, totalWidth, totalHeight, radius);
-      if (isSelected) {
-        ctx.fillStyle = isDarkMode
-          ? "rgba(15, 23, 42, 0.96)"
-          : "rgba(255, 255, 255, 0.99)";
-      } else if (isHovered) {
-        ctx.fillStyle = isDarkMode
-          ? "rgba(30, 41, 59, 0.95)"
-          : "rgba(248, 250, 252, 0.98)";
-      } else {
-        ctx.fillStyle = isDarkMode
-          ? "rgba(15, 23, 42, 0.88)"
-          : "rgba(255, 255, 255, 0.94)";
+      ctx.roundRect(x, y, width, height, radius);
+      
+      ctx.fillStyle = isDarkMode ? '#1e293b' : '#ffffff'; // Slate 800 or White
+      
+      if (isSelected || isHovered) {
+        ctx.shadowColor = nodeColor;
+        ctx.shadowBlur = 12 / globalScale;
       }
+      
       ctx.fill();
-
-      // Border — use nodeColor tint when selected
-      ctx.strokeStyle = isSelected
-        ? nodeColor
-        : isDarkMode
-          ? "rgba(51,65,85,0.5)"
-          : "rgba(226,232,240,0.7)";
-      ctx.lineWidth = (isSelected ? 2 : 1) / globalScale;
+      
+      // Reset shadow
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      
+      // Card Border
+      ctx.lineWidth = (isSelected || isHovered ? 2.5 : 1.5) / globalScale;
+      ctx.strokeStyle = isSelected || isHovered ? nodeColor : (isDarkMode ? '#334155' : '#cbd5e1');
       ctx.stroke();
 
-      // Reset shadow
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "transparent";
-
-      // --- Colored accent bar (left edge) ---
+      // Left Color Indicator (Thin bar on the left of the card)
+      ctx.beginPath();
+      // Only modern browsers support individual corner radii array, we'll draw a rectangle and clip or just draw a rounded rect overlapping.
+      // Better way: clip region to draw left color bar so it respects radius
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(x, y, accentWidth + radius, totalHeight, [
-        radius,
-        0,
-        0,
-        radius,
-      ]);
+      ctx.roundRect(x, y, width, height, radius);
       ctx.clip();
+      
       ctx.fillStyle = nodeColor;
-      ctx.fillRect(x, y, accentWidth, totalHeight);
+      ctx.fillRect(x, y, 6 / globalScale, height);
       ctx.restore();
 
-      // --- Label text ---
-      const labelY = hasNote ? node.y - lineSpacing / 2 : node.y;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = isDarkMode ? "#f1f5f9" : "#1e293b";
-      ctx.font = `${isSelected || isHovered ? "600 " : "500 "}${fontSize}px Inter, system-ui, sans-serif`;
-      ctx.fillText(label, x + accentWidth + paddingX * 0.6, labelY);
+      // Text
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isDarkMode ? '#f8fafc' : '#0f172a'; // Slate 50 or 900
+      
+      // Shift text left slightly if we have a note indicator on the right, and right to account for left bar
+      const leftBarOffset = 3 / globalScale; 
+      const textX = (hasNote ? node.x - hasNoteSpace / 2 : node.x) + leftBarOffset;
+      ctx.fillText(label, textX, node.y);
 
-      // --- Description text (second line, dimmer) ---
-      if (hasNote && descText) {
-        ctx.font = `400 italic ${descFontSize}px Inter, system-ui, sans-serif`;
-        ctx.fillStyle = isDarkMode ? "#94a3b8" : "#64748b";
-        ctx.fillText(
-          descText,
-          x + accentWidth + paddingX * 0.6,
-          labelY + fontSize * 1.3,
-        );
-      }
-
-      // --- Question count badge (right side) ---
-      if (node.question_count > 0) {
-        const badgeText = String(node.question_count);
-        const badgeFontSize = fontSize * 0.75;
-        ctx.font = `700 ${badgeFontSize}px Inter, system-ui, sans-serif`;
-        const badgeTextWidth = ctx.measureText(badgeText).width;
-        const badgePad = badgeFontSize * 0.6;
-        const badgeW = badgeTextWidth + badgePad * 2;
-        const badgeH = badgeFontSize + badgePad;
-        const badgeX = x + totalWidth - badgeW - paddingX * 0.35;
-        const badgeY = labelY - badgeH / 2;
-
-        ctx.beginPath();
-        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, badgeH / 2);
-        ctx.fillStyle = nodeColor + "20";
-        ctx.fill();
-
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = nodeColor;
-        ctx.fillText(badgeText, badgeX + badgeW / 2, labelY);
-      }
-
-      // --- Red dot ABOVE the node (top center) for nodes with notes ---
+      // Note Indicator (Amber Star/Badge instead of red dot)
       if (hasNote) {
-        const dotR = 4.5 / globalScale;
-        const dotX = node.x;
-        const dotY = y - dotR - 2 / globalScale;
-        ctx.fillStyle = "#ef4444";
+        const badgeW = 12 / globalScale;
+        const badgeH = 12 / globalScale;
+        const badgeX = node.x + width / 2 - badgeW - 4 / globalScale;
+        const badgeY = node.y - badgeH / 2;
+        
         ctx.beginPath();
-        ctx.arc(dotX, dotY, dotR, 0, 2 * Math.PI);
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3 / globalScale);
+        ctx.fillStyle = "#f59e0b"; // Amber 500
         ctx.fill();
-        ctx.strokeStyle = isDarkMode ? "#0f172a" : "#ffffff";
-        ctx.lineWidth = 1.5 / globalScale;
-        ctx.stroke();
+        
+        // Draw a tiny 'i' or '!' inside the badge
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${8 / globalScale}px Inter, system-ui, sans-serif`;
+        ctx.fillText("i", badgeX + badgeW / 2, node.y);
       }
+
+      // Hit area perfectly matches the card
+      node.__bckgDimensions = [width, height];
     },
     [selectedId, hoverNode, isDarkMode],
   );
@@ -478,12 +428,19 @@ function GraphCanvas({
             height={dimensions.height}
             graphData={graphData}
             dagMode="lr"
-            dagLevelDistance={300}
+            dagLevelDistance={250}
+            nodeLabel={(node: any) => {
+              if (!node.description) return "";
+              return `<div style="background: rgba(15, 23, 42, 0.95); color: #f8fafc; padding: 8px 12px; border-radius: 8px; font-family: Inter, system-ui; font-size: 12px; max-width: 250px; white-space: pre-wrap; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(4px); line-height: 1.5;"><strong>Ghi chú:</strong><br/>${node.description}</div>`;
+            }}
             nodeCanvasObject={paintNode}
+            nodeCanvasObjectMode={() => "replace"}
             nodePointerAreaPaint={(node: any, color, ctx) => {
+              if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
               ctx.fillStyle = color;
-              const b = node.__bckgDimensions || [40, 20];
-              ctx.fillRect(node.x - b[0] / 2, node.y - b[1] / 2, b[0], b[1]);
+              const w = node.__bckgDimensions?.[0] ?? 16;
+              const h = node.__bckgDimensions?.[1] ?? 16;
+              ctx.fillRect(node.x - w / 2, node.y - h / 2, w, h);
             }}
             linkColor={(link: any) => {
               const isActive =
@@ -502,10 +459,10 @@ function GraphCanvas({
               }
               if (hasFocus) {
                 return isDarkMode
-                  ? "rgba(71, 85, 105, 0.08)"
-                  : "rgba(203, 213, 225, 0.15)";
+                  ? "rgba(71, 85, 105, 0.3)"
+                  : "rgba(148, 163, 184, 0.4)";
               }
-              return targetColor + "40";
+              return targetColor + "b3"; // 70% opacity for inactive edges to emphasize them
             }}
             linkWidth={(link: any) => {
               const isActive =
@@ -516,11 +473,11 @@ function GraphCanvas({
                   (link.source.id === hoverNode ||
                     link.target.id === hoverNode));
               const hasFocus = selectedId || hoverNode;
-              if (isActive) return 2.5;
-              if (hasFocus) return 0.3;
-              return 1;
+              if (isActive) return 5;
+              if (hasFocus) return 1.5;
+              return 3; // Emphasized default width
             }}
-            linkCurvature={0.15}
+            linkCurvature={0.25}
             linkDirectionalParticles={(link: any) => {
               const isActive =
                 (selectedId &&
@@ -529,9 +486,9 @@ function GraphCanvas({
                 (hoverNode &&
                   (link.source.id === hoverNode ||
                     link.target.id === hoverNode));
-              return isActive ? 3 : 0;
+              return isActive ? 5 : 3; // More particles
             }}
-            linkDirectionalParticleWidth={2.5}
+            linkDirectionalParticleWidth={4}
             linkDirectionalParticleSpeed={0.004}
             linkDirectionalParticleColor={(link: any) => {
               return getNodeColor(link.target?.type);
@@ -546,7 +503,7 @@ function GraphCanvas({
                     link.target.id === hoverNode));
               return isActive ? 5 : 3;
             }}
-            linkDirectionalArrowRelPos={1}
+            linkDirectionalArrowRelPos={0.5}
             onNodeClick={(node) => {
               onSelect(node.id);
               fgRef.current?.centerAt(node.x, node.y, 800);
@@ -842,7 +799,7 @@ export default function KnowledgePage() {
     >
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 pb-1">
+          <h1 className="text-3xl font-extrabold tracking-tight text-gradient flex items-center gap-3 pb-1">
             <Network className="w-8 h-8 text-primary-500" />
             Cấu trúc Kiến thức
           </h1>
@@ -855,7 +812,7 @@ export default function KnowledgePage() {
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-12rem)]">
         {/* --- Toolbar / Sidebar Left --- */}
-        <aside className="lg:col-span-1 rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
+        <aside className="lg:col-span-1 rounded-xl border border-slate-200 bg-white shadow-lg dark:border-primary-900/50 dark:bg-[#0b1121]/60 p-4 flex flex-col gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
               Danh sách Tri thức
@@ -886,6 +843,7 @@ export default function KnowledgePage() {
               <option value="TOPIC">Chủ đề (Topic)</option>
               <option value="CONCEPT">Khái niệm (Concept)</option>
               <option value="SKILL">Kỹ năng (Skill)</option>
+              <option value="KNOWLEDGE">Kiến thức (Knowledge)</option>
             </select>
           </div>
 
@@ -907,7 +865,7 @@ export default function KnowledgePage() {
         </aside>
 
         {/* --- Graph Canvas Center --- */}
-        <div className="lg:col-span-2 relative rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
+        <div className="lg:col-span-2 relative rounded-xl border border-slate-200 bg-white shadow-lg dark:border-primary-900/50 dark:bg-[#0b1121]/60 overflow-hidden">
           <GraphCanvas
             nodes={allNodes}
             edges={allEdges}
@@ -920,64 +878,72 @@ export default function KnowledgePage() {
           <AnimatePresence>
             {showNewNote && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 z-50 p-6 overflow-y-auto"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-white/60 dark:bg-[#0b1121]/80 backdrop-blur-md z-50 p-6 overflow-y-auto flex items-center justify-center"
               >
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Thêm Node Tri thức</h3>
-                  <button onClick={() => setShowNewNote(false)} className="text-slate-400 hover:text-slate-600">
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                <form onSubmit={handleCreateNote} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tên Node</label>
-                    <input type="text" required value={noteName} onChange={e => setNoteName(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2" />
+                <motion.div 
+                  initial={{ scale: 0.95, y: 10 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.95, y: 10 }}
+                  className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6"
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Thêm Node Tri thức</h3>
+                    <button onClick={() => setShowNewNote(false)} className="text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 p-1 rounded-full">
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mô tả</label>
-                    <textarea value={noteDescription} onChange={e => setNoteDescription(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2" rows={2} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <form onSubmit={handleCreateNote} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Loại Node</label>
-                      <select value={noteType} onChange={e => setNoteType(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2">
-                        <option value="TOPIC">Chủ đề</option>
-                        <option value="CONCEPT">Khái niệm</option>
-                        <option value="SKILL">Kỹ năng</option>
-                      </select>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tên Node</label>
+                      <input type="text" required value={noteName} onChange={e => setNoteName(e.target.value)} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all shadow-inner" placeholder="Nhập tên node..." />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Phần thi</label>
-                      <select value={noteSubject} onChange={e => setNoteSubject(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2">
-                        <option value="Sử dụng ngôn ngữ — Tiếng Việt">Phần 1: Sử dụng ngôn ngữ — Tiếng Việt</option>
-                        <option value="Sử dụng ngôn ngữ — Tiếng Anh">Phần 1: Sử dụng ngôn ngữ — Tiếng Anh</option>
-                        <option value="Toán học">Phần 2: Toán học</option>
-                        <option value="Tư duy khoa học">Phần 3: Tư duy khoa học</option>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mô tả</label>
+                      <textarea value={noteDescription} onChange={e => setNoteDescription(e.target.value)} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all shadow-inner" rows={2} placeholder="Nhập mô tả (không bắt buộc)..." />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Loại Node</label>
+                        <select value={noteType} onChange={e => setNoteType(e.target.value)} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all">
+                          <option value="TOPIC">Chủ đề</option>
+                          <option value="CONCEPT">Khái niệm</option>
+                          <option value="SKILL">Kỹ năng</option>
+                          <option value="KNOWLEDGE">Kiến thức</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Phần thi</label>
+                        <select value={noteSubject} onChange={e => setNoteSubject(e.target.value)} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all text-xs">
+                          <option value="Sử dụng ngôn ngữ — Tiếng Việt">Tiếng Việt</option>
+                          <option value="Sử dụng ngôn ngữ — Tiếng Anh">Tiếng Anh</option>
+                          <option value="Toán học">Toán học</option>
+                          <option value="Tư duy khoa học">Tư duy KH</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Node Cha</label>
+                      <select value={noteParentId} onChange={e => setNoteParentId(e.target.value)} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all">
+                        <option value="none">-- Không có node cha (Gốc) --</option>
+                        {allNodes.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}
                       </select>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Node Cha</label>
-                    <select value={noteParentId} onChange={e => setNoteParentId(e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2">
-                      <option value="none">-- Không có node cha (Gốc) --</option>
-                      {allNodes.map(n => <option key={n.id} value={n.id}>{n.label}</option>)}
-                    </select>
-                  </div>
-                  {noteError && <p className="text-red-500 text-sm">{noteError}</p>}
-                  <button type="submit" disabled={createNoteMutation.isPending} className="w-full bg-primary-600 text-white rounded-xl px-4 py-2 font-bold">
-                    {createNoteMutation.isPending ? "Đang tạo..." : "Tạo Node"}
-                  </button>
-                </form>
+                    {noteError && <p className="text-danger-500 text-sm font-medium">{noteError}</p>}
+                    <button type="submit" disabled={createNoteMutation.isPending} className="w-full bg-primary-600 hover:bg-primary-500 text-white rounded-xl px-4 py-2.5 font-bold transition-all shadow-lg shadow-primary-500/30">
+                      {createNoteMutation.isPending ? "Đang tạo..." : "Tạo Node"}
+                    </button>
+                  </form>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         {/* --- Details Sidebar Right --- */}
-        <aside className="lg:col-span-1 rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] p-4 flex flex-col gap-4 overflow-y-auto">
+        <aside className="lg:col-span-1 rounded-xl border border-slate-200 bg-white shadow-lg dark:border-primary-900/50 dark:bg-[#0b1121]/60 p-4 flex flex-col gap-4 overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">
               {selectedNode ? "Chi tiết Node" : "Chi tiết"}
@@ -1128,53 +1094,6 @@ export default function KnowledgePage() {
                       </button>
                     </div>
                   )}
-                  {/* Show manual links */}
-                  {allEdges
-                    .filter(
-                      (e) =>
-                        e.type === "MANUAL" &&
-                        ((typeof e.source === "object"
-                          ? (e.source as any).id
-                          : e.source) === selectedNode.id ||
-                          (typeof e.target === "object"
-                            ? (e.target as any).id
-                            : e.target) === selectedNode.id),
-                    )
-                    .map((edge) => {
-                      const otherId =
-                        (typeof edge.source === "object"
-                          ? (edge.source as any).id
-                          : edge.source) === selectedNode.id
-                          ? typeof edge.target === "object"
-                            ? (edge.target as any).id
-                            : edge.target
-                          : typeof edge.source === "object"
-                            ? (edge.source as any).id
-                            : edge.source;
-                      const otherNode = allNodes.find((n) => n.id === otherId);
-                      return otherNode ? (
-                        <div
-                          key={edge.id}
-                          className="flex items-center justify-between rounded-lg bg-white/50 dark:bg-slate-800/50 px-3 py-2 mb-1.5 border border-slate-200/50 dark:border-slate-700/50"
-                        >
-                          <button
-                            onClick={() => setSelectedId(otherNode.id)}
-                            className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                          >
-                            <div
-                              className="h-2 w-2 rounded-full"
-                              style={{
-                                backgroundColor:
-                                  levelColors[otherNode.type] ??
-                                  DEFAULT_NODE_COLOR,
-                              }}
-                            />
-                            {otherNode.label}
-                          </button>
-
-                        </div>
-                      ) : null;
-                    })}
                 </div>
 
                 <div className="pt-3 border-t border-slate-200/50 dark:border-slate-700/50">

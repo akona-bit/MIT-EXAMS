@@ -128,6 +128,7 @@ class ExamResponse(BaseModel):
     show_score_mode: str
     show_answer_mode: str
     allow_omr: bool = False
+    exam_pdf_url: Optional[str] = None
     status: ExamStatus
     submission_count: int = 0
     model_config = ConfigDict(from_attributes=True)

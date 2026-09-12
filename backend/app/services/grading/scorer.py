@@ -389,6 +389,13 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                 return {"status": "SUCCESS", "message": "No submissions found"}
                 
             N = len(records)
+            if N < 200:
+                if task:
+                    task.status = "FAILED"
+                    await append_log(f"Lỗi: Số lượng bài làm (N={N}) chưa đạt ngưỡng tối thiểu (N≥200) để ước lượng tham số IRT. Vui lòng sử dụng kết quả CTT.")
+                    await db.commit()
+                return {"status": "FAILED", "reason": f"Insufficient records: {N} < 200"}
+
             await append_log(f"Tìm thấy {N} bài làm. Đang trích xuất ma trận phản hồi (Response Matrix)...")
             
             # 4. Build response matrix U (N x J)

@@ -64,10 +64,24 @@ class ExamSessionInfoResponse(BaseModel):
     exam_name: str
     form_code: str
     remaining_seconds: Optional[int] = None
+    exam_end_time: Optional[datetime] = None
+    exam_pdf_url: Optional[str] = None
     server_time: datetime
     participant_status: str
     questions: List[SessionQuestion] = []
     saved_answers: List[AnswerItem] = []
+    exam_mode: Optional[str] = None
+    exam_mode_changed: bool = False
+    sbd: Optional[str] = None
+
+class UpdateExamModeRequest(BaseModel):
+    exam_mode: str  # "ONLINE" or "PAPER"
+
+class UpdateExamModeResponse(BaseModel):
+    success: bool
+    exam_mode: str
+    exam_mode_changed: bool
+    message: str
 
 class SubmitExamRequest(BaseModel):
     omr_image_url: Optional[str] = None

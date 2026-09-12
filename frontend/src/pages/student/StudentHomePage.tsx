@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
-import { getExams } from "../../api/exams";
+import { getExams, updateExamMode } from "../../api/exams";
 import client from "../../api/client";
 import type { Exam } from "../../types";
 import { motion } from "framer-motion";
@@ -16,12 +16,15 @@ import {
   Trophy,
   CalendarDays,
   ShieldAlert,
+  Download,
+  Printer,
 } from "lucide-react";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import Button from "../../components/ui/Button";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
+import { PrintPreviewModal, AnswerSheetPreview } from "../../components/print";
 
 /* ── helpers ── */
 function formatExamWindow(startTime: string | null, endTime: string | null) {
@@ -136,6 +139,7 @@ export default function StudentHomePage() {
 
   const [showWarningModal, setShowWarningModal] = useState<Exam | null>(null);
   const [examMode, setExamMode] = useState<'online' | 'omr'>('online');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const handleOpenWarning = (exam: Exam) => {
     setShowWarningModal(exam);
@@ -149,6 +153,15 @@ export default function StudentHomePage() {
       const response = await client.post<{ form_code: string }>(
         `/api/v1/exams/${exam.id}/start`
       );
+      
+      // Update exam mode via API
+      try {
+        await updateExamMode(exam.id, mode === 'omr' ? 'PAPER' : 'ONLINE');
+      } catch (modeError) {
+        console.error("Failed to update exam mode:", modeError);
+        // Continue even if mode update fails
+      }
+      
       setNotice(
         `Đã nhận mã đề ${response.data.form_code}. Đang chuyển vào phòng thi…`
       );
@@ -486,8 +499,37 @@ export default function StudentHomePage() {
                         <span className="font-semibold text-slate-900 dark:text-white">Làm trên giấy</span>
                       </div>
                       <p className="text-xs text-slate-500">Điền vào phiếu trả lời và chụp ảnh tải lên.</p>
+                      {examMode === 'omr' && (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsPrintModalOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 rounded-lg border border-blue-200 transition-colors"
+                          >
+                            <Printer className="w-3 h-3" />
+                            Xem phiếu trả lời
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsPrintModalOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-xs bg-green-50 hover:bg-green-100 text-green-700 px-2 py-1 rounded-lg border border-green-200 transition-colors"
+                          >
+                            <Download className="w-3 h-3" />
+                            Tải PDF
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  <p className="text-xs text-slate-500 mt-2 italic">
+                    * Bạn chỉ được đổi hình thức thi 1 lần duy nhất.
+                  </p>
                 </div>
               )}
 
@@ -521,6 +563,18 @@ export default function StudentHomePage() {
           </div>
         </div>
       )}
+
+      {/* Print Preview Modal for Answer Sheet */}
+      <PrintPreviewModal
+        open={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title="Phiếu trả lời trắc nghiệm"
+      >
+        <AnswerSheetPreview
+          schoolName={showWarningModal?.name}
+          examTitle={showWarningModal?.name}
+        />
+      </PrintPreviewModal>
     </>
   );
 }

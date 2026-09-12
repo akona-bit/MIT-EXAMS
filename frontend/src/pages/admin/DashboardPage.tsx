@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../..
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { motion } from "framer-motion";
-import { BookOpen, Users, FileText, CheckCircle2, TrendingUp, Calendar } from "lucide-react";
+import { BookOpen, Users, FileText, CheckCircle2, TrendingUp, Calendar, PlusCircle, ListPlus, FolderPlus } from "lucide-react";
+import { Link } from "react-router-dom";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from "recharts";
 
 function formatExamTime(startTime: string | null, endTime: string | null) {
   if (!startTime && !endTime) return "Chưa đặt lịch";
@@ -35,10 +37,6 @@ export default function DashboardPage() {
   });
   
   const overview = overviewQuery.data;
-  const maxScoreCount = Math.max(
-    ...(overview?.score_distribution.map((item) => item.count) ?? [0]),
-    1,
-  );
   
   const stats = overview
     ? [
@@ -86,8 +84,14 @@ export default function DashboardPage() {
     show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } }
   };
 
+  const formattedChartData = overview?.score_distribution.map(item => ({
+    name: item.range.split("-")[0],
+    count: item.count,
+    fullRange: item.range
+  })) || [];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-10">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-gradient pb-1">
@@ -153,110 +157,198 @@ export default function DashboardPage() {
                 <CardTitle>Phổ điểm tổng quan</CardTitle>
                 <CardDescription>Biểu đồ phân bố điểm tổng (0-1200)</CardDescription>
               </div>
-              <Badge variant="outline" className="hidden sm:inline-flex">Real-time</Badge>
+              <Badge variant="outline" className="hidden sm:inline-flex bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-800">
+                Real-time
+              </Badge>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-end">
+          <CardContent className="flex-1 flex flex-col">
             {overviewQuery.isLoading ? (
-              <Skeleton className="h-64 w-full rounded-xl" />
+              <Skeleton className="h-[300px] w-full rounded-xl" />
             ) : overview?.score_distribution.some((item) => item.count > 0) ? (
-              <div className="flex h-64 items-end gap-1.5 sm:gap-2 px-1">
-                {overview.score_distribution.map((item, i) => (
-                  <div key={item.range} className="group relative flex h-full flex-1 flex-col items-center justify-end">
-                    {/* Tooltip */}
-                    <div className="absolute -top-10 scale-0 opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:opacity-100 z-10 pointer-events-none">
-                      <div className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white shadow-xl">
-                        {item.count} bài
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-                      </div>
-                    </div>
-                    
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${Math.max((item.count / maxScoreCount) * 100, item.count ? 4 : 1)}%` }}
-                      transition={{ duration: 0.8, delay: i * 0.05, type: "spring" }}
-                      className="w-full rounded-t-md bg-gradient-to-t from-primary-600/80 to-primary-400 hover:brightness-110 cursor-pointer shadow-sm relative overflow-hidden"
+              <div className="h-[300px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={formattedChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }} 
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#64748b', fontSize: 12 }} 
+                    />
+                    <RechartsTooltip 
+                      cursor={{ fill: 'rgba(226, 232, 240, 0.4)' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-primary-800 dark:bg-slate-900">
+                              <p className="font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                                Khoảng điểm: {data.fullRange}
+                              </p>
+                              <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-primary-500"></span>
+                                Số lượng: <span className="font-medium text-slate-900 dark:text-white">{data.count} bài</span>
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar 
+                      dataKey="count" 
+                      radius={[4, 4, 0, 0]} 
+                      animationDuration={1500} 
+                      animationEasing="ease-out"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20" />
-                    </motion.div>
-                    <span className="mt-3 text-[10px] font-medium text-slate-500 rotate-[-45deg] origin-top-left sm:rotate-0 sm:origin-center">
-                      {item.range.split("-")[0]}
-                    </span>
-                  </div>
-                ))}
+                      {formattedChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.count > 0 ? "url(#colorCount)" : "#e2e8f0"} />
+                      ))}
+                    </Bar>
+                    <defs>
+                      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2D6CFF" stopOpacity={0.9}/>
+                        <stop offset="95%" stopColor="#7FA8FF" stopOpacity={0.7}/>
+                      </linearGradient>
+                    </defs>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-primary-800/50 dark:bg-[#0b1121]/40">
-                <div className="rounded-full bg-slate-100 p-3 dark:bg-primary-900/30 mb-3">
-                  <TrendingUp className="h-6 w-6 text-slate-400 dark:text-primary-500/70" />
+              <div className="flex h-[300px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-primary-800/50 dark:bg-[#0b1121]/40">
+                <div className="rounded-full bg-slate-100 p-4 dark:bg-primary-900/30 mb-3 shadow-inner">
+                  <TrendingUp className="h-8 w-8 text-slate-400 dark:text-primary-500/70" />
                 </div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Chưa có dữ liệu điểm</p>
-                <p className="text-xs text-slate-500 mt-1">Đợi thí sinh nộp bài để xem phổ điểm</p>
+                <p className="text-base font-semibold text-slate-600 dark:text-slate-300">Chưa có dữ liệu điểm</p>
+                <p className="text-sm text-slate-500 mt-1">Đợi thí sinh nộp bài để xem phổ điểm</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Recent Exams */}
-        <Card className="flex flex-col shadow-lg border border-slate-200 dark:border-primary-900/50 dark:bg-[#0b1121]/60">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-indigo-500" />
-              <CardTitle>Kỳ thi gần đây</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto">
-            {overviewQuery.isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((item) => (
-                  <div key={item} className="flex gap-4">
-                    <Skeleton className="h-10 w-10 rounded-xl" />
-                    <div className="flex-1 space-y-2 py-1">
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
+        {/* Right Column Stack */}
+        <div className="flex flex-col gap-6">
+          {/* Quick Actions */}
+          <Card className="flex flex-col shadow-lg border border-slate-200 dark:border-primary-900/50 dark:bg-[#0b1121]/60">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="h-5 w-5 text-emerald-500" />
+                <CardTitle>Thao tác nhanh</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-3">
+                <Link to="/admin/exams/new">
+                  <div className="group flex items-center gap-3 rounded-lg border border-slate-200 p-3 hover:border-emerald-500 hover:bg-emerald-50 dark:border-primary-800 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-900/20 transition-all cursor-pointer">
+                    <div className="rounded-full bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                      <PlusCircle className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">Tạo kỳ thi mới</p>
                     </div>
                   </div>
-                ))}
+                </Link>
+                <Link to="/admin/questions/new">
+                  <div className="group flex items-center gap-3 rounded-lg border border-slate-200 p-3 hover:border-primary-500 hover:bg-primary-50 dark:border-primary-800 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/20 transition-all cursor-pointer">
+                    <div className="rounded-full bg-primary-100 p-2 text-primary-600 dark:bg-primary-900/50 dark:text-primary-400 group-hover:scale-110 transition-transform">
+                      <ListPlus className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 group-hover:text-primary-700 dark:group-hover:text-primary-300">Thêm câu hỏi</p>
+                    </div>
+                  </div>
+                </Link>
+                <Link to="/admin/matrix/new">
+                  <div className="group flex items-center gap-3 rounded-lg border border-slate-200 p-3 hover:border-warning-500 hover:bg-warning-50 dark:border-primary-800 dark:hover:border-warning-500/50 dark:hover:bg-warning-900/20 transition-all cursor-pointer">
+                    <div className="rounded-full bg-warning-100 p-2 text-warning-600 dark:bg-warning-900/50 dark:text-warning-400 group-hover:scale-110 transition-transform">
+                      <FolderPlus className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 group-hover:text-warning-700 dark:group-hover:text-warning-300">Tạo ma trận đề</p>
+                    </div>
+                  </div>
+                </Link>
               </div>
-            ) : overview?.recent_exams.length ? (
-              <div className="space-y-4 pr-2">
-                {overview.recent_exams.map((exam, i) => {
-                  const conf = statusConfig[exam.status] || { label: exam.status, variant: "secondary" };
-                  return (
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      key={exam.id}
-                      className="group flex items-start gap-4 rounded-xl border border-transparent p-2 transition-colors hover:bg-slate-50 dark:hover:bg-primary-900/20 hover:border-slate-100 dark:hover:border-primary-800/50"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-primary-900/30">
-                        <FileText className="h-5 w-5 text-slate-500 dark:text-primary-400" />
+            </CardContent>
+          </Card>
+
+          {/* Recent Exams */}
+          <Card className="flex flex-col shadow-lg border border-slate-200 dark:border-primary-900/50 dark:bg-[#0b1121]/60 flex-1">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-indigo-500" />
+                  <CardTitle>Kỳ thi gần đây</CardTitle>
+                </div>
+                <Link to="/admin/exams" className="text-xs font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                  Xem tất cả &rarr;
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-auto pb-4">
+              {overviewQuery.isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((item) => (
+                    <div key={item} className="flex gap-4">
+                      <Skeleton className="h-10 w-10 rounded-xl" />
+                      <div className="flex-1 space-y-2 py-1">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100 group-hover:text-primary-600 transition-colors">
-                          {exam.name}
-                        </h4>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {formatExamTime(exam.start_time, exam.end_time)}
-                        </p>
-                        <div className="mt-2">
-                          <Badge variant={conf.variant}>{conf.label}</Badge>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex h-40 flex-col items-center justify-center text-center">
-                <FileText className="h-8 w-8 text-slate-300 mb-2" />
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Chưa có kỳ thi nào</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Hãy tạo một kỳ thi mới để bắt đầu theo dõi tiến độ.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </div>
+                  ))}
+                </div>
+              ) : overview?.recent_exams.length ? (
+                <div className="space-y-3 pr-2">
+                  {overview.recent_exams.map((exam, i) => {
+                    const conf = statusConfig[exam.status] || { label: exam.status, variant: "secondary" };
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        key={exam.id}
+                      >
+                        <Link to={`/admin/exams/${exam.id}`}>
+                          <div className="group flex items-start gap-3 rounded-xl border border-transparent p-2 transition-colors hover:bg-slate-50 dark:hover:bg-primary-900/20 hover:border-slate-200 dark:hover:border-primary-800/50 cursor-pointer">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 group-hover:bg-indigo-100 transition-colors">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                                {exam.name}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                {formatExamTime(exam.start_time, exam.end_time)}
+                              </p>
+                              <div className="mt-1.5">
+                                <Badge variant={conf.variant} className="text-[10px] px-1.5 py-0">
+                                  {conf.label}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center text-center">
+                  <FileText className="h-8 w-8 text-slate-300 mb-2" />
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Chưa có kỳ thi nào</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

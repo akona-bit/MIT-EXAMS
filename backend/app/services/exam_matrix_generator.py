@@ -95,6 +95,9 @@ def _select_for_cell(
     passage_id: Optional[int] = None,
 ) -> CellResult:
     # Select questions for a matrix cell.
+    if cell.count <= 0:
+        return CellResult(cell=cell, selected_ids=[], shortage=0)
+
     cands = _candidates_for_cell(cell, pool, used_ids, passage_id=passage_id)
 
     # ---- Rule cũ chính thức (đã set đủ level + dạng câu): strict cũ y hệt ----

@@ -72,6 +72,15 @@ export async function updateExam(id: number, data: Partial<Exam>): Promise<Exam>
   return response.data;
 }
 
+export async function uploadExamPdf(id: number, file: File): Promise<{ success: boolean; url: string; filename: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await client.put(`/api/v1/exams/${id}/upload-pdf`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
 export async function deleteExam(id: number): Promise<void> {
   await client.delete(`/api/v1/exams/${id}`);
 }
@@ -122,4 +131,19 @@ export function exportExamLaTeX(examId: number, formCode?: string) {
     link.click();
     link.remove();
   });
+}
+
+export async function updateExamMode(
+  examId: number,
+  examMode: "ONLINE" | "PAPER"
+): Promise<{
+  success: boolean;
+  exam_mode: string;
+  exam_mode_changed: boolean;
+  message: string;
+}> {
+  const response = await client.put(`/api/v1/exams/${examId}/exam-mode`, {
+    exam_mode: examMode,
+  });
+  return response.data;
 }

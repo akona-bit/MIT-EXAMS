@@ -244,10 +244,15 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
         "exam_name": exam.name,
         "form_code": participant.exam_form.code if participant.exam_form else "",
         "remaining_seconds": remaining_seconds,
+        "exam_end_time": exam.end_time,
+        "exam_pdf_url": exam.exam_pdf_url,
         "server_time": now,
         "participant_status": participant.status.value,
         "questions": questions,
-        "saved_answers": saved_answers
+        "saved_answers": saved_answers,
+        "exam_mode": participant.exam_mode.value if participant.exam_mode else None,
+        "exam_mode_changed": participant.exam_mode_changed,
+        "sbd": participant.sbd
     }
 
 async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: AutosaveRequest):
@@ -324,15 +329,27 @@ async def submit_exam(db: AsyncSession, exam_id: int, user_id: int, bypass_verif
     participant.status = ParticipantStatus.SUBMITTED
     participant.submit_time = datetime.now(timezone.utc)
     
+    submission_id = None
     if omr_image_url:
         result_sub = await db.execute(select(ExamSubmission).where(ExamSubmission.exam_participant_id == participant.id))
         submission = result_sub.scalars().first()
         if not submission:
             submission = ExamSubmission(exam_participant_id=participant.id)
             db.add(submission)
+            await db.flush()
         submission.omr_image_url = omr_image_url
+        submission_id = submission.id
     
     await db.commit()
+    
+    # Auto-dispatch OMR grading task if student submitted OMR image
+    if submission_id and omr_image_url:
+        try:
+            from app.services.omr.tasks import grade_student_omr_task
+            grade_student_omr_task.delay(submission_id, enable_gemini=True)
+        except Exception:
+            pass  # Best-effort: don't fail the submission if Celery is unavailable
+    
     return {"status": "success"}
 
 async def log_tracking_event(db: AsyncSession, exam_id: int, user_id: int, req: TrackingEventRequest):
@@ -392,3 +409,50 @@ async def suspend_exam_session(db: AsyncSession, exam_id: int, user_id: int, adm
         pass
         
     return True
+
+async def update_exam_mode(db: AsyncSession, exam_id: int, user_id: int, exam_mode: str):
+    """Update exam mode for a participant. Only allowed once."""
+    from app.models.exam import ExamMode
+    
+    result = await db.execute(select(ExamParticipant).where(
+        ExamParticipant.exam_id == exam_id,
+        ExamParticipant.user_id == user_id
+    ).with_for_update())
+    participant = result.scalars().first()
+    
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    
+    if participant.status == ParticipantStatus.SUBMITTED:
+        raise HTTPException(status_code=400, detail="Cannot change mode after submission")
+    
+    if participant.status == ParticipantStatus.SUSPENDED:
+        raise HTTPException(status_code=400, detail="Cannot change mode on suspended session")
+    
+    # Check if already changed once
+    if participant.exam_mode_changed and participant.exam_mode is not None:
+        raise HTTPException(status_code=400, detail="You can only change exam mode once")
+    
+    # Validate mode
+    try:
+        mode = ExamMode(exam_mode)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid exam mode. Must be ONLINE or PAPER")
+    
+    # If first time setting mode
+    if participant.exam_mode is None:
+        participant.exam_mode = mode
+    else:
+        # Second time: allow change but mark as changed
+        participant.exam_mode = mode
+        participant.exam_mode_changed = True
+    
+    await db.commit()
+    await db.refresh(participant)
+    
+    return {
+        "success": True,
+        "exam_mode": participant.exam_mode.value,
+        "exam_mode_changed": participant.exam_mode_changed,
+        "message": "Exam mode updated successfully"
+    }

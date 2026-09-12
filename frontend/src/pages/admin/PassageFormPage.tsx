@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileText } from 'lucide-react';
+import { FileText, Printer } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { toast } from '../../components/ui/Toast';
 import { passageApi } from '../../api/passages';
 import MarkdownEditor from '../../components/editor/MarkdownEditor';
+import { PrintPreviewModal, PassageTablePreview } from '../../components/print';
 
 export default function PassageFormPage() {
   const navigate = useNavigate();
@@ -20,6 +21,9 @@ export default function PassageFormPage() {
     source_author: '',
     content: ''
   });
+
+  // Print Preview state
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -131,13 +135,34 @@ export default function PassageFormPage() {
             </div>
           </div>
 
-          <div className="flex justify-end pt-4 pb-12 sticky bottom-0 z-20">
+          <div className="flex justify-end gap-3 pt-4 pb-12 sticky bottom-0 z-20">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsPrintModalOpen(true)}
+              disabled={!formData.content.trim()}
+              className="text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100"
+            >
+              <Printer className="w-4 h-4 mr-2" /> Xem trước khi in
+            </Button>
             <Button type="submit" isLoading={saving} size="lg" className="shadow-lg shadow-primary-500/20 px-12 py-6 text-lg">
               {isEdit ? "Lưu thay đổi" : "Hoàn tất tạo ngữ liệu"}
             </Button>
           </div>
         </form>
       )}
+
+      <PrintPreviewModal
+        open={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        title="Ngữ liệu - Xem trước khi in"
+      >
+        <PassageTablePreview
+          content={formData.content}
+          sourceAuthor={formData.source_author || undefined}
+          sourceTitle={formData.source_title || undefined}
+        />
+      </PrintPreviewModal>
     </div>
   );
 }

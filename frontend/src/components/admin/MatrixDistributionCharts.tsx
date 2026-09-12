@@ -30,23 +30,35 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
       if (rule.knowledge_node?.name) {
         topicName = rule.knowledge_node.name;
       }
+      if (topicName.length > 30) {
+        topicName = topicName.substring(0, 30) + '...';
+      }
       topicDist[topicName] = (topicDist[topicName] || 0) + rule.count;
 
-      const levelName = LEVEL_LABELS[rule.level] || `M${rule.level}`;
+      const levelName = rule.level ? (LEVEL_LABELS[rule.level] || `M${rule.level}`) : 'Chưa phân loại';
       levelDist[levelName] = (levelDist[levelName] || 0) + rule.count;
 
-      const typeName = TYPE_LABELS[rule.question_type] || rule.question_type || 'UNKNOWN';
+      const typeName = rule.question_type ? (TYPE_LABELS[rule.question_type] || rule.question_type) : 'Chưa phân loại';
       typeDist[typeName] = (typeDist[typeName] || 0) + rule.count;
     });
 
+    let topicData = Object.entries(topicDist)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    if (topicData.length > 6) {
+      const top5 = topicData.slice(0, 5);
+      const others = topicData.slice(5).reduce((sum, item) => sum + item.value, 0);
+      top5.push({ name: 'Khác', value: others });
+      topicData = top5;
+    }
+
     return {
-      topicData: Object.entries(topicDist)
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value),
+      topicData,
       levelData: Object.entries(levelDist)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => {
-          const order = ['NB', 'TH', 'VD', 'VDC'];
+          const order = ['NB', 'TH', 'VD', 'VDC', 'Chưa phân loại'];
           return order.indexOf(a.name) - order.indexOf(b.name);
         }),
       typeData: Object.entries(typeDist)
@@ -102,7 +114,7 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
                 ))}
               </Pie>
               <Tooltip formatter={(value: any, name: any) => [`${value} câu`, name]} />
-              <Legend iconType="circle" iconSize={8} />
+              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -119,7 +131,7 @@ export default function MatrixDistributionCharts({ rules }: DistributionChartsPr
               <YAxis allowDecimals={false} />
               <Tooltip formatter={(value: any) => [`${value} câu`]} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {distributions.typeData.map((_entry, index) => (
+                {distributions.levelData.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
                 ))}
               </Bar>

@@ -4,6 +4,12 @@ import zipfile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+import re
+import urllib.request
+import urllib.parse
+import uuid
+import mimetypes
+from datetime import datetime
 from app.models.exam import Exam, ExamForm, ExamFormQuestion, ExamFormAnswer
 from app.models.question import Question, KnowledgeNode
 
@@ -43,6 +49,85 @@ class LatexService:
             
         return "other"
         
+    @staticmethod
+    def _escape_latex_text(text: str) -> str:
+        if not text:
+            return ""
+        import re
+        # Extract \begin{figure}...\end{figure} blocks
+        figure_pattern = r'(\\begin\{figure\}.*?\\end\{figure\})'
+        parts = re.split(figure_pattern, text, flags=re.DOTALL)
+        
+        escaped_parts = []
+        for i, part in enumerate(parts):
+            if i % 2 == 1:
+                # Figure block - fix width=XX% to width=0.XX\textwidth
+                fixed = re.sub(
+                    r'width=(\d+)%',
+                    lambda m: f'width=0.{m.group(1)}\\textwidth',
+                    part
+                )
+                escaped_parts.append(fixed)
+            else:
+                # Normal text, escape special chars
+                escaped = part.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                escaped_parts.append(escaped)
+                
+        return "".join(escaped_parts)
+
+    @staticmethod
+    def _process_images_in_text(text: str, subject_key: str, zipf: zipfile.ZipFile) -> str:
+        if not text:
+            return ""
+        
+        pattern = r'\\includegraphics(?:\[.*?\])?\{([^}]+)\}'
+        
+        def replacer(match):
+            full_match = match.group(0)
+            img_url = match.group(1)
+            
+            # Skip if it doesn't look like a URL
+            if not img_url.startswith("http") and not img_url.startswith("/"):
+                return full_match
+                
+            try:
+                filename = f"img_{uuid.uuid4().hex[:8]}.png"
+                if img_url.startswith("http"):
+                    req = urllib.request.Request(img_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        img_data = response.read()
+                        content_type = response.headers.get('Content-Type', '')
+                        if 'jpeg' in content_type or 'jpg' in content_type: 
+                            filename = f"img_{uuid.uuid4().hex[:8]}.jpg"
+                        elif 'png' in content_type: 
+                            filename = f"img_{uuid.uuid4().hex[:8]}.png"
+                        
+                        zip_path = f"content/{subject_key}/images/{filename}"
+                        zipf.writestr(zip_path, img_data)
+                else:
+                    # Local relative path
+                    local_path = img_url.lstrip('/')
+                    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                    full_local_path = os.path.join(base_dir, local_path.replace('/', os.sep))
+                    if os.path.exists(full_local_path):
+                        with open(full_local_path, "rb") as f:
+                            img_data = f.read()
+                        ext = os.path.splitext(local_path)[1] or '.png'
+                        filename = f"img_{uuid.uuid4().hex[:8]}{ext}"
+                        zip_path = f"content/{subject_key}/images/{filename}"
+                        zipf.writestr(zip_path, img_data)
+                    else:
+                        return full_match
+                        
+                replaced_str = full_match.replace(f"{{{img_url}}}", f"{{content/{subject_key}/images/{filename}}}")
+                return replaced_str
+                
+            except Exception as e:
+                print(f"LatexService: Failed to download/process image {img_url}: {e}")
+                return full_match
+                
+        return re.sub(pattern, replacer, text)
+
     @staticmethod
     def _determine_choice_macro(answers: list) -> str:
         # Heuristic to choose \choiceFour, \choiceTwo, \choiceOne
@@ -120,24 +205,24 @@ class LatexService:
                 parts = re.split(pattern, orig_q.content)
                 if len(parts) == 9:
                     # parts are: [text0, span1, text1, span2, text2, span3, text3, span4, text4]
-                    escaped_parts = [p.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#') for p in parts]
+                    escaped_parts = [LatexService._escape_latex_text(p) for p in parts]
                     q_block = r"\errorq{" + "}{".join(escaped_parts) + "}"
                 else:
                     # Fallback if invalid
-                    q_content = orig_q.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    q_content = LatexService._escape_latex_text(orig_q.content)
                     q_block = rf"\q{{{q_content}}}"
             else:
-                q_content = orig_q.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                q_content = LatexService._escape_latex_text(orig_q.content)
                 
                 # Format answers
                 answers = answers_by_fq.get(fq.id, [])
                 ans_latex = ""
                 if len(answers) == 4:
                     macro_name = LatexService._determine_choice_macro([a.answer_ref for a in answers])
-                    a1 = answers[0].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                    a2 = answers[1].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                    a3 = answers[2].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
-                    a4 = answers[3].answer_ref.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    a1 = LatexService._escape_latex_text(answers[0].answer_ref.content)
+                    a2 = LatexService._escape_latex_text(answers[1].answer_ref.content)
+                    a3 = LatexService._escape_latex_text(answers[2].answer_ref.content)
+                    a4 = LatexService._escape_latex_text(answers[3].answer_ref.content)
                     ans_latex = rf"\{macro_name}{{{a1}}}{{{a2}}}{{{a3}}}{{{a4}}}"
                 
                 q_block = rf"\q{{{q_content}}}"
@@ -146,7 +231,7 @@ class LatexService:
 
             if orig_q.passage_id:
                 if orig_q.passage_id not in subject_data[subject]["passages"]:
-                    p_content = orig_q.passage.content.replace('_', r'\_').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#')
+                    p_content = LatexService._escape_latex_text(orig_q.passage.content)
                     subject_data[subject]["passages"][orig_q.passage_id] = {
                         "content": p_content,
                         "questions": []
@@ -197,13 +282,16 @@ class LatexService:
                     return lines
                 
                 if data["single"]:
-                    zipf.writestr(f"content/{subject_key}/single.tex", "\n\n".join(data["single"]))
+                    single_content = "\n\n".join(data["single"])
+                    single_content = LatexService._process_images_in_text(single_content, subject_key, zipf)
+                    zipf.writestr(f"content/{subject_key}/single.tex", single_content)
                     lines.append(rf"\inputspace{{content/{subject_key}/single}}")
                     
                 for p_id, p_data in data["passages"].items():
                     idx = reading_counters[subject_key]
                     reading_counters[subject_key] += 1
                     p_str = rf"\reading{{{len(p_data['questions'])}}}{{{p_data['content']}}}" + "\n\n" + "\n\n".join(p_data["questions"])
+                    p_str = LatexService._process_images_in_text(p_str, subject_key, zipf)
                     zipf.writestr(f"content/{subject_key}/reading{idx}.tex", p_str)
                     lines.append(rf"\inputspace{{content/{subject_key}/reading{idx}}}")
                 return lines

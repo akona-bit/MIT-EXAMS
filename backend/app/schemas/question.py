@@ -31,9 +31,13 @@ class KnowledgeNodeResponse(KnowledgeNodeBase):
 
 class GraphNode(BaseModel):
     id: str
+    entity_id: int
     label: str
     type: str
+    path: Optional[str] = None
     question_count: int = 0
+    description: Optional[str] = None
+    note: Optional[str] = None
 
 class GraphEdge(BaseModel):
     id: str

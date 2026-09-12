@@ -88,7 +88,7 @@ export default function MatrixPage() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 pb-1">
+          <h1 className="text-3xl font-extrabold tracking-tight text-gradient flex items-center gap-3 pb-1">
             <LayoutGrid className="w-8 h-8 text-primary-500" />
             Ma trận Đặc tả
           </h1>
@@ -101,7 +101,7 @@ export default function MatrixPage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 dark:border-slate-800 dark:bg-[#0b1121] dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)] overflow-hidden">
+      <div className="rounded-xl border border-slate-200 shadow-lg dark:border-primary-900/50 dark:bg-[#0b1121]/60 overflow-hidden">
         <div className="p-6 border-b border-slate-200 dark:border-slate-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Danh sách Ma trận</h2>
