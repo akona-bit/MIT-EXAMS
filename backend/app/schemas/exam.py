@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.models.question import QuestionType
 from app.models.exam import ExamStatus, ParticipantStatus
+from app.schemas.question import KnowledgeNodeResponse
 
 # --- MatrixRuleGroup Schemas ---
 class MatrixRuleGroupBase(BaseModel):
@@ -40,7 +41,7 @@ class MatrixRuleResponse(MatrixRuleBase):
     id: int
     matrix_id: int
     group_id: Optional[int] = None
-    knowledge_node: Optional[Dict[str, Any]] = None
+    knowledge_node: Optional[KnowledgeNodeResponse] = None
     note: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
