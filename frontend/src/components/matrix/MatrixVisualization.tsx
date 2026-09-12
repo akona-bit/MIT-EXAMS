@@ -79,10 +79,10 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
   }, [data]);
 
   const levelData = useMemo(() => {
-    const levels = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    const levelNames = { 1: "Nhận biết", 2: "Thông hiểu", 3: "Vận dụng", 4: "Vận dụng cao" };
+    const levels = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+    const levelNames = { 0: "Tự động cân bằng", 1: "Nhận biết", 2: "Thông hiểu", 3: "Vận dụng", 4: "Vận dụng cao" };
     data.forEach((item) => {
-      const lv = item.level || 1;
+      const lv = item.level || 0;
       levels[lv as keyof typeof levels] += (item.count || 0);
     });
     return Object.entries(levels)
@@ -97,7 +97,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
                  : item.question_type === 'MULTIPLE_CHOICE' ? 'Nhiều lựa chọn'
                  : item.question_type === 'TRUE_FALSE' ? 'Đúng/Sai'
                  : item.question_type === 'FILL_IN_BLANK' ? 'Điền khuyết'
-                 : 'Khác';
+                 : 'Tự động chọn';
       const count = item.count || 0;
       if (count > 0) map.set(type, (map.get(type) || 0) + count);
     });
@@ -165,14 +165,14 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
             strokeOpacity: 1 / (depth + 1e-10),
           }}
         />
-        {depth === 1 && width > 50 && height > 30 ? (
-          <text x={x + 8} y={y + 18} fill="#fff" fontSize={14} fontWeight="bold">
-            {name}
+        {depth === 1 && width > 60 && height > 30 ? (
+          <text x={x + 8} y={y + 18} fill="#fff" fontSize={13} fontWeight="bold">
+            {name.length > Math.floor(width / 8) ? name.substring(0, Math.floor(width / 8) - 2) + '...' : name}
           </text>
         ) : null}
-        {depth === 2 && width > 40 && height > 20 ? (
-          <text x={x + width / 2} y={y + height / 2} textAnchor="middle" fill="#fff" fontSize={12} opacity={0.9}>
-            {name} ({value})
+        {depth === 2 && width > 50 && height > 30 ? (
+          <text x={x + width / 2} y={y + height / 2} textAnchor="middle" fill="#fff" fontSize={11} opacity={0.9}>
+            {name.length > Math.floor(width / 7) ? name.substring(0, Math.floor(width / 7) - 2) + '...' : name} ({value})
           </text>
         ) : null}
       </g>
@@ -237,8 +237,8 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
                     <PieChart>
                       <Pie 
                         data={topicData} 
-                        cx="50%" cy="50%" 
-                        innerRadius={80} outerRadius={120} 
+                        cx="50%" cy="45%" 
+                        innerRadius={60} outerRadius={100} 
                         paddingAngle={4} 
                         dataKey="value" 
                         cornerRadius={6}
@@ -248,6 +248,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
                         ))}
                       </Pie>
                       <RechartsTooltip content={<CustomTooltip />} cursor={{fill: 'transparent'}} />
+                      <Legend verticalAlign="bottom" height={60} iconType="circle" wrapperStyle={{ fontSize: 11, fontWeight: 500 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -257,10 +258,10 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
                 <h4 className="text-sm font-bold text-slate-500 text-center uppercase tracking-wider mb-2">Dạng câu hỏi</h4>
                 <div className="flex-1">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={typeData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
+                    <BarChart data={typeData} margin={{ top: 20, right: 20, left: -20, bottom: 40 }}>
                       <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e2e8f0" strokeOpacity={0.5} />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 13, fontWeight: 600, fill: '#64748b' }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#94a3b8' }} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }} interval={0} angle={-30} textAnchor="end" dy={10} dx={-5} height={60} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
                       <RechartsTooltip cursor={{ fill: '#f8fafc', opacity: 0.5 }} content={<CustomTooltip />} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={48}>
                          {typeData.map((entry, index) => (
