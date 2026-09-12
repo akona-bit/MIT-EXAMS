@@ -151,8 +151,14 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
   const COLORS_TREEMAP = ['#8889DD', '#9597E4', '#8DC77B', '#A5D297', '#E2CF45', '#F8C12D'];
   const CustomTreemapContent = (props: any) => {
     const { root, depth, x, y, width, height, index, name, value } = props;
+    const clipId = `clip-${depth}-${Math.floor(x)}-${Math.floor(y)}`;
     return (
       <g>
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={x} y={y} width={width} height={height} />
+          </clipPath>
+        </defs>
         <rect
           x={x}
           y={y}
@@ -165,14 +171,14 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
             strokeOpacity: 1 / (depth + 1e-10),
           }}
         />
-        {depth === 1 && width > 60 && height > 30 ? (
-          <text x={x + 8} y={y + 18} fill="#fff" fontSize={13} fontWeight="bold">
-            {name.length > Math.floor(width / 8) ? name.substring(0, Math.floor(width / 8) - 2) + '...' : name}
+        {depth === 1 && width > 40 && height > 25 ? (
+          <text x={x + 6} y={y + 18} fill="#fff" fontSize={12} fontWeight="bold" clipPath={`url(#${clipId})`}>
+            {name}
           </text>
         ) : null}
-        {depth === 2 && width > 50 && height > 30 ? (
-          <text x={x + width / 2} y={y + height / 2} textAnchor="middle" fill="#fff" fontSize={11} opacity={0.9}>
-            {name.length > Math.floor(width / 7) ? name.substring(0, Math.floor(width / 7) - 2) + '...' : name} ({value})
+        {depth === 2 && width > 40 && height > 25 ? (
+          <text x={x + width / 2} y={y + height / 2 + 4} textAnchor="middle" fill="#fff" fontSize={11} opacity={0.9} clipPath={`url(#${clipId})`}>
+            {name} ({value})
           </text>
         ) : null}
       </g>
@@ -226,7 +232,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
       </div>
 
       {/* Chart Area */}
-      <div className="p-6 h-[450px]">
+      <div className="p-6 h-[550px]">
         
         {chartType === 'overview' && (
            <div className="flex w-full h-full gap-6">
@@ -248,7 +254,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
                         ))}
                       </Pie>
                       <RechartsTooltip content={<CustomTooltip />} cursor={{fill: 'transparent'}} />
-                      <Legend verticalAlign="bottom" height={60} iconType="circle" wrapperStyle={{ fontSize: 11, fontWeight: 500 }} />
+                      <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 11, fontWeight: 500, lineHeight: "24px" }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -300,12 +306,12 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
           <div className="w-full h-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-inner">
             {skillData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={skillData} layout="vertical" margin={{ top: 10, right: 30, left: 140, bottom: 10 }}>
+                <BarChart data={skillData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" strokeOpacity={0.4} />
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={130} tick={{ fontSize: 12, fontWeight: 500, fill: '#475569' }} />
+                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={200} tick={{ fontSize: 11, fontWeight: 600, fill: '#475569' }} tickFormatter={(val) => val.length > 30 ? val.substring(0, 30) + '...' : val} />
                   <RechartsTooltip cursor={{ fill: '#f1f5f9', opacity: 0.6 }} content={<CustomTooltip />} />
-                  <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} animationDuration={1000} />
+                  <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} barSize={16} animationDuration={1000} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
