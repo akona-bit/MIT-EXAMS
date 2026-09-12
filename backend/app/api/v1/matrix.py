@@ -703,15 +703,14 @@ async def parse_structure_file(
             count = 0
             part = 1
             
-        if count > 0:
-            rules.append({
-                "knowledge_node_id": target_node_id,
-                "question_type": None,
-                "level": None,
-                "count": count,
-                "part": part,
-                "note": row.get("note", "")
-            })
+        rules.append({
+            "knowledge_node_id": target_node_id,
+            "question_type": None,
+            "level": None,
+            "count": count,
+            "part": part,
+            "note": row.get("note", "")
+        })
             
     await db.commit()
     

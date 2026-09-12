@@ -35,6 +35,7 @@ class MatrixImportService:
         rows = []
         current_topic = ""
         current_concept = ""
+        current_skill = ""
         
         for raw_parts in reader[start_idx:]:
             parts = [part.strip() for part in raw_parts]
@@ -46,9 +47,9 @@ class MatrixImportService:
                 if len(parts) > 1 and parts[1]:
                     current_topic = parts[1]
                 if len(parts) > 2 and parts[2]:
-                    skill = parts[2]
-                else:
-                    skill = current_topic
+                    current_concept = parts[2]
+                
+                skill = ""
                     
                 count_str = parts[3] if len(parts) > 3 and parts[3] else "0"
                 note_str = parts[4] if len(parts) > 4 else ""
@@ -60,7 +61,7 @@ class MatrixImportService:
                 
                 rows.append({
                     "topic": current_topic,
-                    "concept": "",
+                    "concept": current_concept,
                     "skill": skill,
                     "count": count_str,
                     "part": str(part),
