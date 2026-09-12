@@ -658,27 +658,62 @@ async def parse_structure_file(
     content_bytes = await file.read()
     content = content_bytes.decode('utf-8-sig', errors='ignore')
     
-    preview = await MatrixImportService.preview_import(
-        db=db,
-        content=content,
-        level_ratios={}, # Simple rule
-        type_ratios={}   # Simple rule
-    )
-    
+    raw_rows = MatrixImportService.parse_csv_content(content)
     rules = []
-    for row in preview:
-        if row.get("node_id"):
-            for rule_data in row.get("distributed_rules", []):
-                rules.append({
-                    "knowledge_node_id": row["node_id"],
-                    "question_type": rule_data.get("question_type") or None,
-                    "level": rule_data.get("level") or None,
-                    "count": rule_data.get("count", 1),
-                    "part": rule_data.get("part", 1),
-                    "note": rule_data.get("note", "")
-                })
     
-    return {"rules": rules, "preview_details": preview}
+    for row in raw_rows:
+        topic_name = row.get("topic", "")
+        concept_name = row.get("concept", "")
+        skill_name = row.get("skill", "")
+        
+        # 1. Ensure Topic exists
+        topic_node = await MatrixImportService._find_or_create_node(db, topic_name, "TOPIC", None)
+        
+        # 2. Ensure Concept exists
+        concept_node = None
+        if concept_name:
+            # check if concept exists
+            stmt = select(KnowledgeNode).where(KnowledgeNode.name == concept_name, KnowledgeNode.parent_id == topic_node.id)
+            result = await db.execute(stmt)
+            concept_node = result.scalars().first()
+            if not concept_node:
+                concept_node = await MatrixImportService._find_or_create_node(
+                    db, concept_name, "CONCEPT", topic_node.id
+                )
+                
+        # 3. Ensure Skill exists
+        skill_node = None
+        if skill_name and concept_node:
+            stmt = select(KnowledgeNode).where(KnowledgeNode.name == skill_name, KnowledgeNode.parent_id == concept_node.id)
+            result = await db.execute(stmt)
+            skill_node = result.scalars().first()
+            if not skill_node:
+                skill_node = await MatrixImportService._find_or_create_node(
+                    db, skill_name, "SKILL", concept_node.id
+                )
+                
+        target_node_id = skill_node.id if skill_node else (concept_node.id if concept_node else topic_node.id)
+        
+        try:
+            count = max(0, int(float(row["count"])))
+            part = int(row["part"])
+        except (TypeError, ValueError):
+            count = 0
+            part = 1
+            
+        if count > 0:
+            rules.append({
+                "knowledge_node_id": target_node_id,
+                "question_type": None,
+                "level": None,
+                "count": count,
+                "part": part,
+                "note": row.get("note", "")
+            })
+            
+    await db.commit()
+    
+    return {"rules": rules, "preview_details": []}
 
 
 
