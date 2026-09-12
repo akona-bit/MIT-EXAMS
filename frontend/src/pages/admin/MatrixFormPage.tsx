@@ -202,9 +202,9 @@ export default function MatrixFormPage() {
       return;
     }
 
-    const invalidRule = rules.find((r) => !r.knowledge_node_id || !r.count || r.count <= 0);
+    const invalidRule = rules.find((r) => !r.knowledge_node_id || r.count === undefined || r.count < 0);
     if (invalidRule) {
-      toast.warning("Vui lòng điền đầy đủ và hợp lệ thông tin cho tất cả quy tắc (Chủ đề, Số lượng > 0)");
+      toast.warning("Vui lòng điền đầy đủ và hợp lệ thông tin cho tất cả quy tắc (Chủ đề, Số lượng >= 0)");
       return;
     }
 
