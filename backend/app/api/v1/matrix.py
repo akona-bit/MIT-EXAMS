@@ -231,7 +231,14 @@ async def create_matrix(request: Request, matrix_in: MatrixCreate, db: AsyncSess
     capture(request, "matrix_created", {"matrix_id": matrix.id, "rule_count": len(matrix_in.rules)})
 
     # Reload with rules and groups
-    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix.id))
+    result = await db.execute(
+        select(Matrix)
+        .options(
+            selectinload(Matrix.rules).selectinload(MatrixRule.knowledge_node),
+            selectinload(Matrix.groups)
+        )
+        .where(Matrix.id == matrix.id)
+    )
     return result.scalars().first()
 
 
@@ -293,7 +300,14 @@ async def update_matrix(matrix_id: int, matrix_in: MatrixCreate, db: AsyncSessio
         ))
 
     await db.commit()
-    result = await db.execute(select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix.id))
+    result = await db.execute(
+        select(Matrix)
+        .options(
+            selectinload(Matrix.rules).selectinload(MatrixRule.knowledge_node),
+            selectinload(Matrix.groups)
+        )
+        .where(Matrix.id == matrix.id)
+    )
     return result.scalars().first()
 
 
@@ -346,7 +360,10 @@ async def get_matrix_usage(matrix_id: int, db: AsyncSession = Depends(get_db)):
 async def create_matrix_version(request: Request, matrix_id: int, db: AsyncSession = Depends(get_db)):
     """Create a new version of a matrix by copying all rules and groups."""
     result = await db.execute(
-        select(Matrix).options(selectinload(Matrix.rules), selectinload(Matrix.groups)).where(Matrix.id == matrix_id)
+        select(Matrix).options(
+            selectinload(Matrix.rules).selectinload(MatrixRule.knowledge_node),
+            selectinload(Matrix.groups)
+        ).where(Matrix.id == matrix_id)
     )
     source = result.scalars().first()
     if not source:
