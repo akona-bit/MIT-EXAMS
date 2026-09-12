@@ -339,7 +339,7 @@ export default function MatrixFormPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-24">
+    <div className="max-w-[1500px] w-full px-4 md:px-6 mx-auto space-y-8 pb-24">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -456,10 +456,10 @@ export default function MatrixFormPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
              
              {/* LEFT COLUMN: Main Info & Actions */}
-             <div className="lg:col-span-2 space-y-8">
+             <div className="xl:col-span-3 space-y-8">
                 {/* General Info Card */}
                 <div className="bg-white dark:bg-[#0b1121] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl shadow-slate-200/40 dark:shadow-[0_0_40px_-15px_rgba(30,58,138,0.3)]">
                    <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
