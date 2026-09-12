@@ -34,7 +34,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
   const topicData = useMemo(() => {
     const map = new Map<string, number>();
     data.forEach((item) => {
-      const topicName = item.knowledge_node?.parent?.parent?.name || item.topic || 'Chủ đề khác';
+      const topicName = item.topicName || item.topic || 'Chủ đề khác';
       const count = item.count || 0;
       map.set(topicName, (map.get(topicName) || 0) + count);
     });
@@ -44,8 +44,8 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
   const conceptData = useMemo(() => {
     const topicsMap = new Map<string, any>();
     data.forEach((item) => {
-      const topicName = item.knowledge_node?.parent?.parent?.name || item.topic || 'Chủ đề khác';
-      const conceptName = item.knowledge_node?.parent?.name || item.concept || 'Khái niệm khác';
+      const topicName = item.topicName || item.topic || 'Chủ đề khác';
+      const conceptName = item.conceptName || item.concept || 'Khái niệm khác';
       const count = item.count || 0;
       
       if (!topicsMap.has(topicName)) {
@@ -67,7 +67,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
   const skillData = useMemo(() => {
     const map = new Map<string, number>();
     data.forEach((item) => {
-      const skillName = item.knowledge_node?.name || item.skill || 'Kỹ năng khác';
+      const skillName = item.skillName || item.skill || 'Kỹ năng khác';
       const count = item.count || 0;
       if (count > 0) {
         map.set(skillName, (map.get(skillName) || 0) + count);

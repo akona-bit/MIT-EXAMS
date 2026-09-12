@@ -426,10 +426,19 @@ export default function MatrixFormPage() {
                      >
                         <div className="mb-2">
                           <MatrixVisualization 
-                            data={rules.map(r => ({
-                              ...r,
-                              knowledge_node: nodes.find(n => n.id === r.knowledge_node_id)
-                            }))} 
+                            data={rules.map(r => {
+                              const leafNode = flattenedNodes.find(n => n.id === r.knowledge_node_id);
+                              const conceptNode = leafNode?.parent_id ? flattenedNodes.find(n => n.id === leafNode.parent_id) : undefined;
+                              const topicNode = conceptNode?.parent_id ? flattenedNodes.find(n => n.id === conceptNode.parent_id) : undefined;
+                              
+                              return {
+                                ...r,
+                                knowledge_node: leafNode,
+                                topicName: topicNode?.name || conceptNode?.name || leafNode?.name || 'Chủ đề khác',
+                                conceptName: conceptNode?.name || leafNode?.name || 'Khái niệm khác',
+                                skillName: leafNode?.name || 'Kỹ năng khác'
+                              };
+                            })} 
                             groups={groups}
                           />
                         </div>
