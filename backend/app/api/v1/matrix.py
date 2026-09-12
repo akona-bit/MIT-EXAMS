@@ -65,21 +65,23 @@ async def dgnl_blueprint_template(db: AsyncSession = Depends(get_db)):
     
     group_local_ids = []
     for slot in BLUEPRINT_SLOTS:
-        if slot.passage and slot.key not in group_local_ids:
-            group_local_ids.append(slot.key)
+        group_key = getattr(slot, 'group_prefix', None) or slot.key
+        if slot.passage and group_key not in group_local_ids:
+            group_local_ids.append(group_key)
             groups.append({
-                "local_id": slot.key,
+                "local_id": group_key,
                 "label": slot.label
             })
             
     for slot in BLUEPRINT_SLOTS:
         node_id = auto_map.get(slot.key)
+        group_key = getattr(slot, 'group_prefix', None) or slot.key
         rules.append({
             "knowledge_node_id": node_id,
             "count": slot.count,
             "part": slot.part,
             "position": slot.position,
-            "group_local_id": slot.key if slot.passage else None,
+            "group_local_id": group_key if slot.passage else None,
             "_slot_key": slot.key,
             "_slot_label": slot.label,
             "_node_hint": slot.node_hint,
