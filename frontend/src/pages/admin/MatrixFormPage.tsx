@@ -264,6 +264,14 @@ export default function MatrixFormPage() {
       formData.append("file", file);
       const res = await parseStructureFile(formData);
       
+      // Mới: Refresh lại toàn bộ Knowledge Tree vì Backend có thể vừa tự động sinh thêm Node mới từ file
+      try {
+        const updatedNodes = await getKnowledgeTree();
+        setNodes(updatedNodes);
+      } catch (err) {
+        console.error("Lỗi khi tải lại cây kiến thức:", err);
+      }
+      
       const newRules = res.rules.map((r: any) => ({
         knowledge_node_id: r.knowledge_node_id,
         question_type: r.question_type || undefined,
