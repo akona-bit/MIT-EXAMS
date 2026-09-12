@@ -242,12 +242,13 @@ export default function MatrixFormPage() {
       }
 
       navigate("/admin/matrix");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      const msg = error?.response?.data?.detail || error?.message || "Lỗi không xác định";
       toast.error(
         isEditMode
-          ? "Có lỗi xảy ra khi cập nhật ma trận"
-          : "Có lỗi xảy ra khi tạo ma trận",
+          ? `Có lỗi xảy ra khi cập nhật ma trận: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`
+          : `Có lỗi xảy ra khi tạo ma trận: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`,
       );
     } finally {
       setIsLoading(false);
