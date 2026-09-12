@@ -546,22 +546,24 @@ export default function MatrixFormPage() {
                                        </div>
 
                                        <div className="space-y-1.5">
-                                         <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dạng câu (Cố định)</label>
+                                         <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dạng câu</label>
                                          <select
-                                           disabled={!rule.question_type}
-                                           className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
+                                           className="w-full px-3 py-2 text-sm font-semibold bg-white dark:bg-slate-900 text-slate-700 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
                                            value={rule.question_type || ""}
                                            onChange={(e) => updateRule(idx, "question_type", e.target.value)}
                                          >
                                            <option value="">Tự động chọn</option>
                                            <option value="SINGLE_CHOICE">Trắc nghiệm</option>
+                                           <option value="MULTIPLE_CHOICE">Nhiều lựa chọn</option>
+                                           <option value="TRUE_FALSE">Đúng/Sai</option>
+                                           <option value="FILL_IN_BLANK">Điền khuyết</option>
                                          </select>
                                        </div>
 
                                        <div className="space-y-1.5">
                                          <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mức độ</label>
                                          <select
-                                           className="w-full px-3 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
+                                           className="w-full px-3 py-2 text-sm font-semibold bg-white dark:bg-slate-900 text-slate-700 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
                                            value={rule.level || ""}
                                            onChange={(e) => updateRule(idx, "level", e.target.value ? Number(e.target.value) : undefined)}
                                          >
@@ -575,11 +577,12 @@ export default function MatrixFormPage() {
 
                                        <div className="flex gap-2">
                                          <div className="flex-1 space-y-1.5">
-                                           <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Số lượng (Cố định)</label>
+                                           <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Số lượng</label>
                                            <input
-                                             type="number" min="1" disabled
-                                             className="w-full px-3 py-2 text-sm font-bold text-center bg-slate-100 dark:bg-slate-800/80 text-slate-500 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none"
-                                             value={rule.count || 1}
+                                             type="number" min="0"
+                                             className="w-full px-3 py-2 text-sm font-bold text-center bg-white dark:bg-slate-900 text-slate-700 border border-slate-200 dark:border-slate-700/50 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 transition-shadow"
+                                             value={rule.count === undefined ? 1 : rule.count}
+                                             onChange={(e) => updateRule(idx, "count", Number(e.target.value))}
                                            />
                                          </div>
                                        </div>
