@@ -16,7 +16,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import VerificationUploadModal from "../../components/student/VerificationUploadModal";
 import { sanitizeHtml } from '../../utils/sanitize';
 import { supabase } from "../../lib/supabase";
-import { UploadCloud, Download, Printer } from "lucide-react";
+import { UploadCloud, Download, Printer, Trophy } from "lucide-react";
 import { PrintPreviewModal, AnswerSheetPreview } from "../../components/print";
 import type { ExamSessionFull, SavedAnswer } from "../../types";
 
@@ -70,10 +70,23 @@ export default function StudentExamShell() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // ─── Offline sync ───
-  const { saveAnswer: saveAnswerOffline, loadOfflineAnswers, forceSync } = useOfflineSync({
+  const { saveAnswer: saveAnswerOffline, loadOfflineAnswers } = useOfflineSync({
     examId: Number(id) || 0,
     enabled: examMode === 'online',
   });
+
+  // ─── Warn on page reload (F5) ───
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Nếu bạn tải lại trang, bài làm của bạn có thể bị gián đoạn. Bạn có chắc chắn muốn rời đi?";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   // ─── Fetch session ───
   useEffect(() => {

@@ -19,6 +19,22 @@ backups/
 .env*
 frontend/dist/
 
+# Debug & temp scripts (not for production)
+backend/debug_omr*.py
+backend/check_q.py
+backend/setup_test_exam.py
+backend/test_exam_flow.py
+backend/test_generator_and_scorer.py
+backend/test_multi_attempt.py
+backend/test_omr_script.py
+backend/scripts/_tmp_storage_stats.py
+backend/scripts/custom_reset_and_simulate.py
+backend/scripts/create_test_exam.py
+backend/scripts/custom_matrix.csv
+
+# Logs
+backend/logs/
+
 # Ignore sensitive survey and student data
 data/KẾT QUẢ KHẢO SÁT - Điểm tổng.csv
 data/KẾT QUẢ KHẢO SÁT - Trọng số thưởng_phạt.csv

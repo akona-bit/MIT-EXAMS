@@ -156,11 +156,17 @@ class LatexService:
         stmt = select(ExamForm).where(ExamForm.exam_id == exam_id)
         if form_code:
             stmt = stmt.where(ExamForm.code == form_code)
+            form_result = await db.execute(stmt)
+            form = form_result.scalars().first()
         else:
-            stmt = stmt.where(ExamForm.is_original == True)
-            
-        form_result = await db.execute(stmt)
-        form = form_result.scalars().first()
+            orig_stmt = stmt.where(ExamForm.is_original == True)
+            form_result = await db.execute(orig_stmt)
+            form = form_result.scalars().first()
+            if not form:
+                # Fallback to the first available form
+                form_result = await db.execute(stmt)
+                form = form_result.scalars().first()
+                
         if not form:
             raise ValueError("Không tìm thấy mã đề")
 

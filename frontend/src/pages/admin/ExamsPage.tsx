@@ -98,7 +98,7 @@ export default function ExamsPage() {
               Chi tiết
             </Button>
           </Link>
-          <Link to={`/admin/submissions?exam_id=${row.id}`}>
+          <Link to={`/admin/students?exam_id=${row.id}`}>
             <Button variant="outline" size="sm" className="h-8 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
               Xem bài làm
             </Button>

@@ -17,7 +17,7 @@ import {
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import DataTable from "../../../components/ui/DataTable";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getExams } from "../../../api/exams";
 import {
   getExamParticipants,
@@ -52,8 +52,10 @@ const PART_NAMES: Record<number, string> = {
 
 export default function StudentManagementPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialExamId = searchParams.get("exam_id");
   const [exams, setExams] = useState<Exam[]>([]);
-  const [examId, setExamId] = useState<number | "">("");
+  const [examId, setExamId] = useState<number | "">(initialExamId ? Number(initialExamId) : "");
   const [formFilter, setFormFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");

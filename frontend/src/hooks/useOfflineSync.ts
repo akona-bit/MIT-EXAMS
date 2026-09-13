@@ -13,7 +13,6 @@ import {
   saveAnswerOffline,
   getOfflineAnswers,
   syncOfflineAnswers,
-  type syncOfflineAnswers as syncFn,
 } from '../utils/offlineDb'
 import api from '../api/client'
 

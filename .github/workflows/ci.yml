@@ -37,6 +37,11 @@ jobs:
           pip install ruff
           ruff check . || echo "Ruff completed with issues (non-blocking)"
 
+      - name: Bandit security scan (advisory)
+        run: |
+          pip install bandit
+          bandit -r app/ -ll --skip B101,B311 || echo "Bandit completed with issues (non-blocking)"
+
       - name: Run tests
         run: pytest -v --tb=short
 
