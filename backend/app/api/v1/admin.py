@@ -854,3 +854,192 @@ async def update_answer_access(
         details=f"{action_str} quyền xem đáp án của student {grant.student_id}"
     )
     return {"status": "success"}
+
+
+# ─── Bulk Create Guest Accounts ──────────────────────────────────────────────
+
+class GuestAccountCreate(BaseModel):
+    email: str
+    student_id: str
+    full_name: Optional[str] = None
+    password: str
+
+class BulkCreateGuestRequest(BaseModel):
+    guests: List[GuestAccountCreate]
+    send_email: bool = True
+
+class BulkCreateGuestResponse(BaseModel):
+    success_count: int
+    error_count: int
+    results: List[dict]
+
+@router.post("/students/bulk-create-guest", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def bulk_create_guest_accounts(
+    req: BulkCreateGuestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Tạo hàng loạt tài khoản guest cho thí sinh.
+    Mỗi tài khoản gồm: student_id (6 chữ số), email, password.
+    Có thể gửi email thông báo qua Brevo.
+    """
+    from app.services.email import send_credentials_email
+    import secrets
+    import string
+    
+    # Get STUDENT role
+    role_result = await db.execute(select(Role).where(Role.name == "STUDENT"))
+    role = role_result.scalars().first()
+    if not role:
+        raise HTTPException(status_code=500, detail="Role STUDENT chưa được khởi tạo")
+    
+    results = []
+    success_count = 0
+    error_count = 0
+    
+    for guest in req.guests:
+        try:
+            # Validate student_id is 6 digits
+            if not guest.student_id or not guest.student_id.isdigit() or len(guest.student_id) != 6:
+                results.append({
+                    "email": guest.email,
+                    "student_id": guest.student_id,
+                    "status": "error",
+                    "message": "Mã thí sinh phải là 6 chữ số"
+                })
+                error_count += 1
+                continue
+            
+            # Check if student_id already exists
+            existing_id = await db.execute(select(User).where(User.student_id == guest.student_id))
+            if existing_id.scalars().first():
+                results.append({
+                    "email": guest.email,
+                    "student_id": guest.student_id,
+                    "status": "error",
+                    "message": f"Mã thí sinh {guest.student_id} đã tồn tại"
+                })
+                error_count += 1
+                continue
+            
+            # Check if email already exists
+            existing_email = await db.execute(select(User).where(User.email == guest.email))
+            if existing_email.scalars().first():
+                results.append({
+                    "email": guest.email,
+                    "student_id": guest.student_id,
+                    "status": "error",
+                    "message": f"Email {guest.email} đã tồn tại"
+                })
+                error_count += 1
+                continue
+            
+            # Generate password if not provided
+            password = guest.password
+            if not password:
+                password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
+            
+            # Create user
+            username = guest.email.split("@")[0]
+            user = User(
+                student_id=guest.student_id,
+                email=guest.email,
+                username=username,
+                full_name=guest.full_name,
+                hashed_password=get_password_hash(password),
+                role_id=role.id,
+                is_active=True,
+            )
+            db.add(user)
+            await db.flush()  # Get the user ID
+            
+            # Send email if requested
+            email_sent = False
+            email_error = None
+            if req.send_email:
+                try:
+                    send_credentials_email(
+                        to_email=guest.email,
+                        student_id=guest.student_id,
+                        password=password,
+                        full_name=guest.full_name
+                    )
+                    email_sent = True
+                except Exception as e:
+                    email_error = str(e)
+                    logger.warning(f"Failed to send email to {guest.email}: {e}")
+            
+            results.append({
+                "email": guest.email,
+                "student_id": guest.student_id,
+                "full_name": guest.full_name,
+                "status": "success",
+                "password": password if not req.send_email else None,  # Only return password if not sent via email
+                "email_sent": email_sent,
+                "email_error": email_error,
+            })
+            success_count += 1
+            
+        except Exception as e:
+            results.append({
+                "email": guest.email,
+                "student_id": guest.student_id,
+                "status": "error",
+                "message": str(e)
+            })
+            error_count += 1
+    
+    await db.commit()
+    
+    # Log audit
+    await log_audit(
+        db=db,
+        user_id=current_user.id,
+        action=AuditAction.CREATE_USER,
+        entity_type="User",
+        entity_id=None,
+        details=f"Bulk created {success_count} guest accounts"
+    )
+    
+    return BulkCreateGuestResponse(
+        success_count=success_count,
+        error_count=error_count,
+        results=results
+    )
+
+
+# ─── Admin: Đổi mật khẩu bất kỳ user nào ──────────────────────────────────
+class AdminChangePasswordRequest(BaseModel):
+    user_id: int
+    new_password: str
+
+
+@router.post("/change-password", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def admin_change_password(
+    req: AdminChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin đổi mật khẩu cho bất kỳ user nào (không cần biết mật khẩu cũ)."""
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Mật khẩu phải có ít nhất 6 ký tự")
+
+    result = await db.execute(select(User).where(User.id == req.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Không tìm thấy user")
+
+    user.hashed_password = get_password_hash(req.new_password)
+    await db.commit()
+
+    await log_audit(
+        db=db,
+        user_id=current_user.id,
+        action=AuditAction.UPDATE_USER,
+        entity_type="User",
+        entity_id=str(user.id),
+        details=f"Admin changed password for {user.username or user.email}"
+    )
+
+    return {"message": f"Đã đổi mật khẩu cho {user.username or user.email}"}

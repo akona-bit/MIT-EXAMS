@@ -4,7 +4,6 @@ import {
   Ban,
   CheckCircle2,
   PlayCircle,
-  FileText,
   UserPlus,
   Search,
   Filter,
@@ -478,7 +477,7 @@ export default function StudentManagementPage() {
                 So sánh đã chọn ({selectedRows.size})
               </Button>
               <Button
-                variant="primary"
+                variant="default"
                 onClick={() => setIsAssignModalOpen(true)}
                 className="gap-2 h-10 px-5 rounded-xl font-bold shadow-sm"
               >

@@ -419,3 +419,104 @@ async def get_knowledge_node_detail(
         "questions": questions_list,
         "unlock_hint": "Liên hệ quản trị viên hoặc hoàn tất đăng ký để xem đáp án và lời giải chi tiết." if has_locked else None
     }
+
+
+# ─── 6. Wrong & Blank Answers ────────────────────────────────
+
+@router.get("/students/{student_id}/wrong-answers")
+async def get_wrong_answers(
+    student_id: int,
+    exam_id: Optional[int] = Query(default=None, description="Filter by exam_id"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Danh sách câu hỏi trả lời SAI hoặc BỎ TRỐNG trong các kỳ thi.
+    Hiển thị: nội dung câu hỏi, đáp án học sinh chọn, đáp án đúng, điểm số.
+    """
+    _check_access(current_user, student_id)
+
+    from app.models.exam import Exam, ExamForm, ExamFormQuestion, ExamSubmissionAnswer, ExamFormAnswer
+    from app.models.question import Answer as AnswerModel
+
+    # Query all wrong/blank answers for this student
+    query = (
+        select(
+            ExamSubmissionAnswer,
+            ExamFormQuestion,
+            Question,
+            Exam,
+            ExamForm,
+        )
+        .join(ExamSubmission, ExamSubmission.id == ExamSubmissionAnswer.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .join(ExamFormQuestion, ExamFormQuestion.id == ExamSubmissionAnswer.exam_form_question_id)
+        .join(Question, Question.id == ExamFormQuestion.question_id)
+        .join(Exam, Exam.id == ExamParticipant.exam_id)
+        .outerjoin(ExamForm, ExamForm.id == ExamParticipant.exam_form_id)
+        .where(
+            ExamParticipant.user_id == student_id,
+            # Wrong (score = 0) or blank (selected_answer_id is None)
+            (
+                (ExamSubmissionAnswer.score == 0) |
+                (ExamSubmissionAnswer.selected_answer_id.is_(None))
+            )
+        )
+    )
+
+    if exam_id:
+        query = query.where(Exam.id == exam_id)
+
+    query = query.order_by(Exam.created_at.desc(), ExamFormQuestion.position)
+    query = query.offset(offset).limit(limit)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    items = []
+    for sub_answer, form_question, question, exam, exam_form in rows:
+        # Get correct answers
+        correct_stmt = (
+            select(AnswerModel.content)
+            .where(
+                AnswerModel.question_id == question.id,
+                AnswerModel.is_correct == True
+            )
+        )
+        correct_result = await db.execute(correct_stmt)
+        correct_answers = [row[0] for row in correct_result.all()]
+
+        # Get student's selected answer
+        student_answer = None
+        if sub_answer.selected_answer_id:
+            ans_stmt = select(AnswerModel.content).where(AnswerModel.id == sub_answer.selected_answer_id)
+            ans_result = await db.execute(ans_stmt)
+            student_answer = ans_result.scalar_one_or_none()
+
+        is_blank = sub_answer.selected_answer_id is None
+
+        items.append({
+            "id": sub_answer.id,
+            "question_id": question.id,
+            "question_content": question.content,
+            "question_public_code": question.public_code,
+            "position": form_question.position,
+            "part": form_question.part,
+            "exam_id": exam.id,
+            "exam_name": exam.name,
+            "exam_form_code": exam_form.code if exam_form else None,
+            "student_answer": student_answer,
+            "correct_answers": correct_answers,
+            "is_blank": is_blank,
+            "score": sub_answer.score,
+            "answer_source": sub_answer.answer_source,
+        })
+
+    return {
+        "student_id": student_id,
+        "items": items,
+        "total": len(items),
+        "has_more": len(items) == limit,
+    }

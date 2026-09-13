@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status, BackgroundTasks, File, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -608,9 +608,14 @@ async def suspend(request: Request, exam_id: int, user_id: int = Query(..., desc
     return {"message": "Exam session suspended successfully"}
 
 
-@router.get("/{exam_id}/result", dependencies=[Depends(RequireRole(["STUDENT"]))])
-async def get_student_exam_result_route(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Student views their own exam result after submission.
+@router.get("/{exam_id}/result", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER", "STUDENT"]))])
+async def get_student_exam_result_route(
+    exam_id: int, 
+    user_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """View exam result. Can view other's result if Admin/Teacher or has permission.
 
     Business rules enforced in app/services/exam_result.py:
     - Chặn khi đang thi (IN_PROGRESS) hoặc chưa bắt đầu (NOT_STARTED).
@@ -620,7 +625,13 @@ async def get_student_exam_result_route(exam_id: int, db: AsyncSession = Depends
     """
     from app.services.exam_result import get_student_exam_result
 
-    return await get_student_exam_result(db, exam_id, current_user.id, current_user)
+    target_user_id = current_user.id
+    if user_id is not None:
+        if current_user.role.name not in ["ADMIN", "TEACHER"] and current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Không có quyền xem kết quả của người khác")
+        target_user_id = user_id
+
+    return await get_student_exam_result(db, exam_id, target_user_id, current_user)
 @router.get("/{exam_id}/export/latex", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def export_exam_latex(exam_id: int, form_code: str | None = None, db: AsyncSession = Depends(get_db)):
     from app.services.latex_service import LatexService

@@ -182,3 +182,12 @@ export const deleteStorageObject = async (bucket: string, path: string): Promise
   );
   return response.data;
 };
+
+// ── Admin: Đổi mật khẩu user ──
+export const adminChangePassword = async (userId: number, newPassword: string): Promise<{ message: string }> => {
+  const response = await client.post<{ message: string }>("/api/v1/admin/change-password", {
+    user_id: userId,
+    new_password: newPassword,
+  });
+  return response.data;
+};

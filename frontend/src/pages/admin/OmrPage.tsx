@@ -4,12 +4,15 @@ import {
     uploadOmrSheets,
     getOmrJob,
     confirmOmrSheet,
+    getStudentOmrSubmissions,
+    gradeStudentSubmissionSync,
     type OmrJobDetail,
     type OmrSheet,
+    type StudentOmrSubmission,
 } from "../../api/omr";
 import type { Exam } from "../../types";
 import Button from "../../components/ui/Button";
-import { ScanLine } from "lucide-react";
+import { ScanLine, PlayCircle } from "lucide-react";
 import { toast } from '../../components/ui/Toast';
 import OmrSheetDetailModal from "../../components/admin/OmrSheetDetailModal";
 
@@ -36,6 +39,11 @@ export default function OmrPage() {
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState("");
     const [job, setJob] = useState<OmrJobDetail | null>(null);
+    
+    // New states for student submissions queue
+    const [studentSubmissions, setStudentSubmissions] = useState<StudentOmrSubmission[]>([]);
+    const [gradingQueue, setGradingQueue] = useState(false);
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [selectedSheetId, setSelectedSheetId] = useState<number | null>(null);
@@ -45,6 +53,17 @@ export default function OmrPage() {
             .then((data) => setExams(data.items))
             .catch(() => setExams([]));
     }, []);
+
+    // Fetch student submissions when examId changes
+    useEffect(() => {
+        if (examId) {
+            getStudentOmrSubmissions(Number(examId))
+                .then(setStudentSubmissions)
+                .catch(() => setStudentSubmissions([]));
+        } else {
+            setStudentSubmissions([]);
+        }
+    }, [examId]);
 
     const stopPolling = useCallback(() => {
         if (pollRef.current) {
@@ -115,8 +134,45 @@ export default function OmrPage() {
         } catch {
         }
     };
+    
+    const handleAutoGradeStudentSubmissions = async () => {
+        if (!examId) return;
+        setGradingQueue(true);
+        try {
+            const pendingSubmissions = studentSubmissions.filter((s) => s.status === "PENDING");
+            if (pendingSubmissions.length === 0) {
+                toast.success("Không có bài nộp nào đang chờ chấm.");
+                return;
+            }
+            
+            for (const sub of pendingSubmissions) {
+                // Show PROCESSING locally
+                setStudentSubmissions((prev) =>
+                    prev.map((s) => (s.id === sub.id ? { ...s, status: "PROCESSING" } : s))
+                );
+                try {
+                    await gradeStudentSubmissionSync(sub.id, true);
+                    setStudentSubmissions((prev) =>
+                        prev.map((s) => (s.id === sub.id ? { ...s, status: "COMPLETED" } : s))
+                    );
+                } catch (err: any) {
+                    toast.error(`Lỗi chấm bài ${sub.student_id}: ${err.response?.data?.detail || err.message}`);
+                    setStudentSubmissions((prev) =>
+                        prev.map((s) => (s.id === sub.id ? { ...s, status: "FAILED" } : s))
+                    );
+                }
+            }
+            toast.success("Đã hoàn tất quá trình chấm điểm hàng đợi!");
+            // Re-fetch all to ensure sync with backend score
+            const updated = await getStudentOmrSubmissions(Number(examId));
+            setStudentSubmissions(updated);
+        } finally {
+            setGradingQueue(false);
+        }
+    };
 
     const pendingCount = job?.sheets.filter((s) => s.status === "NEEDS_REVIEW").length ?? 0;
+    const pendingStudentSubmissionsCount = studentSubmissions.filter(s => s.status === "PENDING").length;
 
     return (
         <div className="mx-auto max-w-6xl space-y-6">
@@ -127,31 +183,108 @@ export default function OmrPage() {
                         Chấm bài (OMR)
                     </h1>
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-                        Tải lên ảnh phiếu trả lời trắc nghiệm đã quét/chụp. Hệ thống tự đọc SBD, Mã đề và
-                        120 ô đáp án; các phiếu đọc không chắc chắn sẽ được đưa vào hàng chờ soát thủ công.
+                        Tải lên ảnh phiếu trả lời trắc nghiệm đã quét/chụp hoặc quản lý hàng đợi các phiếu nộp từ học sinh.
                     </p>
                 </div>
             </div>
 
-            {/* Upload card */}
+            {/* Selection and Student Submissions Card */}
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
-                <h2 className="text-lg font-bold">1. Tải lên phiếu trả lời</h2>
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium mb-1">Kỳ thi</label>
-                        <select
-                            value={examId}
-                            onChange={(e) => setExamId(e.target.value ? Number(e.target.value) : "")}
-                            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                        >
-                            <option value="">-- Chọn kỳ thi --</option>
-                            {exams.map((ex) => (
-                                <option key={ex.id} value={ex.id}>
-                                    #{ex.id} - {ex.name}
-                                </option>
-                            ))}
-                        </select>
+                <h2 className="text-lg font-bold">1. Hàng đợi bài nộp từ thí sinh</h2>
+                <div>
+                    <label className="block text-sm font-medium mb-1">Kỳ thi</label>
+                    <select
+                        value={examId}
+                        onChange={(e) => setExamId(e.target.value ? Number(e.target.value) : "")}
+                        className="w-full sm:w-1/2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    >
+                        <option value="">-- Chọn kỳ thi --</option>
+                        {exams.map((ex) => (
+                            <option key={ex.id} value={ex.id}>
+                                #{ex.id} - {ex.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                
+                {examId && (
+                    <div className="mt-6 space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                            <h3 className="text-md font-semibold text-slate-700 dark:text-slate-200">
+                                Danh sách bài nộp OMR cần chấm ({studentSubmissions.length} bài)
+                            </h3>
+                            <Button 
+                                onClick={handleAutoGradeStudentSubmissions}
+                                disabled={gradingQueue || pendingStudentSubmissionsCount === 0}
+                                className="flex items-center gap-2"
+                            >
+                                <PlayCircle className="w-4 h-4" />
+                                {gradingQueue ? "Đang chấm..." : `Chấm tự động toàn bộ (${pendingStudentSubmissionsCount})`}
+                            </Button>
+                        </div>
+                        
+                        {studentSubmissions.length > 0 ? (
+                            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                                <table className="w-full text-left text-sm whitespace-nowrap">
+                                    <thead className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold">SBD</th>
+                                            <th className="px-4 py-3 font-semibold">Họ tên</th>
+                                            <th className="px-4 py-3 font-semibold">Ảnh phiếu OMR</th>
+                                            <th className="px-4 py-3 font-semibold">Thời gian nộp</th>
+                                            <th className="px-4 py-3 font-semibold">Trạng thái</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                        {studentSubmissions.map((s) => (
+                                            <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                                <td className="px-4 py-3 font-mono text-xs">{s.student_id || "-"}</td>
+                                                <td className="px-4 py-3">{s.student_name}</td>
+                                                <td className="px-4 py-3">
+                                                    {s.image_url ? (
+                                                        <a
+                                                            href={s.image_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-primary-600 hover:underline dark:text-primary-400"
+                                                        >
+                                                            Xem ảnh
+                                                        </a>
+                                                    ) : (
+                                                        "-"
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">
+                                                    {s.submit_time ? new Date(s.submit_time).toLocaleString("vi-VN") : "-"}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${SHEET_STATUS_STYLES[s.status] ?? ""}`}>
+                                                        {SHEET_STATUS_LABELS[s.status] ?? s.status}
+                                                    </span>
+                                                    {s.status === "COMPLETED" && s.score !== null && s.score !== undefined && (
+                                                        <span className="ml-2 font-semibold text-primary-600">
+                                                            {s.score.toFixed(2)} đ
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-4 text-center text-sm text-slate-500">
+                                Không có bài nộp OMR nào từ học sinh.
+                            </div>
+                        )}
                     </div>
+                )}
+            </div>
+
+            {/* Upload card for Admin Uploads */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4 mt-6">
+                <h2 className="text-lg font-bold">2. Tải lên phiếu OMR (Dành cho Giám thị)</h2>
+                <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-1">
                         <label className="block text-sm font-medium mb-1">Ảnh phiếu (jpg/png, nhiều file)</label>
                         <input
@@ -177,7 +310,7 @@ export default function OmrPage() {
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                         <h2 className="text-lg font-bold">
-                            2. Kết quả xử lý - Job #{job.job.id}
+                            Kết quả xử lý file tải lên - Job #{job.job.id}
                         </h2>
                         <div className="flex items-center gap-2 text-xs font-semibold">
                             <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1">

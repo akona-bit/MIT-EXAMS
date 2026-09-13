@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { generateExam } from "../../api/exams";
+import { generateExam, updateExam } from "../../api/exams";
 import { getMatrices } from "../../api/matrix";
 import type { Matrix } from "../../types";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
+import { CalendarClock } from "lucide-react";
 
 export default function ExamFormPage() {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export default function ExamFormPage() {
   const [description, setDescription] = useState("");
   const [matrixId, setMatrixId] = useState("");
   const [formCount, setFormCount] = useState(4);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -44,6 +47,15 @@ export default function ExamFormPage() {
         exam_description: description.trim() || undefined,
         number_of_forms: formCount,
       });
+
+      // Set schedule if provided
+      if (startTime || endTime) {
+        await updateExam(exam.id, {
+          start_time: startTime ? new Date(startTime).toISOString() : null,
+          end_time: endTime ? new Date(endTime).toISOString() : null,
+        });
+      }
+
       navigate(`/admin/exams/${exam.id}`);
     } catch (error) {
       console.error(error);
@@ -160,6 +172,44 @@ export default function ExamFormPage() {
             <p className="mt-1.5 text-xs text-slate-500">
               Đề gốc sẽ được tạo kèm các mã đề xáo trộn.
             </p>
+          </div>
+        </div>
+
+        {/* Schedule Section */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <CalendarClock className="w-4 h-4 text-primary-500" />
+            Lịch thi (tùy chọn)
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2">
+            Nếu để trống, kỳ thi sẽ mở ngay sau khi xuất bản và không tự đóng.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="start-time" className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Mở cổng thi
+              </label>
+              <input
+                id="start-time"
+                type="datetime-local"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="end-time" className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Đóng cổng thi
+              </label>
+              <input
+                id="end-time"
+                type="datetime-local"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                min={startTime || undefined}
+                className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none"
+              />
+            </div>
           </div>
         </div>
 

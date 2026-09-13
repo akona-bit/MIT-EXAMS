@@ -7,6 +7,14 @@ export interface GenerateExamRequest {
   distinct_questions: boolean;
 }
 
+export interface ConfigPublishRequest {
+  start_time: string | null;
+  end_time: string | null;
+  duration_minutes?: number | null;
+  show_score_mode?: string;
+  show_answer_mode?: string;
+}
+
 export async function getExams(
   skip: number = 0,
   limit: number = 50,
@@ -69,6 +77,11 @@ export async function generateExamForms(
 
 export async function publishExam(id: number): Promise<Exam> {
   const response = await client.post<Exam>(`/api/v1/exams/${id}/publish`);
+  return response.data;
+}
+
+export async function configPublishExam(id: number, config: ConfigPublishRequest): Promise<Exam> {
+  const response = await client.put<Exam>(`/api/v1/exams/${id}/config-publish`, config);
   return response.data;
 }
 

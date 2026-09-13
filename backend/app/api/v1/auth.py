@@ -20,7 +20,7 @@ from pydantic import Field, EmailStr
 from app.schemas.user import UserCreate, UserResponse, Token
 from app.api.dependencies import get_current_active_user
 from app.core.analytics import capture
-from app.services.email import send_otp_email, send_password_reset_email
+from app.services.email import send_otp_email, send_password_reset_email, send_credentials_email
 import os
 
 # On local (no Redis), call email functions directly
@@ -32,8 +32,8 @@ if _use_celery:
 from pydantic import BaseModel
 
 
-class ResolveSBDRequest(BaseModel):
-    sbd: str
+class ResolveIdentifierRequest(BaseModel):
+    identifier: str
 
 class UpdateMeRequest(BaseModel):
     full_name: str
@@ -49,6 +49,14 @@ class ResetPasswordRequest(BaseModel):
     email: EmailStr
     code: str
     new_password: str = Field(min_length=8)
+
+class LoginWithIdentifierRequest(BaseModel):
+    identifier: str
+    password: str
+
+class BulkCreateGuestRequest(BaseModel):
+    guests: list[dict]  # [{"email": "...", "student_id": "...", "full_name": "..."}]
+    send_email: bool = True
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -68,25 +76,54 @@ async def read_current_user(
     """
     return current_user
 
-@router.post("/resolve-sbd")
-async def resolve_sbd(req: ResolveSBDRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/resolve-student-id")
+async def resolve_student_id(req: ResolveIdentifierRequest, db: AsyncSession = Depends(get_db)):
     """
-    Resolve SBD to Email for login.
-    Uses the latest ExamParticipant record matching the SBD.
+    Check if a student_id or email exists and return basic info (without email for privacy).
     """
-    from app.models.exam import ExamParticipant
     result = await db.execute(
-        select(User)
-        .join(ExamParticipant, ExamParticipant.user_id == User.id)
-        .where(ExamParticipant.sbd == req.sbd)
-        .order_by(ExamParticipant.id.desc())
-        .limit(1)
+        select(User).where(or_(User.student_id == req.identifier, User.email == req.identifier))
     )
     user = result.scalars().first()
     if not user:
-        raise HTTPException(status_code=404, detail="Số báo danh không tồn tại")
+        raise HTTPException(status_code=404, detail="Định danh không tồn tại")
     
-    return {"email": user.email}
+    return {
+        "exists": True,
+        "full_name": user.full_name,
+        "has_password": user.hashed_password is not None,
+    }
+
+@router.post("/login-identifier")
+@limiter.limit("10/minute")
+async def login_with_identifier(request: Request, req: LoginWithIdentifierRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Login with identifier (email or 6-digit student_id) and password.
+    """
+    result = await db.execute(
+        select(User).where(or_(User.student_id == req.identifier, User.email == req.identifier))
+    )
+    user = result.scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu không đúng")
+    
+    if not user.hashed_password:
+        raise HTTPException(status_code=401, detail="Tài khoản này chưa có mật khẩu. Vui lòng liên hệ quản trị viên.")
+    
+    if not security.verify_password(req.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Mã thí sinh hoặc mật khẩu không đúng")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Tài khoản đã bị khóa")
+    
+    # Generate JWT
+    token = security.create_access_token(
+        subject=user.id,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    
+    return {"access_token": token, "token_type": "bearer"}
 
 @router.put("/me", response_model=UserResponse)
 async def update_current_user(

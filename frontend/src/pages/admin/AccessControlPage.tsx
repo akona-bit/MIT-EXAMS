@@ -5,6 +5,7 @@ import {
   getStaffMembers,
   inviteUser,
   updateStaffMember,
+  adminChangePassword,
   type StudentItem,
   type StaffMember,
 } from "../../api/admin";
@@ -16,7 +17,7 @@ import { Skeleton } from "../../components/ui/Skeleton";
 import EmptyState from "../../components/ui/EmptyState";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Lock } from "lucide-react";
 import { toast } from '../../components/ui/Toast';
 
 type Tab = "students" | "staff";
@@ -74,6 +75,9 @@ function StudentsTab() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pwUser, setPwUser] = useState<{ id: number; name: string } | null>(null);
+  const [newPw, setNewPw] = useState("");
+  const [isSavingPw, setIsSavingPw] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,6 +185,14 @@ function StudentsTab() {
                     >
                       {s.can_view_answers ? "Thu hồi" : "Cấp quyền"}
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setPwUser({ id: s.id, name: s.full_name || s.username || "" }); setNewPw(""); }}
+                    >
+                      <Lock className="w-3.5 h-3.5 mr-1" />
+                      Đổi MK
+                    </Button>
                     <Link to={`/admin/students/${s.id}`}>
                       <Button size="sm" variant="outline">Chi tiết</Button>
                     </Link>
@@ -216,6 +228,44 @@ function StudentsTab() {
           </Button>
         </div>
       )}
+
+      {/* Change Password Modal */}
+      <Modal isOpen={!!pwUser} onClose={() => !isSavingPw && setPwUser(null)} title={`Đổi mật khẩu — ${pwUser?.name || ""}`}>
+        <div className="space-y-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mật khẩu mới</label>
+            <input
+              type="text"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="Ít nhất 6 ký tự"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPwUser(null)} disabled={isSavingPw}>Hủy</Button>
+            <Button
+              isLoading={isSavingPw}
+              onClick={async () => {
+                if (!newPw || newPw.length < 6) { toast.error("Mật khẩu phải có ít nhất 6 ký tự"); return; }
+                setIsSavingPw(true);
+                try {
+                  await adminChangePassword(pwUser!.id, newPw);
+                  toast.success("Đã đổi mật khẩu thành công");
+                  setPwUser(null);
+                } catch (err: any) {
+                  toast.error(err.response?.data?.detail || "Lỗi đổi mật khẩu");
+                } finally {
+                  setIsSavingPw(false);
+                }
+              }}
+            >
+              Lưu mật khẩu
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -234,6 +284,9 @@ function StaffTab() {
   const [editActive, setEditActive] = useState(true);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  const [pwUser, setPwUser] = useState<{ id: number; name: string } | null>(null);
+  const [newPw, setNewPw] = useState("");
+  const [isSavingPw, setIsSavingPw] = useState(false);
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -361,6 +414,15 @@ function StaffTab() {
                     >
                       Sửa
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-2"
+                      onClick={() => { setPwUser({ id: u.id, name: u.full_name || u.username || "" }); setNewPw(""); }}
+                    >
+                      <Lock className="w-3.5 h-3.5 mr-1" />
+                      Đổi MK
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -450,6 +512,44 @@ function StaffTab() {
             <Button type="submit" disabled={isInviting}>{isInviting ? "Đang gửi..." : "Gửi lời mời"}</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal isOpen={!!pwUser} onClose={() => !isSavingPw && setPwUser(null)} title={`Đổi mật khẩu — ${pwUser?.name || ""}`}>
+        <div className="space-y-4 mt-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Mật khẩu mới</label>
+            <input
+              type="text"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="Ít nhất 6 ký tự"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPwUser(null)} disabled={isSavingPw}>Hủy</Button>
+            <Button
+              isLoading={isSavingPw}
+              onClick={async () => {
+                if (!newPw || newPw.length < 6) { toast.error("Mật khẩu phải có ít nhất 6 ký tự"); return; }
+                setIsSavingPw(true);
+                try {
+                  await adminChangePassword(pwUser!.id, newPw);
+                  toast.success("Đã đổi mật khẩu thành công");
+                  setPwUser(null);
+                } catch (err: any) {
+                  toast.error(err.response?.data?.detail || "Lỗi đổi mật khẩu");
+                } finally {
+                  setIsSavingPw(false);
+                }
+              }}
+            >
+              Lưu mật khẩu
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

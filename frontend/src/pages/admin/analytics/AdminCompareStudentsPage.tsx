@@ -125,7 +125,7 @@ export default function AdminCompareStudentsPage() {
         width: "220px",
         render: (r: ExamParticipantRow) => (
           <div>
-            <div className="font-bold text-slate-900 dark:text-white truncate max-w-[180px]" title={r.full_name || r.username}>
+            <div className="font-bold text-slate-900 dark:text-white truncate max-w-[180px]" title={r.full_name || r.username || undefined}>
               {r.full_name || r.username || "-"}
             </div>
             <div className="flex items-center gap-2 mt-1">
@@ -236,7 +236,7 @@ export default function AdminCompareStudentsPage() {
     return (
       <div className="max-w-4xl mx-auto py-12 text-center">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">Không tìm thấy dữ liệu so sánh</h2>
-        <Button onClick={() => navigate("/admin/students")} variant="primary">
+        <Button onClick={() => navigate("/admin/students")} variant="default">
           Quay lại danh sách
         </Button>
       </div>

@@ -86,6 +86,15 @@ export interface KnowledgeNetworkResponse {
   has_more: boolean;
 }
 
+export interface StudentProfileSummary {
+  student: {
+    id: number;
+    name: string;
+    class_label: string | null;
+  };
+  can_view_answers_default: boolean;
+}
+
 // ─── API Calls ────────────────────────────────────────────────────────
 
 export const getVActProgress = async (studentId: number): Promise<VActProgressResponse> => {

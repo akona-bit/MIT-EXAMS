@@ -54,3 +54,23 @@ export async function confirmOmrSheet(sheetId: number, answersOverride?: Record<
     const response = await client.post(`/api/v1/omr/sheets/${sheetId}/review`, answersOverride || {});
     return response.data.data;
 }
+
+export interface StudentOmrSubmission {
+    id: number;
+    student_id: string;
+    student_name: string;
+    submit_time: string | null;
+    image_url: string;
+    status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+    score?: number | null;
+}
+
+export async function getStudentOmrSubmissions(examId: number): Promise<StudentOmrSubmission[]> {
+    const response = await client.get(`/api/v1/omr/exams/${examId}/student-submissions`);
+    return response.data.data;
+}
+
+export async function gradeStudentSubmissionSync(submissionId: number, enableGemini = true): Promise<{ success: boolean; message: string }> {
+    const response = await client.post(`/api/v1/omr/grade-student-submission-sync/${submissionId}?enable_gemini=${enableGemini}`);
+    return response.data.data;
+}

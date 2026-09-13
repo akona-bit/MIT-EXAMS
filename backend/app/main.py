@@ -152,6 +152,8 @@ from app.api.v1 import feedbacks
 from app.api.v1 import notifications
 from app.api.v1 import submissions
 from app.api.v1 import student_profile
+from app.api.v1 import search
+from app.api.v1 import ai
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -195,6 +197,8 @@ app.include_router(feedbacks.router, prefix="/api/v1/feedbacks", tags=["Feedback
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(submissions.router, prefix="/api/v1/submissions", tags=["Submissions"])
 app.include_router(student_profile.router, prefix="/api/v1", tags=["Student Profile"])
+app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
+app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI Assistant"])
 
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)

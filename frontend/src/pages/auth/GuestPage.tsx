@@ -98,7 +98,6 @@ export default function GuestPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">MIT EXAMS</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Hệ thống Quản lý Thi Trắc nghiệm</p>
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-slate-200 dark:border-slate-700 p-8 animate-in slide-in-from-bottom-4 duration-500 w-full max-w-md mb-12">

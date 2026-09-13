@@ -24,8 +24,9 @@ import type { ExamSessionFull, SavedAnswer } from "../../types";
 const BLOCKED_KEYS = new Set([
   "F12",
   "PrintScreen",
+  "F5" // Block F5 refresh
 ]);
-const BLOCKED_CTRL_KEYS = new Set(["c", "v", "a", "u", "s", "p"]);
+const BLOCKED_CTRL_KEYS = new Set(["c", "v", "a", "u", "s", "p", "r"]); // Block Ctrl+R
 
 export default function StudentExamShell() {
   const { id } = useParams();
@@ -78,15 +79,18 @@ export default function StudentExamShell() {
   // ─── Warn on page reload (F5) ───
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "Nếu bạn tải lại trang, bài làm của bạn có thể bị gián đoạn. Bạn có chắc chắn muốn rời đi?";
-      return e.returnValue;
+      if (sessionInfo?.participant_status === "IN_PROGRESS") {
+        e.preventDefault();
+        // Modern browsers require this to be empty string or anything to show the native prompt
+        e.returnValue = ""; 
+        return "";
+      }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, []);
+  }, [sessionInfo?.participant_status]);
 
   // ─── Fetch session ───
   useEffect(() => {
@@ -426,14 +430,18 @@ export default function StudentExamShell() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
-          <div className="text-red-500 text-4xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold text-red-600 mb-2">Lỗi</h2>
-          <p className="text-slate-600 mb-4">{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-[#060b14] dark:to-[#0a1128] p-4">
+        <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl shadow-xl text-center max-w-md border border-slate-200 dark:border-slate-800">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center">
+            <svg className="w-8 h-8 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Đã xảy ra lỗi</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">{error}</p>
           <button
             onClick={() => navigate("/student")}
-            className="px-6 py-2 bg-slate-600 text-white rounded-lg"
+            className="px-6 py-3 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/25 transition-all"
           >
             Về trang chủ
           </button>
@@ -444,34 +452,34 @@ export default function StudentExamShell() {
 
   if (sessionInfo?.participant_status === "SUBMITTED") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="bg-white p-10 rounded-2xl shadow-xl text-center max-w-md">
-          <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
-            <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-emerald-50/30 dark:from-[#060b14] dark:to-[#0a1128] p-4">
+        <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl shadow-xl text-center max-w-md border border-slate-200 dark:border-slate-800">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-green-700 mb-2">
-            Bạn đã nộp bài thành công
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            Nộp bài thành công!
           </h1>
-          <p className="text-slate-500 mb-6">
+          <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">
             Bài làm của bạn đã được ghi nhận vào hệ thống.
           </p>
-          <div className="flex flex-col gap-3">
-            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 mb-2 text-sm text-blue-800 text-left">
-              <p className="font-semibold mb-1">ℹ️ Lưu ý:</p>
-              <p>Điểm thi và đáp án sẽ được công bố sau khi ban tổ chức hoàn tất quá trình chấm điểm.</p>
-              <p className="mt-2 text-xs italic text-blue-600">
-                * Chỉ những thí sinh có quyền xem đáp án mới có thể xem chi tiết bài làm của mình.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/student")}
-              className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              Quay lại trang chủ
-            </button>
+          <div className="rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-4 mb-6 text-left">
+            <p className="font-semibold text-blue-800 dark:text-blue-300 text-sm mb-1 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Lưu ý
+            </p>
+            <p className="text-blue-700 dark:text-blue-400 text-xs leading-relaxed">
+              Điểm thi và đáp án sẽ được công bố sau khi ban tổ chức hoàn tất quá trình chấm điểm.
+            </p>
           </div>
+          <button
+            onClick={() => navigate("/student")}
+            className="w-full px-6 py-3 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/25 transition-all"
+          >
+            Quay lại trang chủ
+          </button>
         </div>
       </div>
     );
@@ -479,23 +487,22 @@ export default function StudentExamShell() {
 
   if (sessionInfo?.participant_status === "SUSPENDED") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50">
-        <div className="bg-white p-10 rounded-2xl shadow-xl text-center max-w-md border-2 border-red-200">
-          <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6">
-            <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-rose-50/30 dark:from-[#060b14] dark:to-[#0a1128] p-4">
+        <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl shadow-xl text-center max-w-md border border-rose-200 dark:border-rose-800">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/30">
+            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-red-700 mb-2">
-            PHIÊN THI BỊ ĐÌNH CHỈ
+          <h1 className="text-2xl font-bold text-rose-700 dark:text-rose-400 mb-2 uppercase tracking-tight">
+            Phiên thi bị đình chỉ
           </h1>
-          <p className="text-slate-600 mb-6">
-            Bạn đã bị đình chỉ thi do vi phạm quy chế. Bài làm của bạn đã bị
-            khoá.
+          <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">
+            Bạn đã bị đình chỉ thi do vi phạm quy chế. Bài làm của bạn đã bị khoá.
           </p>
           <button
             onClick={() => navigate("/student")}
-            className="px-6 py-3 bg-slate-600 text-white rounded-lg"
+            className="w-full px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white font-semibold rounded-xl shadow-lg transition-all"
           >
             Về trang chủ
           </button>
@@ -578,28 +585,19 @@ export default function StudentExamShell() {
 
       {/* ── Violation Warning Banner ── */}
       {showWarningBanner && (
-        <div className="fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white px-6 py-3 flex items-center justify-between shadow-xl animate-pulse">
+        <div className="fixed top-0 left-0 right-0 z-[9999] bg-gradient-to-r from-rose-600 to-red-600 text-white px-6 py-3 flex items-center justify-between shadow-xl animate-pulse">
           <div className="flex items-center gap-3">
-            <svg
-              className="w-6 h-6 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
+            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
             <span className="font-bold text-sm">
-              ⚠ CẢNH BÁO: Hành vi của bạn đã bị hệ thống ghi nhận vi phạm quy
-              chế thi. (Tổng: {violationCount} lần)
+              CẢNH BÁO: Hành vi của bạn đã bị hệ thống ghi nhận vi phạm quy chế thi. (Tổng: {violationCount} lần)
             </span>
           </div>
           <button
-            className="text-white/80 hover:text-white text-xs font-medium border border-white/30 px-3 py-1 rounded"
+            className="text-white/80 hover:text-white text-xs font-semibold border border-white/30 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
             onClick={() => setShowWarningBanner(false)}
           >
             Đã hiểu
@@ -759,14 +757,14 @@ export default function StudentExamShell() {
           className={`${hasPassage ? "w-full md:w-1/2" : "w-full"} flex-1 min-h-0 bg-white flex flex-col`}
         >
           {examMode === 'omr' ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 overflow-y-auto">
-              <div className="w-full max-w-lg bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <UploadCloud className="w-8 h-8" />
+            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 bg-gradient-to-br from-slate-50 to-blue-50/30 overflow-y-auto">
+              <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 text-center">
+                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                  <UploadCloud className="w-8 h-8 text-white" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Nộp bài thi bằng phiếu OMR</h2>
-                <p className="text-slate-500 text-sm mb-4">
-                  Bạn đang làm bài theo hình thức trên giấy. Vui lòng chụp ảnh phiếu trả lời (OMR) rõ nét và tải lên đây.
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Nộp bài thi bằng phiếu OMR</h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 leading-relaxed">
+                  Bạn đang làm bài theo hình thức trên giấy. Vui lòng chụp ảnh phiếu trả lời rõ nét và tải lên đây.
                 </p>
                 
                 {/* Answer Sheet Actions */}
@@ -793,22 +791,24 @@ export default function StudentExamShell() {
 
                 {omrPreview ? (
                   <div className="relative mb-6 group">
-                    <img src={omrPreview} alt="OMR Preview" className="w-full rounded-xl border-2 border-blue-500 object-contain max-h-96" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                    <img src={omrPreview} alt="OMR Preview" className="w-full rounded-2xl border-2 border-blue-500 object-contain max-h-96 shadow-lg" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
                       <button 
                         onClick={() => { setOmrImage(null); setOmrPreview(null); }}
-                        className="px-4 py-2 bg-white text-rose-600 font-semibold rounded-lg shadow"
+                        className="px-5 py-2.5 bg-white text-rose-600 font-semibold rounded-xl shadow-xl"
                       >
                         Xóa và tải lại
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-blue-50 hover:border-blue-400 transition-colors">
+                  <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl cursor-pointer bg-slate-50 dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400 dark:hover:border-blue-600 transition-all group">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <svg className="w-10 h-10 mb-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                      <p className="mb-2 text-sm text-slate-500 font-semibold">Nhấn để tải ảnh hoặc chụp ảnh</p>
-                      <p className="text-xs text-slate-500">Hỗ trợ JPG, PNG (tối đa 10MB)</p>
+                      <div className="w-12 h-12 mb-3 rounded-xl bg-slate-200 dark:bg-slate-700 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 flex items-center justify-center transition-colors">
+                        <UploadCloud className="w-6 h-6 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                      </div>
+                      <p className="mb-2 text-sm text-slate-600 dark:text-slate-300 font-semibold">Nhấn để tải ảnh hoặc chụp ảnh</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Hỗ trợ JPG, PNG (tối đa 10MB)</p>
                     </div>
                     <input 
                       type="file" 

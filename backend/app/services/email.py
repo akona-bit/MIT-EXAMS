@@ -116,3 +116,48 @@ def send_password_reset_email(to_email: str, code: str) -> dict:
       </div>
     """
     return _send(to_email, "MIT EXAMS - Mã xác thực Đặt lại mật khẩu", _base_wrapper(body))
+
+
+def send_credentials_email(to_email: str, student_id: str, password: str, full_name: str = None) -> dict:
+    """Send exam credentials (student_id + password) to a guest user via Brevo."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Sending credentials email to %s", to_email)
+    
+    greeting = f"Chào {full_name}," if full_name else "Chào bạn,"
+    
+    body = f"""
+      <div style="font-size:24px;font-weight:700;color:#000000;margin-bottom:16px;letter-spacing:-0.5px;">Thông tin Tài khoản Thi</div>
+      <div style="font-size:16px;color:#444444;line-height:1.6;margin-bottom:24px;">
+        {greeting}
+      </div>
+      <div style="font-size:16px;color:#444444;line-height:1.6;margin-bottom:32px;">
+        Bạn đã được cấp tài khoản để tham gia kỳ thi trên MIT EXAMS. Dưới đây là thông tin đăng nhập:
+      </div>
+      <div style="background-color:#f5f5f5;border-radius:8px;padding:24px;margin-bottom:24px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="font-size:14px;color:#666666;padding:8px 0;">Mã thí sinh:</td>
+            <td style="font-size:20px;font-weight:700;color:#000000;letter-spacing:4px;font-family:Menlo,Monaco,Consolas,monospace;text-align:right;">{student_id}</td>
+          </tr>
+          <tr>
+            <td style="font-size:14px;color:#666666;padding:8px 0;">Mật khẩu:</td>
+            <td style="font-size:20px;font-weight:700;color:#000000;letter-spacing:2px;font-family:Menlo,Monaco,Consolas,monospace;text-align:right;">{password}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="background-color:#fff3cd;border-radius:8px;padding:16px;margin-bottom:24px;border:1px solid #ffc107;">
+        <div style="font-size:14px;color:#856404;line-height:1.6;">
+          <strong>Lưu ý quan trọng:</strong>
+          <ul style="margin:8px 0 0 0;padding-left:20px;">
+            <li>Đây là thông tin đăng nhập duy nhất để vào thi</li>
+            <li>Vui lòng bảo mật thông tin, không chia sẻ cho người khác</li>
+            <li>Nếu quên mật khẩu, hãy liên hệ quản trị viên</li>
+          </ul>
+        </div>
+      </div>
+      <div style="font-size:14px;color:#666666;line-height:1.6;">
+        Đăng nhập tại: <a href="https://mitexams.com/login" style="color:#4f46e5;text-decoration:none;">https://mitexams.com/login</a>
+      </div>
+    """
+    return _send(to_email, "MIT EXAMS - Thông tin Tài khoản Thi", _base_wrapper(body))

@@ -161,7 +161,7 @@ export default function AssignStudentsModal({
             Hủy
           </Button>
           <Button
-            variant="primary"
+            variant="default"
             onClick={handleAssign}
             disabled={selectedIds.size === 0 || submitting}
             isLoading={submitting}

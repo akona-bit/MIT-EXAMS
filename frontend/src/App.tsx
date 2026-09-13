@@ -29,6 +29,7 @@ const StudentHomePage = lazy(() => import("./pages/student/StudentHomePage"));
 const StudentExamShell = lazy(() => import("./pages/student/StudentExamShell"));
 const StudentExamResultPage = lazy(() => import("./pages/student/StudentExamResultPage"));
 const StudentLeaderboardPage = lazy(() => import("./pages/student/StudentLeaderboardPage"));
+const StudentExamDetailPage = lazy(() => import("./pages/student/StudentExamDetailPage"));
 
 const KnowledgePage = lazy(() => import("./pages/admin/KnowledgePage"));
 const ResourcesPage = lazy(() => import("./pages/admin/ResourcesPage"));
@@ -165,10 +166,15 @@ function AppRoutes() {
           <Route index element={<StudentHomePage />} />
           <Route path="profile" element={<StudentProfilePage />} />
           <Route path="leaderboard" element={<StudentLeaderboardPage />} />
+          <Route path="exam/:id" element={<StudentExamDetailPage />} />
         </Route>
         <Route path="/student/exam/:id/session" element={<StudentExamShell />} />
+      </Route>
+
+      {/* Shared Route: View Result */}
+      <Route element={<ProtectedRoute allowedRoles={["ADMIN", "TEACHER", "STUDENT"]} />}>
         <Route path="/student/exam/:examId/result" element={
-          <StudentShell backTo="/student" backLabel="Trang chủ">
+          <StudentShell backTo="/" backLabel="Quay lại">
             <StudentExamResultPage />
           </StudentShell>
         } />

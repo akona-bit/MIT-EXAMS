@@ -66,7 +66,8 @@ export interface StudentExamResult {
   review: ReviewQuestion[] | null;
 }
 
-export async function getStudentExamResult(examId: number): Promise<StudentExamResult> {
-  const response = await client.get<StudentExamResult>(`/api/v1/exams/${examId}/result`);
+export async function getStudentExamResult(examId: number, userId?: number): Promise<StudentExamResult> {
+  const url = userId ? `/api/v1/exams/${examId}/result?user_id=${userId}` : `/api/v1/exams/${examId}/result`;
+  const response = await client.get<StudentExamResult>(url);
   return response.data;
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getExam, publishExam, getExamForms, updateExam, uploadExamPdf } from '../../api/exams';
+import { getExam, publishExam, getExamForms, updateExam, uploadExamPdf, configPublishExam } from '../../api/exams';
 import { runIrtCalibration, getIrtTaskStatus } from '../../api/grading';
 import { getExamOverview, getExamItemsAnalysis, type ExamOverview, type ExamItemAnalysis } from '../../api/statistics';
 import { generateCredentials } from '../../api/exams';
@@ -11,7 +11,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { toast } from '../../components/ui/Toast';
 import Modal from '../../components/ui/Modal';
 import IrtTerminalModal from '../../components/admin/IrtTerminalModal';
-import { Printer, Upload, FileText, ExternalLink, ListOrdered, Users, BarChart3, TrendingUp, ArrowDown, FlaskConical, AlertTriangle } from 'lucide-react';
+import { Printer, Upload, FileText, ExternalLink, ListOrdered, Users, BarChart3, TrendingUp, ArrowDown, FlaskConical, AlertTriangle, CalendarClock, Play, Square } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Badge } from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
@@ -53,6 +53,11 @@ export default function ExamDetailPage() {
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Schedule editing state
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
   // Print Preview state
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isFormsViewerOpen, setIsFormsViewerOpen] = useState(false);
@@ -90,6 +95,14 @@ export default function ExamDetailPage() {
   useEffect(() => {
     fetchExamData();
   }, [id]);
+
+  // Populate schedule fields when exam loads
+  useEffect(() => {
+    if (exam) {
+      setEditStartTime(exam.start_time ? toLocalDatetimeString(exam.start_time) : "");
+      setEditEndTime(exam.end_time ? toLocalDatetimeString(exam.end_time) : "");
+    }
+  }, [exam]);
 
   useEffect(() => {
     if (!irtTaskId || irtStatus === 'SUCCESS' || irtStatus === 'FAILED') return;
@@ -176,6 +189,66 @@ export default function ExamDetailPage() {
       toast.error(action === 'publish' ? 'Lỗi xuất bản' : 'Lỗi chạy IRT');
     }
   };
+
+  // Helper: convert ISO string to datetime-local input value
+  function toLocalDatetimeString(iso: string): string {
+    const d = new Date(iso);
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  const handleSaveSchedule = async () => {
+    if (!exam) return;
+    setIsSavingSchedule(true);
+    try {
+      await configPublishExam(exam.id, {
+        start_time: editStartTime ? new Date(editStartTime).toISOString() : null,
+        end_time: editEndTime ? new Date(editEndTime).toISOString() : null,
+      });
+      toast.success("Đã cập nhật lịch thi");
+      fetchExamData();
+    } catch (e) {
+      toast.error("Không thể cập nhật lịch thi");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  const handleOpenNow = async () => {
+    if (!exam) return;
+    setIsSavingSchedule(true);
+    try {
+      await configPublishExam(exam.id, {
+        start_time: new Date().toISOString(),
+        end_time: null,
+      });
+      toast.success("Đã mở cổng thi ngay lập tức");
+      fetchExamData();
+    } catch (e) {
+      toast.error("Không thể mở cổng thi");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  const handleCloseNow = async () => {
+    if (!exam) return;
+    setIsSavingSchedule(true);
+    try {
+      await configPublishExam(exam.id, {
+        start_time: exam.start_time ? new Date(exam.start_time).toISOString() : null,
+        end_time: new Date().toISOString(),
+      });
+      toast.success("Đã đóng cổng thi ngay lập tức");
+      fetchExamData();
+    } catch (e) {
+      toast.error("Không thể đóng cổng thi");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  const isScheduleOpen = exam && (!exam.start_time || new Date(exam.start_time) <= new Date()) && (!exam.end_time || new Date(exam.end_time) > new Date());
 
   if (isLoading) return <div>Đang tải...</div>;
   if (!exam) return <div>Không tìm thấy kỳ thi</div>;
@@ -286,6 +359,86 @@ export default function ExamDetailPage() {
                       </button>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Schedule Section */}
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="w-5 h-5 text-primary-500" />
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Lịch thi</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isScheduleOpen ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/20 px-2.5 py-1 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Đang mở
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-100 dark:text-slate-400 dark:bg-slate-800 px-2.5 py-1 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        Chưa mở
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 mb-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Mở cổng thi
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editStartTime}
+                      onChange={(e) => setEditStartTime(e.target.value)}
+                      className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Đóng cổng thi
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editEndTime}
+                      onChange={(e) => setEditEndTime(e.target.value)}
+                      min={editStartTime || undefined}
+                      className="w-full px-4 py-2.5 text-sm font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-[0_4px_12px_rgb(0,0,0,0.05)] focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500/50 transition-all outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={handleSaveSchedule}
+                    disabled={isSavingSchedule}
+                    size="sm"
+                    className="shadow-sm"
+                  >
+                    {isSavingSchedule ? "Đang lưu..." : "Lưu lịch"}
+                  </Button>
+                  <Button
+                    onClick={handleOpenNow}
+                    disabled={isSavingSchedule}
+                    variant="outline"
+                    size="sm"
+                    className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-900/20"
+                  >
+                    <Play className="w-3.5 h-3.5 mr-1.5" />
+                    Mở cổng ngay
+                  </Button>
+                  <Button
+                    onClick={handleCloseNow}
+                    disabled={isSavingSchedule}
+                    variant="outline"
+                    size="sm"
+                    className="text-rose-700 border-rose-200 bg-rose-50 hover:bg-rose-100 dark:text-rose-400 dark:border-rose-800 dark:bg-rose-900/20"
+                  >
+                    <Square className="w-3.5 h-3.5 mr-1.5" />
+                    Đóng cổng ngay
+                  </Button>
                 </div>
               </div>
             </div>
@@ -439,9 +592,9 @@ export default function ExamDetailPage() {
                               <Bar dataKey="count" name="Số lượng" fill="#2D6CFF" radius={[4, 4, 0, 0]} maxBarSize={48} />
                             </BarChart>
                           </ResponsiveContainer>
-                        </div>
-                      </div>
-                    )}
+              </div>
+            </div>
+          )}
                   </>
                 ) : (
                   <EmptyState

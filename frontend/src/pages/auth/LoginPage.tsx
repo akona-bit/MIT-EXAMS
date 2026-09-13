@@ -3,32 +3,22 @@ import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../stores/authStore";
-import { resolveSBD } from "../../api/auth";
+import { loginWithIdentifier } from "../../api/auth";
 import { toast } from "../../components/ui/Toast";
 import PublicNoticeBoard from "../../components/auth/PublicNoticeBoard";
+import SearchBar from "../../components/common/SearchBar";
+import { User, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const [identifier, setIdentifier] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { loginWithToken } = useAuth();
   const navigate = useNavigate();
-
-  const handleResolveIdentifier = async (ident: string) => {
-    // If it's a 6-digit number, assume SBD
-    if (/^\d{6}$/.test(ident)) {
-      try {
-        const res = await resolveSBD(ident);
-        return res.email;
-      } catch (e: any) {
-        throw new Error("Số báo danh không tồn tại");
-      }
-    }
-    return ident;
-  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -36,14 +26,19 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const emailToUse = await handleResolveIdentifier(identifier);
-      const user = await login({ username: emailToUse, password });
-      const targetRoute = user.role?.name === "STUDENT" ? "/student" : "/admin";
-      navigate(targetRoute);
+      // Validate identifier is not empty
+      if (!studentId.trim()) {
+        throw new Error("Vui lòng nhập email hoặc mã thí sinh");
+      }
+
+      const result = await loginWithIdentifier(studentId, password);
+      loginWithToken(result.access_token);
+      toast.success("Đăng nhập thành công!");
+      navigate("/student");
     } catch (err: any) {
       let errorMessage = err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.";
-      if (errorMessage.includes("Invalid login credentials") || errorMessage.includes("Invalid credentials")) {
-        errorMessage = "Sai email hoặc Mật khẩu (hoặc tài khoản không tồn tại).";
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
       }
       setError(errorMessage);
       toast.error(errorMessage);
@@ -75,7 +70,10 @@ export default function LoginPage() {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">MIT EXAMS</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Hệ thống Quản lý Thi Trắc nghiệm</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Đăng nhập vào hệ thống thi</p>
+            <div className="mt-4">
+              <SearchBar />
+            </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-slate-200 dark:border-slate-700 p-8 animate-in slide-in-from-right-4 duration-500 w-full max-w-md">
@@ -83,7 +81,7 @@ export default function LoginPage() {
             <div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Đăng nhập</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Nhập thông tin tài khoản để đăng nhập
+                Nhập email hoặc mã thí sinh để đăng nhập
               </p>
             </div>
 
@@ -94,25 +92,39 @@ export default function LoginPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                label="Email / Tên đăng nhập / Số báo danh mới nhất"
-                type="text"
-                placeholder="Ví dụ: 123456 hoặc hs@mitexams.com"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                required
-                autoFocus
-              />
+              <div className="relative">
+                <Input
+                  label="Email hoặc Mã thí sinh"
+                  type="text"
+                  placeholder="Ví dụ: student@email.com hoặc 123456"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <div className="absolute right-3 top-9 text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+              </div>
 
               <div className="space-y-1">
-                <Input
-                  label="Mật khẩu"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    label="Mật khẩu"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-9 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 <div className="flex justify-end">
                   <Link to="/forgot-password" className="text-xs text-primary-500 hover:underline">
                     Quên mật khẩu?

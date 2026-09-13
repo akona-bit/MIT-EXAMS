@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     full_name: Optional[str] = None
     username: Optional[str] = None
     email: Optional[EmailStr] = None
+    student_id: Optional[str] = None
     gender: Optional[str] = None
     verification_image_url: Optional[str] = None
     verification_status: Optional[str] = "UNVERIFIED"

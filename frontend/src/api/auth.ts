@@ -6,8 +6,13 @@ export async function getMe(): Promise<User> {
   return response.data;
 }
 
-export async function resolveSBD(sbd: string): Promise<{ email: string }> {
-  const response = await client.post<{ email: string }>('/api/v1/auth/resolve-sbd', { sbd });
+export async function resolveStudentId(student_id: string): Promise<{ exists: boolean; full_name: string | null; has_password: boolean }> {
+  const response = await client.post<{ exists: boolean; full_name: string | null; has_password: boolean }>('/api/v1/auth/resolve-student-id', { identifier: student_id });
+  return response.data;
+}
+
+export async function loginWithIdentifier(identifier: string, password: string): Promise<{ access_token: string; token_type: string }> {
+  const response = await client.post<{ access_token: string; token_type: string }>('/api/v1/auth/login-identifier', { identifier, password });
   return response.data;
 }
 

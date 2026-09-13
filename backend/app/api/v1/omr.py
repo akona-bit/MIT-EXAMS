@@ -356,3 +356,77 @@ async def grade_student_submission(
             "message": "Đang chấm điểm bài OMR, vui lòng đợi."
         }
     }
+
+# ─── Student OMR Submissions Queue ──────────────────────────────────────────
+
+@router.get("/exams/{exam_id}/student-submissions")
+async def get_student_omr_submissions(
+    exam_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(RequireRole(["ADMIN", "TEACHER"])),
+):
+    from app.models.exam import ExamSubmission, ExamParticipant
+    from app.models.grading import ExamResult
+    from app.models.user import User as UserModel
+    
+    # Lấy các submission có omr_image_url
+    stmt = (
+        select(ExamSubmission, ExamParticipant, UserModel, ExamResult)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .join(UserModel, UserModel.id == ExamParticipant.user_id)
+        .outerjoin(ExamResult, ExamResult.exam_submission_id == ExamSubmission.id)
+        .where(
+            ExamParticipant.exam_id == exam_id,
+            ExamSubmission.omr_image_url.is_not(None)
+        )
+        .order_by(ExamSubmission.submit_time.asc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    
+    data = []
+    for sub, part, user, exam_result in rows:
+        data.append({
+            "id": sub.id,
+            "student_id": part.sbd,
+            "student_name": user.full_name,
+            "submit_time": sub.submit_time.isoformat() if sub.submit_time else None,
+            "image_url": sub.omr_image_url,
+            "status": "COMPLETED" if exam_result else "PENDING",
+            "score": exam_result.total_score if exam_result else None
+        })
+        
+    return {"data": data}
+
+@router.post("/grade-student-submission-sync/{submission_id}")
+async def grade_student_submission_sync(
+    request: Request,
+    submission_id: int,
+    enable_gemini: bool = Query(True, description="Bật Gemini layer cho needs_review"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(RequireRole(["ADMIN", "TEACHER"])),
+):
+    """
+    Chấm điểm OMR ĐỒNG BỘ (Synchronous) cho bài làm của học sinh.
+    Sử dụng cho tính năng Chấm tuần tự trên frontend.
+    """
+    from app.services.omr.tasks import grade_student_omr_async
+    
+    try:
+        await grade_student_omr_async(submission_id, enable_gemini)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Sync grading failed for submission {submission_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    capture(request, "grade_student_submission_sync", {
+        "submission_id": submission_id
+    })
+
+    return {
+        "data": {
+            "success": True,
+            "message": "Chấm điểm thành công."
+        }
+    }
+

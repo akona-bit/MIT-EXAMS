@@ -92,6 +92,22 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-13` — **Cải thiện tính năng Search trên trang Đăng nhập**:
+  - [x] **Backend**: Xóa email khỏi response API search để bảo mật thông tin.
+  - [x] **Frontend - SearchBar**: Ẩn email khỏi kết quả search, hiển thị initials avatar thay vì email.
+  - [x] **Frontend - StudentDetailModal**: Tạo modal mới hiển thị chi tiết thí sinh khi bấm vào kết quả search, bao gồm:
+    - Tab Tổng quan: Stats cards (điểm cao nhất, số bài nộp, top 3, số kỳ thi tham gia) + lịch sử thi chi tiết.
+    - Tab Tiến độ: VAct Progress (Area chart), VAct Radar (Radar chart), Activity Heatmap.
+    - Tab Kiến thức: Knowledge Network.
+  - [x] **TypeScript**: Thêm `StudentProfileSummary` type vào `studentProfile.ts`, fix lint errors.
+  - [x] Files: `backend/app/api/v1/search.py`, `frontend/src/api/search.ts`, `frontend/src/api/studentProfile.ts`, `frontend/src/components/common/SearchBar.tsx`, `frontend/src/components/common/StudentDetailModal.tsx`.
+
+- `2026-09-13` — **Thêm hệ thống Search trên trang Đăng nhập**:
+  - [x] **Backend API**: Tạo endpoint mới `GET /api/v1/search/` nhận query `q` (tên kỳ thi, tên/email học sinh). Trả về danh sách kỳ thi (tên, trạng thái, thời gian, mã đề, số bài thi) và kết quả học sinh (tên, email, các kỳ thi đã tham gia, mã đề, điểm, xếp hạng).
+  - [x] **Frontend Component**: Tạo `SearchBar.tsx` với debounce 300ms, tab chuyển đổi Kỳ thi/Học sinh, hiển thị badge trạng thái, điểm số và xếp hạng. Responsive dark mode.
+  - [x] **Tích hợp LoginPage**: Thêm SearchBar vào trang đăng nhập, hiển thị phía trên form đăng nhập với subtitle "Tìm kiếm kỳ thi và kết quả thi".
+  - [x] Files tạo/sửa: `backend/app/api/v1/search.py`, `backend/app/main.py`, `frontend/src/api/search.ts`, `frontend/src/components/common/SearchBar.tsx`, `frontend/src/pages/auth/LoginPage.tsx`.
+
 - `2026-09-13` — **Hoàn thành 11 cải tiến 4 giai đoạn (Infra → Code Quality → Frontend → Core Features)**:
   - [x] **Giai đoạn 1 — Hạ tầng**: Docker Compose (5 services: postgres, redis, backend, celery, frontend), `.env.docker`, `frontend/Dockerfile`, GitHub Actions CI pipeline (pytest + ruff advisory + vite build), `backend/pyproject.toml` (ruff config).
   - [x] **Giai đoạn 2 — Code Quality**: Analytics `csv import` → DB queries (tương thích 120 câu), `MatrixFormPage` ungroupRule+submitGroup, OMR `answer_source` column + migration, `_load_layout_for_sheet()` helper, `StudentAnalyticsPage` grid-cols fix, `posthog-js` removed.
@@ -558,7 +574,7 @@
   **Cascade deletes (4):**
   - ✅ DB-04: `KnowledgeNode.parent_id` thêm `ondelete="SET NULL"` — prevents orphan FK on parent delete. — `question.py`.
   - ✅ DB-05: `Question.creator_id` thêm `ondelete="SET NULL"` — prevents broken reference on user delete. — `question.py`.
-  - ✅ DB-06: `Question.parent_question_id` thêm `ondelete="SET NULL"` — prevents broken version chain on question delete. — `question.py`.
+  - ✅ DB-06: `Question.parent_question_id` thêm `ondelete="SET NULL"` — prevents broken version chain on user delete. — `question.py`.
   - ✅ DB-07: `ExamParticipant.suspended_by_id` thêm `ondelete="SET NULL"` — prevents broken reference on user delete. — `exam.py`.
 
   **Delete cascade fixes (2):**
@@ -573,6 +589,29 @@
   **Verified**: `python -c "import ast; ..."` — all backend files parse clean. `npx tsc --noEmit` — no new TS errors (pre-existing errors in unrelated files only).
 
   **Files sửa**: `exam.py`, `question.py`, `exams.py`, `passages.py`, `advanced_analytics.py`, `resources.py`, `exam_session.py`, `admin.py`, `matrix.py`, `knowledge.py`, `grading.py`, `statistics.py`, `feedbacks.py`, `questions.py` — tổng cộng 14 files.
+
+- **2026-09-13 — Chuyển đổi hệ thống đăng nhập sang Student ID (6 chữ số):**
+  - ✅ **User Model**: Thêm `student_id: str(6)` field, unique, indexed — `user.py`.
+  - ✅ **Auth API**: 
+    - `POST /auth/resolve-student-id` — Kiểm tra student_id tồn tại
+    - `POST /auth/login-student-id` — Đăng nhập bằng student_id + password
+  - ✅ **Admin API**: `POST /admin/students/bulk-create-guest` — Tạo hàng loạt tài khoản guest với student_id + password, gửi email qua Brevo
+  - ✅ **Email Service**: Thêm `send_credentials_email()` — Gửi thông tin đăng nhập qua Brevo
+  - ✅ **Migration**: `d5e6f7a8b9c0_add_student_id_to_user.py` — Thêm cột student_id vào bảng user
+  - ✅ **Frontend**: 
+    - Auth API: `resolveStudentId()`, `loginWithStudentId()`
+    - Login Page: Input "Mã thí sinh" (6 chữ số), validation, show/hide password
+  - ✅ **Verified**: `alembic upgrade head` thành công, `python -c "from app.main import app"` OK, `npx tsc --noEmit` không có lỗi mới
+
+  **Flow mới:**
+  | User Type | Login Method |
+  |-----------|--------------|
+  | Admin/Teacher | Email + Password (qua Supabase) |
+  | Student (đã có tài khoản) | Student ID (6 chữ số) + Password |
+  | Guest (tự đăng nhập) | OTP Email → Auto-create user (KHÔNG có student_id) |
+  | Guest (Admin tạo) | Student ID + Password (gửi qua Brevo email) |
+
+  Files sửa: `user.py`, `auth.py`, `email.py`, `admin.py`, `user.py` (schema), `auth.ts`, `LoginPage.tsx`
 
 ## Vấn đề đang mở / cần quyết định
 

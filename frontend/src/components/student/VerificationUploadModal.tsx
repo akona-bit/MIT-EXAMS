@@ -92,12 +92,12 @@ export default function VerificationUploadModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-950 rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-white to-slate-50 dark:from-slate-950 dark:to-slate-900 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/40 text-primary-600 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center shadow-md">
+              <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               Chứng thực học sinh
@@ -106,7 +106,7 @@ export default function VerificationUploadModal({
           {!isUploading && (
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -129,10 +129,10 @@ export default function VerificationUploadModal({
           </p>
 
           <div
-            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
+            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
               preview
                 ? "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
-                : "border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                : "border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-400 dark:hover:border-primary-600"
             }`}
             onClick={() => fileInputRef.current?.click()}
           >
@@ -148,7 +148,7 @@ export default function VerificationUploadModal({
                 <img
                   src={preview}
                   alt="Preview"
-                  className="max-h-48 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-4"
+                  className="max-h-48 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 mb-4"
                 />
                 <Button variant="outline" size="sm" type="button" onClick={(e) => {
                   e.stopPropagation();
@@ -159,13 +159,13 @@ export default function VerificationUploadModal({
               </div>
             ) : (
               <div className="flex flex-col items-center pointer-events-none">
-                <div className="w-14 h-14 bg-primary-100 dark:bg-primary-900/40 text-primary-600 rounded-full flex items-center justify-center mb-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary-500/20">
                   <UploadCloud className="w-7 h-7" />
                 </div>
                 <p className="font-semibold text-slate-900 dark:text-white mb-1">
                   Nhấn để chọn ảnh
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Hỗ trợ JPG, PNG (tối đa 5MB)
                 </p>
               </div>
