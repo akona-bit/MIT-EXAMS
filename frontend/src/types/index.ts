@@ -156,6 +156,7 @@ export interface QuestionCreate {
   content: string;
   level: number;
   type: string;
+  render_style?: string;
   knowledge_node_id: number;
   passage_id?: number | null;
   source_author?: string | null;

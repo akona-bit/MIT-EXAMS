@@ -31,7 +31,7 @@ function SwipeToConfirm({ onConfirm, isLoading, text = 'Kéo để xóa' }: { on
   const bg = useTransform(x, [0, Math.max(containerWidth - 50, 100)], ['var(--tw-gradient-from, transparent)', 'rgba(239, 68, 68, 0.1)']);
   const textOpacity = useTransform(x, [0, Math.max(containerWidth / 2, 50)], [1, 0]);
 
-  const handleDragEnd = (event: any, info: any) => {
+  const handleDragEnd = (_event: any, info: any) => {
     if (!containerWidth) return;
     const thumbWidth = 44; // h-11 w-11
     

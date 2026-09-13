@@ -27,7 +27,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
 /* ── Types ────────────────────────────────────────────────── */
 
-type ResourceTab = "van-ban" | "anh" | "pdf" | "viet-tay";
+type ResourceTab = "van-ban" | "anh" | "pdf" | "viet-tay" | "bang";
 
 interface TabDef {
   id: ResourceTab;

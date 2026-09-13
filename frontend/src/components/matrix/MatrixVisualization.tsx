@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -60,7 +60,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
 
     return Array.from(topicsMap.values()).map(t => ({
       name: t.name,
-      children: Array.from(t.children.values()).filter(c => c.size > 0)
+      children: Array.from(t.children.values()).filter((c: any) => c.size > 0)
     })).filter(t => t.children.length > 0);
   }, [data]);
 
@@ -270,7 +270,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
                       <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
                       <RechartsTooltip cursor={{ fill: '#f8fafc', opacity: 0.5 }} content={<CustomTooltip />} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={48}>
-                         {typeData.map((entry, index) => (
+                         {typeData.map((_entry, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS_TYPE[index % COLORS_TYPE.length]} />
                          ))}
                       </Bar>
@@ -286,7 +286,7 @@ export default function MatrixVisualization({ data, groups = [] }: Visualization
              {conceptData.length > 0 ? (
                <ResponsiveContainer width="100%" height="100%">
                  <Treemap
-                   data={conceptData}
+                    data={conceptData as any}
                    dataKey="size"
                    stroke="#fff"
                    fill="#8884d8"

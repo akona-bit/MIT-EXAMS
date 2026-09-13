@@ -147,33 +147,6 @@ export default function ImageSelectorModal({ isOpen, onClose, onSelect }: ImageS
     img.original_name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const generatePreviewCode = () => {
-    let code = "";
-    selectedIds.forEach(id => {
-      const conf = configs[id];
-      if (!conf) return;
-      if (exportFormat === 'latex') {
-        let widthStr = '';
-        if (conf.width && conf.width !== '100%') {
-           if (conf.width.endsWith('%')) {
-              const wVal = parseFloat(conf.width);
-              widthStr = `[width=${(wVal/100).toFixed(2)}\\linewidth]`;
-           } else {
-              widthStr = `[width=${conf.width}]`;
-           }
-        }
-        code += `\\begin{figure}[H]\n\\centering\n\\includegraphics${widthStr}{${conf.url}}\n${conf.alt ? `\\caption{${conf.alt}}\n` : ''}\\end{figure}\n\n`;
-      } else {
-        const titleParts = [];
-        if (conf.width && conf.width !== '100%') titleParts.push(`width=${conf.width}`);
-        if (conf.align && conf.align !== 'center') titleParts.push(`align=${conf.align}`);
-        const title = titleParts.length > 0 ? ` "${titleParts.join(' ')}"` : '';
-        code += `![${conf.alt || 'image'}](${conf.url}${title})\n\n`;
-      }
-    });
-    return code;
-  };
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={step === 1 ? "Chọn hình ảnh" : "Cấu hình hình ảnh"} maxWidth={step === 1 ? "max-w-4xl" : "max-w-6xl"}>
       <div className="p-6 flex flex-col h-[70vh]">

@@ -118,12 +118,8 @@ export default function MarkdownEditor({
                 editor.chain().focus().unsetMark("answerErrorSpan").run();
               } else {
                 const doc = editor.state.doc;
-                let spanCount = 0;
-                doc.descendants((node, pos) => {
-                  if (node.isText && node.marks.some(m => m.type.name === 'answerErrorSpan')) {
-                    // This counts segments, not exact spans, but usually sufficient.
-                    // Better to just count in the current markdown.
-                  }
+                doc.descendants((_node, _pos) => {
+                  // count segments
                 });
                 const md = (editor.storage as any).markdown.getMarkdown();
                 const matchCount = (md.match(/\[.*?\]\{\.answer-error\}/g) || []).length;
@@ -264,7 +260,7 @@ export default function MarkdownEditor({
                 chain = chain.setImage({ 
                   src: conf.url, 
                   alt: conf.alt || 'image', 
-                  title: titleParts.length > 0 ? titleParts.join(' ') : null
+                  title: titleParts.length > 0 ? titleParts.join(' ') : undefined
                 });
                 if (layout === 'vertical') {
                   chain = chain.insertContent('\n\n');
