@@ -24,19 +24,28 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 
 export interface ExamOverview {
   total_participants: number;
-  average_score: number;
-  max_score: number;
-  min_score: number;
+  average_score: number | null;
+  max_score: number | null;
+  min_score: number | null;
   distribution: { range: string; count: number }[];
+  /** false = chưa có bài làm nào được chấm điểm cho kỳ thi này */
+  has_data: boolean;
 }
 
 export interface ExamItemAnalysis {
   question_id: number;
-  content: string;
-  difficulty_b: number;
-  discrimination_a: number;
-  guessing_c: number;
-  is_calibrated: boolean;
+  content: string | null;
+  /** IRT b-param được calibrate trong kỳ thi này (null nếu chưa chạy IRT) */
+  difficulty_b: number | null;
+  /** IRT a-param được calibrate trong kỳ thi này */
+  discrimination_a: number | null;
+  /** CTT: tỷ lệ trả lời đúng (0-1) */
+  ctt_difficulty: number | null;
+  /** CTT: D-Index độ phân biệt */
+  ctt_discrimination: number | null;
+  /** p-value của kiểm định Chi² độ khớp model IRT */
+  chi_square_p: number | null;
+  computed_at: string | null;
   warning_flags: string[];
 }
 

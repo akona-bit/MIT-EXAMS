@@ -91,6 +91,7 @@ class ExamUpdateRequest(BaseModel):
     duration_minutes: Optional[int] = None
     show_score_mode: Optional[str] = None
     show_answer_mode: Optional[str] = None
+    max_attempts: Optional[int] = None
     allow_omr: Optional[bool] = None
 
 # --- Matrix Import Schemas ---
@@ -116,6 +117,7 @@ class MatrixImportPreviewResponse(BaseModel):
 class MatrixImportExecuteRequest(BaseModel):
     confirmed_rows: List[MatrixImportPreviewRow]
     strategy: str # "add" or "replace"
+
 class ExamResponse(BaseModel):
     id: int
     name: str
@@ -127,6 +129,7 @@ class ExamResponse(BaseModel):
     duration_minutes: Optional[int] = None
     show_score_mode: str
     show_answer_mode: str
+    max_attempts: Optional[int] = None
     allow_omr: bool = False
     exam_pdf_url: Optional[str] = None
     status: ExamStatus
@@ -141,6 +144,7 @@ class ExamParticipantResponse(BaseModel):
     id: int
     exam_id: int
     user_id: int
+    attempt_number: int = 1
     exam_form_id: Optional[int] = None
     status: ParticipantStatus
     start_time: Optional[datetime] = None
@@ -211,3 +215,31 @@ class AiMatrixRuleResponse(BaseModel):
 class AiMatrixGenerateResponse(BaseModel):
     rules: List[AiMatrixRuleResponse]
     ai_model: str = "gemini-1.5-flash-latest"
+
+# --- Exam Form Detail Schemas (xem danh sách mã đề + thứ tự câu) ---
+class ExamFormAnswerDetail(BaseModel):
+    id: int
+    answer_id: int
+    new_position: int
+    original_position: int = 0
+    is_correct: bool = False
+    content: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class ExamFormQuestionDetail(BaseModel):
+    id: int
+    position: int
+    question_id: int
+    part: int
+    question_content: Optional[str] = None
+    answers: List[ExamFormAnswerDetail] = []
+    model_config = ConfigDict(from_attributes=True)
+
+class ExamFormDetail(BaseModel):
+    id: int
+    code: str
+    is_original: bool
+    created_at: datetime
+    question_count: int = 0
+    questions: List[ExamFormQuestionDetail] = []
+    model_config = ConfigDict(from_attributes=True)

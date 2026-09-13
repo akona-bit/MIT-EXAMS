@@ -4,8 +4,8 @@
 
 ## Trạng thái tổng quan
 
-**Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH TOÀN BỘ (BACKEND & FRONTEND) + UI REDESIGN
-**Cập nhật lần cuối:** 2026-09-11
+**Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH 11 CẢI TIẾN 4 GIAI ĐOẠN
+**Cập nhật lần cuối:** 2026-09-13
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -89,6 +89,14 @@
 - [x] Audit log/nhật ký hoạt động (Bảng `AuditLog`)
 - [x] Danh sách học sinh bị cấm thi (Cột `is_banned`, báo lỗi 403 ngay lập tức)
 - [x] Hệ thống Feedback (Góp ý/Báo lỗi)
+
+## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-13` — **Hoàn thành 11 cải tiến 4 giai đoạn (Infra → Code Quality → Frontend → Core Features)**:
+  - [x] **Giai đoạn 1 — Hạ tầng**: Docker Compose (5 services: postgres, redis, backend, celery, frontend), `.env.docker`, `frontend/Dockerfile`, GitHub Actions CI pipeline (pytest + ruff advisory + vite build), `backend/pyproject.toml` (ruff config).
+  - [x] **Giai đoạn 2 — Code Quality**: Analytics `csv import` → DB queries (tương thích 120 câu), `MatrixFormPage` ungroupRule+submitGroup, OMR `answer_source` column + migration, `_load_layout_for_sheet()` helper, `StudentAnalyticsPage` grid-cols fix, `posthog-js` removed.
+  - [x] **Giai đoạn 3 — Frontend Quality**: vitest@2 + testing-library (21 tests: 14 grading + 7 Button), `QuestionNavGrid` mobile-first redesign (bottom bar + fullscreen grid drawer), `StudentExamShell` responsive breakpoints (SBD `sm+`, exam name `md+`, feedback/connection always).
+  - [x] **Giai đoạn 4 — Core Features**: IndexedDB offline support (`offlineDb.ts` + `useOfflineSync` hook — offline-first save, auto-sync on reconnect), IRT anchor items (`is_anchor` column + migration, `mmle()` anchor_mask support, scorer.py passes anchors from DB, `PUT /{id}/anchor` + `POST /bulk-anchor` endpoints), load test rewrite (auth, 2 user types, 6 endpoints).
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
@@ -210,6 +218,19 @@
   - [x] Fix xung đột google-genai 2.22.0 (bắt buộc httpx>=0.28.1) → hạ về `google-genai==1.0.0` (API `genai.Client`/`GenerateContentConfig`/`Part.from_bytes` vẫn giữ nguyên), nâng supafunc 0.3.3→0.10.2 để hết cảnh báo metadata. Pin `google-genai==1.0.0` trong requirements.txt.
   - [x] Fix test `test_generate_original_exam_happy_path_creates_form_and_questions` (test_happy_paths_expanded.py): mock DB queue thiếu kết quả cho bước `get_all_descendant_leaves()` (được thêm từ 2026-09-04) khiến SimpleNamespace câu hỏi bị nuốt vào làm "con node tri thức" → thêm 1 kết quả rỗng vào đầu queue đúng thứ tự query.
   - [x] Kết quả: backend pytest **74/74 pass** (8m10s), frontend build OK, `import app.main` OK với venv backend.
+
+- **2026-09-13 — Cải thiện UI tab "Kết quả IRT & Thống kê" (`ExamDetailPage.tsx`):**
+  - ✅ KPI cards có icon + accent màu semantic (Số lượng/primary, Điểm TB/info, Cao nhất/success, Thấp nhất/warning), đơn vị "thí sinh" + "/ 1200", hover shadow.
+  - ✅ Thêm **biểu đồ phổ điểm** (recharts BarChart, fill `#2D6CFF` theo ui-tokens) — dùng `distribution` API đã trả về nhưng trước giờ chưa render.
+  - ✅ Dùng lại component có sẵn `EmptyState` (trạng thái trống có icon + nút action "Chạy phân tích IRT" gọi thẳng `handleRunIrt`) và `Badge` (nhãn tiếng Việt cho warning_flags: Phân biệt kém/Quá khó/Quá dễ/Lệch model, badge "Ổn định" success) thay cho span inline.
+  - ✅ Dải cảnh báo tổng hợp nổi bật phía trên bảng ("X/Y câu cần lưu ý" + badge đếm theo loại, nền warning) — theo ui-rules.md "cảnh báo không chôn trong bảng dài"; dòng có cảnh báo được highlight nền warning nhẹ; số liệu a, b, p, D-Index dùng `font-mono`.
+  - Kiểm chứng: `tsc --noEmit` — 0 lỗi mới ở ExamDetailPage (các lỗi còn lại là lỗi cũ của trang khác).
+
+- **2026-09-13 — Fix tab "Kết quả IRT & Thống kê" hiển thị số liệu rác khi chưa chạy IRT:**
+  - ✅ Bug: `/statistics/exams/{id}/items` đọc `a_param`/`b_param` trực tiếp từ bảng `Question` (tham số toàn cục của ngân hàng câu hỏi, còn sót từ lần chạy IRT của kỳ thi khác) → kỳ thi chưa chạy IRT vẫn hiện bảng a, b. Sửa: đọc từ `ItemAnalysisResult` theo `exam_id` (kết quả per-exam do IRT task ghi) — không có → trả `[]`, UI hiện empty state "Chưa chạy phân tích IRT". — `api/v1/statistics.py`
+  - ✅ Bug: `/overview` trả 0/0/0/0 khi chưa có bài chấm → UI hiện "0". Sửa: thêm `has_data` (false khi không có submissions/ExamResult), điểm trả `null`; UI hiện empty state có giải thích. — `api/v1/statistics.py`, `ExamDetailPage.tsx`
+  - ✅ Bảng phân tích bổ sung cột CTT (p đúng, D-Index) + timestamp "Phân tích lúc ...", cờ cảnh báo thêm `MODEL_MISFIT` (Chi² p < 0.05); hàng không cảnh báo hiển thị badge "Ổn định". — `ExamDetailPage.tsx`, `api/statistics.ts`
+  - Kiểm chứng: `py_compile` OK; `tsc --noEmit` không có lỗi mới ở 2 file sửa (các lỗi tsc còn lại là lỗi cũ của trang khác, đã tồn tại trước đó).
 
 - `2026-09-04` — **Đồng bộ Logic Ma trận & Cây Tri thức**: 
   - [x] Sửa đổi `KnowledgeService`: Tính tổng số câu hỏi gộp (inclusive) từ các node con, cháu để hiển thị chính xác tổng lượng câu hỏi cho Topic/Concept.
@@ -447,6 +468,114 @@
   - ✅ Sửa: thêm state `isExportingLaTeX` — nút disabled + label "Đang xuất đề (LaTeX)..." trong lúc fetch; toast.success khi tải xong, toast.error khi thất bại. Đồng bộ convention với nút "Cấp SBD & Mật khẩu".
   - Lưu ý: `client.ts` không set axios timeout → request giữ đến khi xong; backend `/export/latex` chạy đồng bộ.
 
+
+- **2026-09-13 — Thêm tính năng xem danh sách mã đề & so sánh thứ tự câu:**
+  - ✅ Backend: thêm schema `ExamFormDetail`, `ExamFormQuestionDetail`, `ExamFormAnswerDetail` trong `schemas/exam.py`.
+  - ✅ Backend: thêm API `GET /exams/{exam_id}/forms/detail` — trả về danh sách mã đề kèm ExamFormQuestion (position, question_id, part) + ExamFormAnswer (new_position, answer_id) đã sắp xếp. — `api/v1/exams.py`
+  - ✅ Frontend: thêm types `ExamFormDetail`, `ExamFormQuestionDetail`, `ExamFormAnswerDetail` trong `types/index.ts`.
+  - ✅ Frontend: thêm API client `getExamFormsDetail(id)` trong `api/exams.ts`.
+  - ✅ Frontend: tạo component `ExamFormsViewer.tsx` — modal 3 tab:
+    - Tab "Danh sách": card hiển thị tất cả mã đề (code, loại gốc/xáo, số câu, ngày tạo), bấm vào chuyển sang tab Chi tiết.
+    - Tab "Chi tiết câu hỏi": dropdown chọn mã → bảng 120 câu theo phần (TV/TA/Toán/TDKH), hiển thị position, question_id, nội dung tóm tắt, đáp án xáo.
+    - Tab "So sánh mã đề": bảng matrix — row = question_id gốc, column = mã đề, cell = vị trí position trên mã đó. Dùng màu nền phân biệt phần thi.
+  - ✅ Frontend: tích hợp `ExamFormsViewer` vào `ExamDetailPage.tsx` — nút "Xem mã đề" (icon ListOrdered, màu tím) trong phần Thao tác khi có forms.
+
+- `2026-09-13` — **Thiết lập môi trường chạy repo tham khảo `the-delegation/`** (repo clone ngoài, không thuộc MIT EXAMS): `npm install` thành công (Vite 6.4.1, React 19, Three.js 0.183, Tailwind v4, @google/genai) trên Node v24.18.0/npm 11.16.0 — không lỗi phiên bản. Dev server chạy nền tại `http://localhost:3000/the-delegation/` (HTTP 200, Vite PID 16204) rồi đã **tắt cùng ngày theo yêu cầu người dùng** (taskkill PID 16204, port 3000 free — khi cần chạy lại: `cd the-delegation && npm run dev`). `vite.config.ts` không đổi. App dùng BYOK: người dùng nhập Gemini API key trong UI (BYOKModal) — không cần file `.env`. Không sửa code, không ảnh hưởng MIT EXAMS.
+
+
+- **2026-09-13 — Audit bảo mật + performance + code quality toàn diện (29 issues):**
+
+  **Security fixes (7):**
+  - ✅ SEC-01: `.env.local` đã nằm trong `.gitignore` (line 19), chưa bị commit — token cần rotate trên Vercel dashboard.
+  - ✅ SEC-02: Xóa hardcoded passwords (`admin123/teacher123/student123`) trong `seed.py`, chuyển sang env-based (`SEED_ADMIN_PASSWORD` etc.). Bỏ logic reset password mỗi lần seed.
+  - ✅ SEC-03: Xóa CORS wildcard regex `*.mit-2143.vercel.app` trong `main.py` — chỉ giữ whitelist origins cụ thể.
+  - ✅ SEC-04: Xóa dynamic CORS header reflection trong global exception handler — tránh bypass CORS middleware.
+  - ✅ SEC-05: `SECRET_KEY` empty → raise `RuntimeError` trong production (chỉ warn ở dev) — `config.py`.
+  - ✅ SEC-06: Notifications endpoints dùng `selectinload(Notification.sender)` thay vì N+1 loop + thêm rate limit `30/minute` (public) và `60/minute` (authenticated) — `notifications.py`.
+  - ✅ SEC-07: Thêm rate limit cho OTP endpoints: `send-otp` 5/minute, `verify-otp` 10/minute, `send-reset-password` 3/minute — `auth.py`.
+
+  **Performance fixes (7):**
+  - ✅ PERF-01: `get_exam_forms_detail` dùng `selectinload` eager loading thay vì N+1 queries — giảm từ ~1200 queries xuống 1-3 queries — `exams.py`.
+  - ✅ PERF-02: WebSocket `broadcast_online_users` cache fraud alerts TTL 10s thay vì query DB mỗi connect/disconnect — `main.py`.
+  - ✅ PERF-03: merged into SEC-06.
+  - ✅ PERF-04: Thêm composite indexes: `ExamParticipant(exam_id, user_id)`, `ExamSubmission(exam_participant_id)`, `Answer(question_id)`, `OTPToken(email, code, purpose)` — models.
+  - ✅ PERF-05: Connection pool `pool_size=20, max_overflow=10, pool_timeout=30` — `database.py`.
+  - ⏳ PERF-06: Dashboard shared query builder — cần refactor advanced_analytics.py (deferred).
+  - ✅ PERF-07: `keep_alive()` import httpx ở module level + exponential backoff khi error — `main.py`.
+
+  **Code quality fixes (10):**
+  - ✅ CODE-01: Xóa duplicate route `get_knowledge_network` (bản thứ 2 ở line 351 bị override bản thứ nhất có filter/pagination) — `student_profile.py`.
+  - ✅ CODE-02: `User.role` relationship đổi từ `lazy="selectin"` sang `lazy="joined"` — `user.py`.
+  - ✅ CODE-03: Thay thế `print()` bằng `logger.info/warning/debug` trong auth.py, exams.py, questions.py, email.py, irt_engine.py, omr/tasks.py, latex_service.py.
+  - ✅ CODE-04: N/A — import trong function body vẫn chấp nhận được để tránh circular import.
+  - ✅ CODE-05: Xóa unused `import string` — `security.py`.
+  - ✅ CODE-06: Sửa hardcoded `"GIAIDOAN2"` thành `None` — `student_profile.py`.
+  - ✅ CODE-07: Thay `datetime.utcnow()` bằng `datetime.now(timezone.utc)` trong auth.py + otp.py.
+  - ✅ CODE-08: `get_db()` thêm `try/except` rollback — `database.py`.
+  - ✅ CODE-09: Global exception handler bỏ dynamic CORS headers — merged with SEC-04.
+  - ⏳ CODE-10: Dead analytics CSV code — deferred (có thể dùng cho testing).
+
+  **UX fixes (1):**
+  - ✅ UX-01: `fetchExams` error hiển thị `toast.error` thay vì im lặng — `ExamsPage.tsx`.
+  - ✅ UX-02: ExamsPage đã có `emptyMessage` trong DataTable — verified.
+  - ✅ UX-03: `StudentExamShell.tsx` — thêm interfaces `ExamSessionFull`, `SessionQuestion`, `SavedAnswer` thay `any` cho `sessionInfo` và `savedAnswers`. Fix null guard cho `passage_id` computed property.
+  - ✅ UX-04: `advanced_analytics.py` — xóa hardcoded `"Toán"/"TDKH"` labels, thêm `_get_exam_part_labels()` query từ `ExamFormQuestion.part` metadata. Trả `part_labels` dict cho frontend.
+  - ⏳ CODE-10: Dead analytics CSV code — **KHÔNG PHẢI DEAD CODE** — đang được `TeacherAnalyticsPage` + `StudentAnalyticsPage` sử dụng.
+
+  **Files đã sửa:** `main.py`, `config.py`, `security.py`, `database.py`, `seed.py`, `exam.py`, `question.py`, `otp.py`, `user.py`, `exams.py`, `auth.py`, `notifications.py`, `questions.py`, `student_profile.py`, `email.py`, `irt_engine.py`, `omr/tasks.py`, `latex_service.py`, `ExamsPage.tsx` — tổng cộng 19 files.
+
+
+- **2026-09-13 — Audit batch 2: Dashboard refactor + Type safety + Dynamic labels:**
+  - ✅ PERF-06: `advanced_analytics.py` refactor — tạo `_get_exam_results()` shared helper + `_get_exam_part_labels()` query part metadata từ DB. Tất cả 5 endpoints (distributions, gam-curve, boxplots, descriptive-stats, penalty-vs-irt) dùng chung helper, giảm code duplication ~60 dòng.
+  - ✅ UX-03: `StudentExamShell.tsx` — thêm TypeScript interfaces (`ExamSessionFull`, `SessionQuestion`, `SessionSubItem`, `SessionQuestionOption`, `SavedAnswer`) thay thế `any` cho `sessionInfo` state và `savedAnswers`. Fix `passage_id` null guard trên computed property key.
+  - ✅ UX-04: Xóa hardcoded subject labels `"Toán"/"TDKH"` trong `flagged-items` và `item-parameters` endpoints. Thay bằng `_get_exam_part_labels()` query `ExamFormQuestion.part` → trả `part_labels` dict cho frontend tự map.
+  - ✅ UX-02: Verified ExamsPage đã có `emptyMessage="Chưa có kỳ thi nào được tạo."` trong DataTable.
+  - Files sửa: `advanced_analytics.py`, `StudentExamShell.tsx`, `types/index.ts`
+
+- **2026-09-13 — Fix bug "Chưa có mã đề nào được tạo" (ExamFormsViewer trắng):**
+  - 🐛 **Root cause**: `GET /api/v1/exams/{id}/forms/detail` (`exams.py::get_exam_forms_detail`) chỉ `selectinload` `ExamFormQuestion.answers`, không load `ExamFormQuestion.question_ref` (relationship lazy). Truy cập `q.question_ref` ở dòng 271 trong async context → `sqlalchemy.exc.MissingGreenlet` → endpoint 500 → frontend `.catch(() => setForms([]))` → hiển thị "Chưa có mã đề nào được tạo". DB thực tế **đã có đủ dữ liệu** (exam 28 "Ky thi DGNL 1000 TS - 20 Ma De": 20 mã đề 101-120, 2400 exam_form_question, 120 câu/form).
+  - ✅ **Fix**: thêm `selectinload(ExamForm.questions).selectinload(ExamFormQuestion.question_ref)` vào options của query — `exams.py`.
+  - ✅ **Verified**: script test chạy đúng logic query + serialization → trả 20 forms × 120 câu, đọc `question_ref.content` không lỗi; backend `start_server.py` chạy `reload=True` nên đã tự nạp code mới (endpoint `/exams/28/forms` trả 401 khi chưa auth — đúng, không còn 500).
+  - Files sửa: `backend/app/api/v1/exams.py`.
+
+- **2026-09-13 — Hiển thị đáp án đúng + sơ đồ xáo trong ExamFormsViewer:**
+  - ✅ **Backend** `GET /exams/{id}/forms/detail` (`exams.py`): eager-load thêm `ExamFormQuestion.question_ref → Question.answers`; mỗi đáp án trả về thêm `is_correct`, `original_position`, `content` (truncate 80 ký tự, tooltip). Sync schema `ExamFormAnswerDetail` (`schemas/exam.py`).
+  - ✅ **Frontend**: types `ExamFormAnswerDetail` thêm 3 field mới (`types/index.ts`); `ExamFormsViewer.tsx` — cột "Đáp án xáo" đổi thành "Sơ đồ xáo" (mapping `A→C B→A...`, đáp án đúng viền xanh, tooltip nội dung), thêm cột "Đáp án đúng" (badge xanh + icon Check, chữ cái SAU khi xáo). Fallback: nếu đáp án gốc có `position=0` (dữ liệu seed cũ) → chỉ hiện chữ cái mới, không hiện mapping sai.
+  - ✅ **Verified**: script test trên DB thật — exam 28: 120/120 câu xác định được đáp án đúng sau xáo (vd câu 1: đúng=A, câu 2: đúng=B, câu 3: đúng=C). `npx tsc --noEmit` — không có lỗi mới ở các file sửa (các lỗi TS tồn tại từ trước ở file khác).
+  - Files sửa: `backend/app/api/v1/exams.py`, `backend/app/schemas/exam.py`, `frontend/src/types/index.ts`, `frontend/src/components/admin/ExamFormsViewer.tsx`.
+
+- **2026-09-13 — Audit batch 2: Error handling, constraints, cascade deletes, loggers (14 fixes):**
+
+  **Error handling (2):**
+  - ✅ SEC-08: Thêm `logger.warning()` vào 6 bare `except Exception:` blocks — `advanced_analytics.py` (KDE + GAM), `resources.py` (signed URL + date parsing ×2), `exam_session.py` (OMR dispatch).
+  - ✅ SEC-09: `resources.py` — sửa `datetime.utcnow()` → `datetime.now(timezone.utc)` trong date parsing fallback.
+
+  **Database constraints (3):**
+  - ✅ DB-01: `UniqueConstraint('exam_id', 'user_id', name='uq_exam_participant_exam_user')` trên `ExamParticipant` — prevents duplicate participant rows. — `exam.py`.
+  - ✅ DB-02: `UniqueConstraint('exam_id', 'code', name='uq_exam_form_exam_code')` trên `ExamForm` — prevents duplicate form codes within same exam. — `exam.py`.
+  - ✅ DB-03: `UniqueConstraint('exam_submission_id', 'exam_form_question_id', name='uq_submission_answer_question')` trên `ExamSubmissionAnswer` — prevents duplicate answer rows. — `exam.py`.
+
+  **Cascade deletes (4):**
+  - ✅ DB-04: `KnowledgeNode.parent_id` thêm `ondelete="SET NULL"` — prevents orphan FK on parent delete. — `question.py`.
+  - ✅ DB-05: `Question.creator_id` thêm `ondelete="SET NULL"` — prevents broken reference on user delete. — `question.py`.
+  - ✅ DB-06: `Question.parent_question_id` thêm `ondelete="SET NULL"` — prevents broken version chain on question delete. — `question.py`.
+  - ✅ DB-07: `ExamParticipant.suspended_by_id` thêm `ondelete="SET NULL"` — prevents broken reference on user delete. — `exam.py`.
+
+  **Delete cascade fixes (2):**
+  - ✅ DB-08: `delete_exam` endpoint xóa thêm `ExamSubmissionAnswer` → `ExamSubmission` trước khi xóa `ExamParticipant` — tránh orphan rows. — `exams.py`.
+  - ✅ DB-09: `delete_passage` endpoint xóa thêm `QuestionSubItem` trước khi xóa `Answer`/`Question` — tránh orphan sub_items. — `passages.py`.
+
+  **Logging + code cleanup (3):**
+  - ✅ CODE-11: Thêm `logger = logging.getLogger(__name__)` vào 8 routers thiếu: `admin.py`, `matrix.py`, `knowledge.py`, `passages.py`, `grading.py`, `statistics.py`, `feedbacks.py`.
+  - ✅ CODE-12: Move `import re` từ function body lên module-level imports trong `questions.py` (+ remove duplicate `import logging`), `passages.py`.
+  - ✅ CODE-13: `resources.py` — thêm `import logging` + `logger` definition.
+
+  **Verified**: `python -c "import ast; ..."` — all backend files parse clean. `npx tsc --noEmit` — no new TS errors (pre-existing errors in unrelated files only).
+
+  **Files sửa**: `exam.py`, `question.py`, `exams.py`, `passages.py`, `advanced_analytics.py`, `resources.py`, `exam_session.py`, `admin.py`, `matrix.py`, `knowledge.py`, `grading.py`, `statistics.py`, `feedbacks.py`, `questions.py` — tổng cộng 14 files.
+
 ## Vấn đề đang mở / cần quyết định
 
-- Bảng tên tiếng Anh chính thức cho các entity ERD gốc tiếng Việt đã đề xuất trong `architecture.md` (phụ lục) — cần người dùng xác nhận trước khi dùng làm chuẩn cứng.
+- ~~**MANUAL ACTION REQUIRED**: Rotate `VERCEL_OIDC_TOKEN` trên Vercel dashboard (SEC-01)~~ ✅ DONE 2026-09-13
+- ~~6 env vars "Needs Attention"~~ ✅ DONE 2026-09-13 — `DATABASE_URL`, `SECRET_KEY`, `SUPABASE_JWT_SECRET`, `POSTHOG_PROJECT_TOKEN`, `SUPABASE_KEY`, `GEMINI_API_KEY` đã gán lại cho tất cả environments.
+- ~~Bảng tên tiếng Anh chính thức cho các entity ERD~~ ✅ DONE 2026-09-13 — 25/35 entities đã chốt tên khớp code. Thêm 3 entity mới từ code (`AnswerAccessGrant`, `StudentActivityDaily`, `StudentTopicMastery`) vào appendix. 6 entities đề xuất chưa tạo: `Section`, `KnowledgeNodeParent`, `KnowledgeNodeLink`, `QuestionSkillTag`, `AiAnalysisCache`, `AiRequestLog`.

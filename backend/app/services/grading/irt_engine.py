@@ -6,6 +6,9 @@ from scipy.stats import norm, chi2
 from scipy.integrate import quad
 from scipy.special import hermite
 import numpy.polynomial.hermite as herm
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Hàm tính độ phân biệt bằng point-biserial correlation
 def cal_disc(r):
@@ -82,13 +85,31 @@ def log_likelihood(U, a_list, b_list, theta_grid, gh_weights, eps=1e-12):
 
 # def mmle(U, a_init, b_init, name="MMLE", max_iter=60, K=81, tol=1e-4,
 #          reg=1e-2, step_size=0.3, verbose=True):
-def mmle(U, name, max_iter=60, K=81, tol=1e-4, reg=1e-2, step_size=0.3, verbose=True):
+def mmle(U, name, max_iter=60, K=81, tol=1e-4, reg=1e-2, step_size=0.3, verbose=True,
+         anchor_mask=None, anchor_a=None, anchor_b=None):
+    """
+    MMLE with optional anchor items.
+
+    Args:
+        anchor_mask: boolean array of shape (J,) — True for anchor items
+        anchor_a: pre-calibrated a values for anchor items (same length as anchor_mask)
+        anchor_b: pre-calibrated b values for anchor items (same length as anchor_mask)
+    """
     N, J = U.shape
     # a = np.array(a_init, dtype=float).copy().clip(1e-3, 3.0)
     # b = np.array(b_init, dtype=float).copy().clip(-6.0, 6.0)
     # b = b - np.mean(b)  # chuẩn hoá b về trung bình 0
     a = np.ones(J, dtype=float)
     b = np.zeros(J, dtype=float)
+
+    # If anchor items provided, fix their parameters
+    is_anchor = np.zeros(J, dtype=bool)
+    if anchor_mask is not None:
+        is_anchor = np.asarray(anchor_mask, dtype=bool)
+        if anchor_a is not None:
+            a[is_anchor] = np.asarray(anchor_a)[is_anchor]
+        if anchor_b is not None:
+            b[is_anchor] = np.asarray(anchor_b)[is_anchor]
 
     # Gauss-Hermite nodes
     theta_grid, gh_weights = np.polynomial.hermite.hermgauss(K)
@@ -100,7 +121,7 @@ def mmle(U, name, max_iter=60, K=81, tol=1e-4, reg=1e-2, step_size=0.3, verbose=
     mask = (U != -1)
 
     if verbose:
-        print(f"Start {name}: N={N}, J={J}, K={K}")
+        logger.info(f"Start {name}: N={N}, J={J}, K={K}")
 
     for it in range(1, max_iter + 1):
         # --- E-step ---
@@ -118,13 +139,16 @@ def mmle(U, name, max_iter=60, K=81, tol=1e-4, reg=1e-2, step_size=0.3, verbose=
         W = np.exp(L - denom[:, None])
 
         if verbose:
-            print(f"Iter {it}: LL = {np.sum(denom):.2f}")
+            logger.debug(f"Iter {it}: LL = {np.sum(denom):.2f}")
 
         a_old, b_old = a.copy(), b.copy()
 
         # --- M-step ---
         theta_k = theta_grid.reshape(K, 1)
         for j in range(J):
+            # Skip anchor items — keep their pre-calibrated parameters
+            if is_anchor[j]:
+                continue
             col = U[:, j]
             valid_idx = np.where(col != -1)[0]
             if valid_idx.size == 0:

@@ -129,3 +129,56 @@ export const getExamParticipants = async (
   );
   return response.data;
 };
+
+// ── Thống kê dung lượng Supabase (DB + Storage) ──
+
+export interface DbTableSize {
+  name: string;
+  total_size: number; // bytes
+  row_estimate: number;
+}
+
+export interface StorageBucketUsage {
+  name: string;
+  public: boolean;
+  file_count: number;
+  total_size: number; // bytes
+  created_at: string;
+}
+
+export interface StorageTopObject {
+  bucket: string;
+  name: string;
+  size: number; // bytes
+  created_at: string;
+}
+
+export interface StorageStats {
+  database: {
+    total_bytes: number;
+    quota_bytes: number;
+    usage_pct: number;
+    tables: DbTableSize[];
+  };
+  storage: {
+    total_bytes: number;
+    total_files: number;
+    quota_bytes: number;
+    usage_pct: number;
+    buckets: StorageBucketUsage[];
+    top_objects: StorageTopObject[];
+  };
+  auth_users: number | null;
+}
+
+export const getStorageStats = async (): Promise<StorageStats> => {
+  const response = await client.get<StorageStats>("/api/v1/admin/storage-stats");
+  return response.data;
+};
+
+export const deleteStorageObject = async (bucket: string, path: string): Promise<{ message: string }> => {
+  const response = await client.delete<{ message: string }>(
+    `/api/v1/admin/storage/${bucket}/${path}`
+  );
+  return response.data;
+};

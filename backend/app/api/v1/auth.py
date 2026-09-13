@@ -5,8 +5,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 import secrets
 import string
+import logging
 
 from app.core import security
 from app.core.config import settings
@@ -48,6 +51,8 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 
 def _generate_otp_code(length: int = 6) -> str:
@@ -101,7 +106,8 @@ async def update_current_user(
 # --- OTP Endpoints (Resend) ---
 
 @router.post("/send-otp")
-async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def send_otp(request: Request, req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
     """Send OTP code to email for guest login."""
     # Check cooldown (60 seconds)
     latest_otp_result = await db.execute(
@@ -111,11 +117,11 @@ async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
         .limit(1)
     )
     latest_otp = latest_otp_result.scalars().first()
-    if latest_otp and (datetime.utcnow() - latest_otp.created_at.replace(tzinfo=None)).total_seconds() < 60:
+    if latest_otp and (datetime.now(timezone.utc) - latest_otp.created_at).total_seconds() < 60:
         raise HTTPException(status_code=429, detail="Vui lòng đợi 1 phút trước khi yêu cầu mã mới")
 
     code = _generate_otp_code()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     otp = OTPToken(
         email=req.email,
@@ -134,7 +140,7 @@ async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
             send_otp_email_task.delay(req.email, code)
         except Exception as e:
             # Fallback if Redis is down on production
-            print(f"Celery dispatch failed: {e}. Falling back to sync email.")
+            logger.warning(f"Celery dispatch failed: {e}. Falling back to sync email.")
             send_otp_email(req.email, code)
     else:
         send_otp_email(req.email, code)
@@ -143,7 +149,8 @@ async def send_otp(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/verify-otp")
-async def verify_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def verify_otp(request: Request, req: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
     """Verify OTP code and return JWT token. Creates user if not exists (guest)."""
     result = await db.execute(
         select(OTPToken)
@@ -161,7 +168,7 @@ async def verify_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
     if not otp:
         raise HTTPException(status_code=400, detail="Mã OTP không đúng")
 
-    if otp.expires_at.replace(tzinfo=None) < datetime.utcnow():
+    if otp.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Mã OTP đã hết hạn")
 
     otp.is_used = True
@@ -199,7 +206,8 @@ async def verify_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/send-reset-password")
-async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/minute")
+async def send_reset_password(request: Request, req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
     """Send password reset code to email."""
     # Check user exists
     result = await db.execute(select(User).where(User.email == req.email))
@@ -215,11 +223,11 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
         .limit(1)
     )
     latest_otp = latest_otp_result.scalars().first()
-    if latest_otp and (datetime.utcnow() - latest_otp.created_at.replace(tzinfo=None)).total_seconds() < 60:
+    if latest_otp and (datetime.now(timezone.utc) - latest_otp.created_at).total_seconds() < 60:
         raise HTTPException(status_code=429, detail="Vui lòng đợi 1 phút trước khi yêu cầu mã mới")
 
     code = _generate_otp_code()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     otp = OTPToken(
         email=req.email,
@@ -237,7 +245,7 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
         try:
             send_password_reset_email_task.delay(req.email, code)
         except Exception as e:
-            print(f"Celery dispatch failed: {e}. Falling back to sync email.")
+            logger.warning(f"Celery dispatch failed: {e}. Falling back to sync email.")
             send_password_reset_email(req.email, code)
     else:
         send_password_reset_email(req.email, code)
@@ -246,7 +254,8 @@ async def send_reset_password(req: SendOTPRequest, db: AsyncSession = Depends(ge
 
 
 @router.post("/reset-password")
-async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def reset_password(request: Request, req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Reset password using OTP code."""
     result = await db.execute(
         select(OTPToken)
@@ -264,7 +273,7 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
     if not otp:
         raise HTTPException(status_code=400, detail="Mã xác thực không đúng")
 
-    if otp.expires_at.replace(tzinfo=None) < datetime.utcnow():
+    if otp.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Mã xác thực đã hết hạn")
 
     otp.is_used = True

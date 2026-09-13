@@ -1,6 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import RequireRole, get_current_active_user
 from app.core.analytics import capture
 from app.core.supabase_client import supabase_client
+
+logger = logging.getLogger(__name__)
 from app.db.database import get_db
 from app.models.question import ResourceType
 from app.models.user import User
@@ -94,14 +97,16 @@ async def list_resources(
                     signed_url = signed_url_res["signedURL"]
                 elif hasattr(signed_url_res, "get"):
                     signed_url = signed_url_res.get("signedURL")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to create signed URL for {path}: {e}")
                 signed_url = path
                 
             created_str = f.get("created_at")
             try:
-                created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")) if created_str else datetime.utcnow()
-            except Exception:
-                created_dt = datetime.utcnow()
+                created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")) if created_str else datetime.now(timezone.utc)
+            except Exception as e:
+                logger.debug(f"Failed to parse created_at '{created_str}': {e}")
+                created_dt = datetime.now(timezone.utc)
 
             response_list.append(ResourceResponse(
                 id=f"{bucket_name}/{path}",

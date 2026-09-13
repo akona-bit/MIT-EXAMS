@@ -91,7 +91,7 @@ export default function StudentAnalyticsPage() {
     });
 
     return (
-      <div className="grid grid-cols-10 sm:grid-cols-15 gap-2 sm:gap-3 mt-6">
+      <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-2 sm:gap-3 mt-6">
         {questions.map((q) => {
           let bg =
             "bg-slate-100 dark:bg-slate-800 text-slate-500 shadow-inner border border-slate-200 dark:border-slate-700";

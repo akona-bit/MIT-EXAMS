@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Enum, Float, JSON
+from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Enum, Float, JSON, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -57,7 +57,7 @@ class KnowledgeNode(Base):
     short_code: Mapped[Optional[str]] = mapped_column(String(50), index=True, nullable=True)
     path_code: Mapped[Optional[str]] = mapped_column(String(255), index=True, nullable=True)
 
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_node.id"), nullable=True, index=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_node.id", ondelete="SET NULL"), nullable=True, index=True)
     parent: Mapped[Optional["KnowledgeNode"]] = relationship("KnowledgeNode", remote_side=[id], back_populates="children")
     children: Mapped[List["KnowledgeNode"]] = relationship("KnowledgeNode", back_populates="parent", cascade="all, delete-orphan")
 
@@ -89,14 +89,14 @@ class Question(Base):
     reject_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     resource_id: Mapped[Optional[int]] = mapped_column(ForeignKey("resource.id"), nullable=True)
-    creator_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    creator_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
     passage_id: Mapped[Optional[int]] = mapped_column(ForeignKey("passage.id"), nullable=True)
     
     source_author: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     source_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Versioning
-    parent_question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("question.id"), nullable=True)
+    parent_question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("question.id", ondelete="SET NULL"), nullable=True)
 
     knowledge_node_id: Mapped[int] = mapped_column(ForeignKey("knowledge_node.id"), index=True, default=0)
 
@@ -108,6 +108,8 @@ class Question(Base):
     b_param: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0") # Difficulty
     c_param: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0") # Guessing
     is_calibrated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Anchor items: câu neo — tham số IRT được giữ cố định khi chạy MMLE trên kỳ thi mới
+    is_anchor: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # Cấu hình chấm riêng cho từng dạng câu
     # Ví dụ: TRUE_FALSE có thể cấu hình "0.1/0.25/0.5/1" tùy số ý đúng
@@ -147,6 +149,9 @@ class QuestionSubItem(Base):
 
 
 class Answer(Base):
+    __table_args__ = (
+        Index('ix_answer_question_id', 'question_id'),
+    )
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     question_id: Mapped[int] = mapped_column(ForeignKey("question.id"))
     content: Mapped[str] = mapped_column(Text)

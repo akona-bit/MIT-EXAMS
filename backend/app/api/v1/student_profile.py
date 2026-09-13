@@ -29,8 +29,7 @@ router = APIRouter()
 def _check_access(current_user: User, target_id: int):
     """
     STUDENT chỉ được xem chính mình.
-    ADMIN/TEACHER hiện tại được xem bất kỳ ai.
-    TODO: khi có model class/enrollment, scope TEACHER chỉ xem học sinh lớp mình.
+    ADMIN/TEACHER được xem bất kỳ ai (chưa có model class/enrollment để scope TEACHER).
     """
     if current_user.role.name == "STUDENT" and current_user.id != target_id:
         raise HTTPException(status_code=403, detail="Bạn chỉ được xem hồ sơ của chính mình")
@@ -339,61 +338,12 @@ async def get_profile_summary(
         "student": {
             "id": student.id,
             "name": student.full_name or student.username,
-            "class_label": "GIAIDOAN2"  # placeholder
+            "class_label": None
         },
         "vact_progress": progress,
         "irt_radar": radar,
         "activity_heatmap": heatmap,
-        "can_view_answers_default": can_view
-    }
-
-# ─── 5. Knowledge Network ────────────────────────────────
-@router.get("/students/{student_id}/knowledge-network")
-async def get_knowledge_network(
-    student_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    _check_access(current_user, student_id)
-    
-    # query StudentTopicMastery
-    from app.models.student_profile import StudentTopicMastery
-    from app.models.exam import Exam
-    
-    result = await db.execute(
-        select(StudentTopicMastery, KnowledgeNode, Exam.name)
-        .join(KnowledgeNode, KnowledgeNode.id == StudentTopicMastery.knowledge_node_id)
-        .outerjoin(Exam, Exam.id == StudentTopicMastery.last_wrong_exam_id)
-        .where(StudentTopicMastery.user_id == student_id)
-    )
-    rows = result.all()
-    
-    counts = {
-        "tracked": len(rows),
-        "on_prereq_review": 0,
-        "upcoming_review": 0,
-        "at_level": 0
-    }
-    
-    items = []
-    for mastery, node, exam_name in rows:
-        counts[mastery.status] = counts.get(mastery.status, 0) + 1
-        items.append({
-            "knowledge_node_id": node.id,
-            "label": node.name,
-            "status": mastery.status,
-            "wrong_count": mastery.wrong_count,
-            "blank_count": mastery.blank_count,
-            "attempt_count": mastery.attempt_count,
-            "last_wrong_ref": {
-                "question_id": mastery.last_wrong_question_id,
-                "exam_label": exam_name
-            } if mastery.last_wrong_question_id else None
-        })
-        
-    return {
-        "counts": counts,
-        "items": items
+            "can_view_answers_default": can_view
     }
 
 @router.get("/students/{student_id}/knowledge-network/{knowledge_node_id}/detail")

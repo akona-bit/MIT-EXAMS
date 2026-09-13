@@ -156,3 +156,11 @@ Giáo viên upload ảnh/PDF phiếu quét hàng loạt → Celery worker chạy
 | — | `SystemSetting` | Cấu hình hệ thống key-value (PK là `key`). Cols: `key`, `value`, `description` |
 | — | `ObsidianSyncRun` | Log 1 lần đồng bộ vault Obsidian. Cols: `api_url`, `status`, `success_count`, `skipped_count`, `error_count` |
 | — | `ObsidianFile` | Trạng thái đồng bộ từng file Obsidian (1:1 với file trên vault). Cols: `file_path` (unique), `checksum`, `status`, `question_id` |
+| — | `AnswerAccessGrant` | Phân quyền truy cập đáp án theo vai trò. Cols: `answer_id`, `role_id` |
+| — | `StudentActivityDaily` | Thống kê hoạt động học sinh theo ngày. Cols: `user_id`, `date`, `questions_attempted`, `questions_correct`, `study_time_minutes` |
+| — | `StudentTopicMastery` | Mức độ thành thạo theo chủ đề. Cols: `user_id`, `knowledge_node_id`, `mastery_score`, `last_practiced` |
+
+> **Trạng thái triển khai:**
+> - 25/35 thực thể đã có trong codebase (đã chốt tên).
+> - 3 thực thể mới thêm từ code: `AnswerAccessGrant`, `StudentActivityDaily`, `StudentTopicMastery`.
+> - 6 thực thể đề xuất nhưng chưa tạo: `Section` (reserve), `KnowledgeNodeParent`, `KnowledgeNodeLink`, `QuestionSkillTag`, `AiAnalysisCache`, `AiRequestLog`.

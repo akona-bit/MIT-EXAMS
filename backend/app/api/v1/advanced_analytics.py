@@ -7,6 +7,7 @@ import scipy.stats as stats
 from pygam import GAM, s
 import numpy as np
 from typing import Dict, Any
+import logging
 
 from app.db.database import get_db
 from app.models.grading import ItemAnalysisResult, ExamResult, IrtTask
@@ -14,6 +15,34 @@ from app.models.exam import ExamParticipant, ExamSubmission, ExamFormQuestion, E
 from app.api.dependencies import RequireRole
 
 router = APIRouter(dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+logger = logging.getLogger(__name__)
+
+
+async def _get_exam_results(exam_id: int, db: AsyncSession) -> list:
+    """Shared query: fetch all ExamResult rows for an exam via Submission→Participant JOIN."""
+    result = await db.execute(
+        select(ExamResult)
+        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
+        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
+        .where(ExamParticipant.exam_id == exam_id)
+    )
+    return result.scalars().all()
+
+
+async def _get_exam_part_labels(exam_id: int, db: AsyncSession) -> dict:
+    """Detect part labels from ExamFormQuestion.part values for this exam."""
+    result = await db.execute(
+        select(ExamFormQuestion.part, func.count(ExamFormQuestion.id))
+        .join(ExamForm, ExamForm.id == ExamFormQuestion.exam_form_id)
+        .where(ExamForm.exam_id == exam_id)
+        .group_by(ExamFormQuestion.part)
+    )
+    rows = result.all()
+    part_map = {1: "Phần 1.1 (TV)", 2: "Phần 1.2 (TA)", 3: "Phần 2 (Toán)", 4: "Phần 3 (TDKH)"}
+    labels = {}
+    for part, _ in rows:
+        labels[part] = part_map.get(part, f"Phần {part}")
+    return labels
 
 @router.get("/status")
 async def get_analysis_status(exam_id: int, db: AsyncSession = Depends(get_db)):
@@ -29,10 +58,11 @@ async def get_analysis_status(exam_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/flagged-items")
 async def get_flagged_items(exam_id: int, db: AsyncSession = Depends(get_db)):
-    # Check status
     status = await get_analysis_status(exam_id, db)
     if status["status"] != "done":
         return status
+    
+    part_labels = await _get_exam_part_labels(exam_id, db)
         
     result = await db.execute(
         select(ItemAnalysisResult).where(ItemAnalysisResult.exam_id == exam_id)
@@ -41,7 +71,7 @@ async def get_flagged_items(exam_id: int, db: AsyncSession = Depends(get_db)):
     
     flagged = []
     
-    for idx, item in enumerate(items):
+    for item in items:
         reasons = []
         if item.chi_square_p is not None and item.chi_square_p < 0.05:
             reasons.append("Chỉ số Chi-square p-value < 0.05 (Misfit)")
@@ -52,8 +82,8 @@ async def get_flagged_items(exam_id: int, db: AsyncSession = Depends(get_db)):
             
         if reasons:
             flagged.append({
-                "question": getattr(item, "position", item.question_id),
-                "subject": "Toán" if idx % 2 == 0 else "TDKH",
+                "question": item.question_id,
+                "question_id": item.question_id,
                 "a": round(item.irt_a, 2) if item.irt_a else 0,
                 "b": round(item.irt_b, 2) if item.irt_b else 0,
                 "reasons": reasons
@@ -61,7 +91,8 @@ async def get_flagged_items(exam_id: int, db: AsyncSession = Depends(get_db)):
             
     return {
         "status": "done",
-        "items": flagged
+        "items": flagged,
+        "part_labels": part_labels
     }
 
 @router.get("/item-parameters")
@@ -74,6 +105,8 @@ async def get_item_parameters(
     status = await get_analysis_status(exam_id, db)
     if status["status"] != "done":
         return status
+    
+    part_labels = await _get_exam_part_labels(exam_id, db)
         
     offset = (page - 1) * limit
     
@@ -89,10 +122,10 @@ async def get_item_parameters(
     items = result.scalars().all()
     
     formatted_items = []
-    for idx, item in enumerate(items):
+    for item in items:
         formatted_items.append({
-            "question": getattr(item, "position", item.question_id),
-            "subject": "Toán" if idx % 2 == 0 else "TDKH",
+            "question": item.question_id,
+            "question_id": item.question_id,
             "a": round(item.irt_a, 2) if item.irt_a else 0.0,
             "b": round(item.irt_b, 2) if item.irt_b else 0.0
         })
@@ -100,6 +133,7 @@ async def get_item_parameters(
     return {
         "status": "done",
         "items": formatted_items,
+        "part_labels": part_labels,
         "total": total,
         "page": page,
         "pages": (total + limit - 1) // limit
@@ -107,25 +141,16 @@ async def get_item_parameters(
 
 @router.get("/distributions")
 async def get_distributions(exam_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ExamResult)
-        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
-        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
-        .where(ExamParticipant.exam_id == exam_id)
-    )
-    records = result.scalars().all()
+    records = await _get_exam_results(exam_id, db)
     if not records:
         return {"status": "no_data"}
         
-    # Example fields, depending on exactly what we want to plot.
-    # Assuming part1 = Math, part2 = Sci for the plot
     math_raw = [r.ctt_score_part1 for r in records if r.ctt_score_part1 is not None]
     sci_raw = [r.ctt_score_part2 for r in records if r.ctt_score_part2 is not None]
     
     math_irt = [r.irt_score_part1 for r in records if r.irt_score_part1 is not None]
     sci_irt = [r.irt_score_part2 for r in records if r.irt_score_part2 is not None]
     
-    # Generate KDE for total scores
     def calculate_kde(data, min_val, max_val, bandwidth=15):
         if not data or len(data) < 2: return [], []
         try:
@@ -133,7 +158,8 @@ async def get_distributions(exam_id: int, db: AsyncSession = Depends(get_db)):
             x = np.linspace(min_val, max_val, 100)
             y = kde(x) * len(data) * (max_val - min_val) / 30
             return x.tolist(), y.tolist()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Statistical calculation failed: {e}")
             return [], []
 
     math_irt_kde_x, math_irt_kde_y = calculate_kde(math_irt, 0, 300)
@@ -153,13 +179,7 @@ async def get_distributions(exam_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/gam-curve")
 async def get_gam_curve(exam_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ExamResult)
-        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
-        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
-        .where(ExamParticipant.exam_id == exam_id)
-    )
-    records = result.scalars().all()
+    records = await _get_exam_results(exam_id, db)
     if not records:
         return {"status": "no_data"}
         
@@ -178,7 +198,8 @@ async def get_gam_curve(exam_id: int, db: AsyncSession = Depends(get_db)):
             x_grid = np.linspace(-3, 3, 100).reshape(-1, 1)
             y_pred = gam.predict(x_grid)
             return x_grid.flatten().tolist(), y_pred.flatten().tolist()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Statistical calculation failed: {e}")
             return [], []
 
     math_gam_x, math_gam_y = fit_gam(math_theta, math_raw)
@@ -198,13 +219,7 @@ async def get_gam_curve(exam_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/boxplots")
 async def get_boxplots(exam_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ExamResult)
-        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
-        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
-        .where(ExamParticipant.exam_id == exam_id)
-    )
-    records = result.scalars().all()
+    records = await _get_exam_results(exam_id, db)
     if not records:
         return {"status": "no_data"}
         
@@ -219,13 +234,7 @@ async def get_boxplots(exam_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/descriptive-stats")
 async def get_descriptive_stats(exam_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ExamResult)
-        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
-        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
-        .where(ExamParticipant.exam_id == exam_id)
-    )
-    records = result.scalars().all()
+    records = await _get_exam_results(exam_id, db)
     if not records:
         return {"status": "no_data"}
         
@@ -255,13 +264,7 @@ async def get_descriptive_stats(exam_id: int, db: AsyncSession = Depends(get_db)
 
 @router.get("/penalty-vs-irt")
 async def get_penalty_vs_irt(exam_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ExamResult)
-        .join(ExamSubmission, ExamSubmission.id == ExamResult.exam_submission_id)
-        .join(ExamParticipant, ExamParticipant.id == ExamSubmission.exam_participant_id)
-        .where(ExamParticipant.exam_id == exam_id)
-    )
-    records = result.scalars().all()
+    records = await _get_exam_results(exam_id, db)
     if not records:
         return {"status": "no_data"}
         
@@ -297,17 +300,24 @@ async def get_leaderboard(exam_id: int, db: AsyncSession = Depends(get_db)):
     if not records:
         return {"status": "no_data"}
         
-    students = []
+    students_dict = {}
     for r, u in records:
         math_irt = r.irt_score_part1 or 0
         sci_irt = r.irt_score_part2 or 0
         total_irt = r.total_score or (math_irt + sci_irt)
-        students.append({
-            "name": u.full_name or u.username,
-            "math_irt": round(math_irt, 2),
-            "sci_irt": round(sci_irt, 2),
-            "total_irt": round(total_irt, 2)
-        })
+        total_irt = round(total_irt, 2)
+        raw_score = r.raw_total_score
+        
+        if u.id not in students_dict or students_dict[u.id]["raw_score"] < raw_score:
+            students_dict[u.id] = {
+                "name": u.full_name or u.username,
+                "math_irt": round(math_irt, 2),
+                "sci_irt": round(sci_irt, 2),
+                "total_irt": total_irt,
+                "raw_score": raw_score
+            }
+            
+    students = list(students_dict.values())
         
     students.sort(key=lambda x: x["total_irt"], reverse=True)
     top_students = students[:10]

@@ -39,7 +39,7 @@ class GeminiOMRReviewer:
     Chỉ nhận crop ảnh của câu hỏi cần review, KHÔNG gửi cả trang.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-3.6-flash"):
         if not HAS_GEMINI:
             raise RuntimeError("google-generativeai chưa cài. pip install google-generativeai")
 
@@ -76,21 +76,25 @@ class GeminiOMRReviewer:
         from app.services.omr.layout_config import SheetLayout
         layout = layout_config or SheetLayout()
 
-        for q_no in question_numbers:
-            try:
-                crop = self._crop_question(warped_image, q_no, layout)
-                fill_ratios = opencv_fill_ratios.get(q_no, {})
-                result = self._review_single(crop, q_no, fill_ratios)
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Gemini review failed for Q{q_no}: {e}")
-                results.append(GeminiReviewResult(
-                    question_no=q_no,
-                    trang_thai="khong_ro",
-                    dap_an=None,
-                    confidence=0.0,
-                    source="gemini",
-                ))
+        batch_size = 20
+        for i in range(0, len(question_numbers), batch_size):
+            batch_q_nos = question_numbers[i:i + batch_size]
+            batch_items = []
+            
+            for q_no in batch_q_nos:
+                try:
+                    crop = self._crop_question(warped_image, q_no, layout)
+                    fill_ratios = opencv_fill_ratios.get(q_no, {})
+                    batch_items.append((q_no, crop, fill_ratios))
+                except Exception as e:
+                    logger.error(f"Crop failed for Q{q_no}: {e}")
+                    results.append(GeminiReviewResult(
+                        question_no=q_no, trang_thai="khong_ro", dap_an=None, confidence=0.0, source="gemini"
+                    ))
+            
+            if batch_items:
+                batch_results = self._review_batch(batch_items)
+                results.extend(batch_results)
 
         return results
 
@@ -122,100 +126,110 @@ class GeminiOMRReviewer:
         crop = warped_image[y1:y2, x1:x2]
         return crop
 
-    def _review_single(
+    def _review_batch(
         self,
-        crop_image: np.ndarray,
-        question_no: int,
-        fill_ratios: Dict[str, float],
-    ) -> GeminiReviewResult:
+        batch_items: List[Tuple[int, np.ndarray, Dict[str, float]]]
+    ) -> List[GeminiReviewResult]:
         """
-        Gửi 1 crop ảnh câu hỏi cho Gemini và nhận kết quả review.
+        Gửi 1 mẻ (batch) ảnh câu hỏi cho Gemini và nhận kết quả review.
         """
-        # Encode crop thành JPEG bytes
-        _, buffer = cv2.imencode('.jpg', crop_image, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        image_bytes = buffer.tobytes()
+        contents = []
+        prompt_intro = "Bạn là hệ thống chấm thi OMR. Dưới đây là danh sách các ảnh crop của các câu hỏi trắc nghiệm.\n"
+        contents.append(prompt_intro)
+        
+        for q_no, crop_image, fill_ratios in batch_items:
+            _, buffer = cv2.imencode('.jpg', crop_image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            image_bytes = buffer.tobytes()
+            ratios_text = ", ".join(f"{k}: {v:.3f}" for k, v in sorted(fill_ratios.items()))
+            
+            text = f"Câu hỏi {q_no}. Fill ratios từ OpenCV: {ratios_text}\n"
+            contents.append(text)
+            contents.append(types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"))
 
-        # Thêm context fill ratios từ OpenCV vào prompt
-        ratios_text = ", ".join(f"{k}: {v:.3f}" for k, v in sorted(fill_ratios.items()))
-
-        prompt = f"""Bạn là hệ thống chấm thi OMR. Hãy phân tích ảnh crop câu hỏi số {question_no}.
-
-Các ô A/B/C/D trong ảnh, với fill ratios từ OpenCV: {ratios_text}
-
-Quyết định:
+        prompt_outro = """
+Quyết định cho TỪNG câu hỏi:
 1. Nếu RÕ RÀNG chỉ có 1 ô được tô đen → trang_thai="hop_le", dap_an="A"/"B"/"C"/"D"
 2. Nếu NHIỀU ô được tô đen hoặc không rõ cái nào được chọn → trang_thai="nhieu_dap_an", dap_an=null
 3. Nếu ẢNH MỜ/KHÔNG ĐỌC ĐƯỢC → trang_thai="khong_ro", dap_an=null
 
 QUAN TRỌNG: Nếu fill-ratio gap giữa 2 đáp án hàng đầu KHÔNG rõ ràng → BẮT BUỘC trang_thai="nhieu_dap_an", dap_an=null.
 
-Trả về JSON:
-{{
-  "trang_thai": "hop_le" hoặc "nhieu_dap_an" hoặc "khong_ro",
-  "dap_an": "A"/"B"/"C"/"D" hoặc null
-}}"""
-
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=[
-                prompt,
-                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-            ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
+Trả về mảng JSON chứa các object:
+[
+  {
+    "question_no": số thứ tự câu hỏi (integer),
+    "trang_thai": "hop_le" hoặc "nhieu_dap_an" hoặc "khong_ro",
+    "dap_an": "A"/"B"/"C"/"D" hoặc null
+  }
+]"""
+        contents.append(prompt_outro)
 
         try:
-            result_json = json.loads(response.text)
-        except json.JSONDecodeError:
-            logger.error(f"Gemini trả về không phải JSON: {response.text}")
-            return GeminiReviewResult(
-                question_no=question_no,
-                trang_thai="khong_ro",
-                dap_an=None,
-                confidence=0.0,
-                source="gemini",
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
             )
+            
+            result_json = json.loads(response.text)
+            if not isinstance(result_json, list):
+                result_json = []
+                
+        except Exception as e:
+            logger.error(f"Gemini batch review failed: {e}")
+            return [
+                GeminiReviewResult(
+                    question_no=q, trang_thai="khong_ro", dap_an=None, confidence=0.0, source="gemini"
+                ) for q, _, _ in batch_items
+            ]
 
-        trang_thai = result_json.get("trang_thai", "khong_ro")
-        dap_an = result_json.get("dap_an")
+        # Map results
+        parsed_results = {}
+        for item in result_json:
+            if isinstance(item, dict) and item.get("question_no"):
+                parsed_results[item["question_no"]] = item
+                
+        final_results = []
+        for q_no, _, fill_ratios in batch_items:
+            item = parsed_results.get(q_no, {})
+            trang_thai = item.get("trang_thai", "khong_ro")
+            dap_an = item.get("dap_an")
+            
+            if trang_thai not in ("hop_le", "nhieu_dap_an", "khong_ro"):
+                trang_thai = "khong_ro"
 
-        # Validate trang_thai
-        if trang_thai not in ("hop_le", "nhieu_dap_an", "khong_ro"):
-            trang_thai = "khong_ro"
-
-        # Validate dap_an: chỉ chấp nhận khi trang_thai=hop_le
-        if trang_thai != "hop_le":
-            dap_an = None
-        elif dap_an and dap_an.upper() not in ("A", "B", "C", "D"):
-            dap_an = None
-        else:
-            dap_an = dap_an.upper() if dap_an else None
-
-        # Tính confidence
-        confidence = 0.0
-        if trang_thai == "hop_le" and dap_an:
-            # Dựa vào gap fill ratio
-            ratios = list(fill_ratios.values())
-            if len(ratios) >= 2:
-                sorted_ratios = sorted(ratios, reverse=True)
-                gap = sorted_ratios[0] - sorted_ratios[1]
-                confidence = min(0.95, 0.6 + gap * 0.6)
+            if trang_thai != "hop_le":
+                dap_an = None
+            elif dap_an and dap_an.upper() not in ("A", "B", "C", "D"):
+                dap_an = None
             else:
-                confidence = 0.7
-        elif trang_thai == "nhieu_dap_an":
-            confidence = 0.8  # Khá chắc chắn là multi-mark
-        else:
-            confidence = 0.3
+                dap_an = dap_an.upper() if dap_an else None
 
-        return GeminiReviewResult(
-            question_no=question_no,
-            trang_thai=trang_thai,
-            dap_an=dap_an,
-            confidence=confidence,
-            source="gemini",
-        )
+            confidence = 0.0
+            if trang_thai == "hop_le" and dap_an:
+                ratios = list(fill_ratios.values())
+                if len(ratios) >= 2:
+                    sorted_ratios = sorted(ratios, reverse=True)
+                    gap = sorted_ratios[0] - sorted_ratios[1]
+                    confidence = min(0.95, 0.6 + gap * 0.6)
+                else:
+                    confidence = 0.7
+            elif trang_thai == "nhieu_dap_an":
+                confidence = 0.8
+            else:
+                confidence = 0.3
+
+            final_results.append(GeminiReviewResult(
+                question_no=q_no,
+                trang_thai=trang_thai,
+                dap_an=dap_an,
+                confidence=confidence,
+                source="gemini",
+            ))
+            
+        return final_results
 
     def review_sbd_ma_de(
         self,

@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, delete
 from typing import List
 import uuid
+import re
+import logging
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_user
@@ -13,6 +15,7 @@ from app.models.question import Question, Answer
 from app.schemas.passage import PassageCreate, PassageUpdate, PassageResponse, PassageSearchResponse, QuestionBulkCreateRequest, QuestionBulkUpdateRequest
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/search", response_model=dict)
 async def search_passages(q: str = "", limit: int = 10, db: AsyncSession = Depends(get_db)):
@@ -33,7 +36,6 @@ async def search_passages(q: str = "", limit: int = 10, db: AsyncSession = Depen
         count_res = await db.execute(count_stmt)
         count = count_res.scalar_one()
 
-        import re
         # Strip markdown rudimentary
         text_only = re.sub(r'[*_#`\[\]]', '', p.content)
         preview = text_only[:50] + ("..." if len(text_only) > 50 else "")
@@ -351,7 +353,7 @@ async def update_questions_bulk(public_code: str, req: QuestionBulkUpdateRequest
 @router.delete("/{public_code}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def delete_passage(public_code: str, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import update as sa_update
-    from app.models.question import Answer
+    from app.models.question import Answer, QuestionSubItem
     result = await db.execute(select(Passage).where(Passage.public_code == public_code))
     passage = result.scalars().first()
     if not passage:
@@ -363,7 +365,7 @@ async def delete_passage(public_code: str, db: AsyncSession = Depends(get_db)):
 
     # Cascade delete related records
     for q_id in q_ids:
-
+        await db.execute(delete(QuestionSubItem).where(QuestionSubItem.question_id == q_id))
         await db.execute(delete(Answer).where(Answer.question_id == q_id))
     await db.execute(delete(Question).where(Question.passage_id == passage.id))
 

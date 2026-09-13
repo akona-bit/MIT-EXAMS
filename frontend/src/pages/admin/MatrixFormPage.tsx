@@ -339,12 +339,58 @@ export default function MatrixFormPage() {
   };
 
   const ungroupRule = (idx: number) => {
-    // TODO: implement ungroupRule
-    void idx;
+    const newRules = [...rules];
+    newRules[idx] = { ...newRules[idx], group_local_id: undefined };
+    setRules(newRules);
+
+    // Clean up empty groups
+    const removedGroupId = rules[idx].group_local_id;
+    if (removedGroupId) {
+      const hasOtherRulesUsingGroup = newRules.some(
+        (r, i) => i !== idx && r.group_local_id === removedGroupId
+      );
+      if (!hasOtherRulesUsingGroup) {
+        setGroups((prev) => prev.filter((g) => g.local_id !== removedGroupId));
+      }
+    }
   };
 
   const submitGroup = () => {
-    // TODO: implement submitGroup
+    if (selectedRuleIndices.size === 0) {
+      toast.warning("Vui lòng chọn ít nhất 1 quy tắc để gộp nhóm");
+      return;
+    }
+
+    const localId = `group_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const newGroup: MatrixRuleGroup = {
+      local_id: localId,
+      label: groupLabel || `Nhóm ${groups.length + 1}`,
+      required_passage_id: undefined,
+    };
+
+    // Find passage ID if code is provided
+    if (reqPassageCode) {
+      const passage = passages.find((p) => p.public_code === reqPassageCode);
+      if (passage) {
+        newGroup.required_passage_id = passage.id;
+      }
+    }
+
+    // Assign group to selected rules
+    const newRules = rules.map((r, idx) => {
+      if (selectedRuleIndices.has(idx)) {
+        return { ...r, group_local_id: localId };
+      }
+      return r;
+    });
+
+    setGroups((prev) => [...prev, newGroup]);
+    setRules(newRules);
+    setSelectedRuleIndices(new Set());
+    setIsGroupModalOpen(false);
+    setGroupLabel("");
+    setReqPassageCode("");
+    toast.success(`Đã tạo nhóm "${newGroup.label}" với ${selectedRuleIndices.size} quy tắc`);
   };
 
   return (

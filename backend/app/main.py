@@ -102,14 +102,14 @@ async def lifespan(app: FastAPI):
 
 async def keep_alive():
     """Ping self every 4 minutes to prevent Render and Neon from sleeping."""
-    import httpx
+    import httpx as _httpx
     while True:
         await asyncio.sleep(240)
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with _httpx.AsyncClient(timeout=30) as client:
                 await client.get("http://127.0.0.1:8000/api/health")
         except Exception:
-            pass
+            await asyncio.sleep(60)
 
 
 app = FastAPI(
@@ -126,17 +126,9 @@ app.add_middleware(PostHogContextMiddleware)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     log_error(f"Unhandled exception: {request.method} {request.url.path} - {exc}", exc_info=True)
-    
-    headers = {}
-    origin = request.headers.get("origin")
-    if origin:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        
     return JSONResponse(
         status_code=500, 
         content={"detail": "Internal server error"},
-        headers=headers
     )
 
 from app.api.v1 import auth
@@ -177,7 +169,6 @@ CORS_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_origin_regex=r"https://.*\.mit-2143\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -231,6 +222,9 @@ import asyncio
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Set[WebSocket] = set()
+        self._last_fraud_broadcast: float = 0
+        self._cached_fraud_alerts: list = []
+        self._fraud_cache_ttl: float = 10  # seconds
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -240,13 +234,14 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.discard(websocket)
-            # We can't await broadcast here because it's sync, we'll schedule it
             asyncio.create_task(self.broadcast_online_users())
 
-    async def broadcast_online_users(self):
-        count = len(self.active_connections)
-        
-        # Lấy dữ liệu fraud từ DB
+    async def _get_fraud_alerts(self) -> list:
+        import time
+        now = time.time()
+        if now - self._last_fraud_broadcast < self._fraud_cache_ttl:
+            return self._cached_fraud_alerts
+
         fraud_alerts = []
         try:
             from app.db.database import AsyncSessionLocal
@@ -260,7 +255,6 @@ class ConnectionManager:
                 setting = setting_result.scalars().first()
                 threshold = int(setting.value) if setting and setting.value.isdigit() else 3
 
-                # Đếm số event theo participant đang thi
                 stmt = select(
                     ExamParticipant,
                     func.count(ExamTrackingLog.id).label('risk_score')
@@ -282,8 +276,15 @@ class ConnectionManager:
                         "flagged": risk_score > threshold
                     })
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Error fetching fraud alerts: {e}")
+            logger.error(f"Error fetching fraud alerts: {e}")
+
+        self._cached_fraud_alerts = fraud_alerts
+        self._last_fraud_broadcast = now
+        return fraud_alerts
+
+    async def broadcast_online_users(self):
+        count = len(self.active_connections)
+        fraud_alerts = await self._get_fraud_alerts()
 
         dead_connections = set()
         for connection in list(self.active_connections):

@@ -24,6 +24,7 @@ export default function ExamsPage() {
       setExams(data.items);
     } catch (error) {
       console.error(error);
+      toast.error("Không thể tải danh sách kỳ thi");
     } finally {
       setIsLoading(false);
     }

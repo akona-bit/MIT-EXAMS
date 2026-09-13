@@ -1,5 +1,5 @@
 import client from "./client";
-import type { Exam, PaginatedResponse, ExamForm } from "../types";
+import type { Exam, PaginatedResponse, ExamForm, ExamFormDetail } from "../types";
 
 export interface GenerateExamRequest {
   exam_id: number;
@@ -30,6 +30,11 @@ export async function getExam(id: number): Promise<Exam> {
 
 export async function getExamForms(id: number): Promise<ExamForm[]> {
   const response = await client.get<ExamForm[]>(`/api/v1/exams/${id}/forms`);
+  return response.data;
+}
+
+export async function getExamFormsDetail(id: number): Promise<ExamFormDetail[]> {
+  const response = await client.get<ExamFormDetail[]>(`/api/v1/exams/${id}/forms/detail`);
   return response.data;
 }
 

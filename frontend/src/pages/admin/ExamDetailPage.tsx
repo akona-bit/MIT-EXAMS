@@ -11,8 +11,20 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { toast } from '../../components/ui/Toast';
 import Modal from '../../components/ui/Modal';
 import IrtTerminalModal from '../../components/admin/IrtTerminalModal';
-import { Printer, Upload, FileText, ExternalLink } from 'lucide-react';
+import { Printer, Upload, FileText, ExternalLink, ListOrdered, Users, BarChart3, TrendingUp, ArrowDown, FlaskConical, AlertTriangle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Badge } from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
 import { PrintPreviewModal, AnswerSheetPreview } from '../../components/print';
+
+// Nhãn + màu Badge cho từng loại cảnh báo câu hỏi (theo ui-tokens.md semantic colors)
+const FLAG_META: Record<string, { label: string; variant: 'destructive' | 'warning' | 'info' }> = {
+  POOR_DISCRIMINATION: { label: 'Phân biệt kém', variant: 'destructive' },
+  TOO_HARD: { label: 'Quá khó', variant: 'warning' },
+  TOO_EASY: { label: 'Quá dễ', variant: 'info' },
+  MODEL_MISFIT: { label: 'Lệch model', variant: 'warning' },
+};
+import ExamFormsViewer from '../../components/admin/ExamFormsViewer';
 
 export default function ExamDetailPage() {
   const { id } = useParams();
@@ -43,6 +55,7 @@ export default function ExamDetailPage() {
 
   // Print Preview state
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isFormsViewerOpen, setIsFormsViewerOpen] = useState(false);
 
   const fetchExamData = async () => {
     if (!id) return;
@@ -167,6 +180,13 @@ export default function ExamDetailPage() {
   if (isLoading) return <div>Đang tải...</div>;
   if (!exam) return <div>Không tìm thấy kỳ thi</div>;
 
+  // Tổng hợp cảnh báo câu hỏi (dải cảnh báo nổi bật phía trên bảng — ui-rules.md)
+  const flagCounts = (itemsAnalysis ?? []).reduce<Record<string, number>>((acc, it) => {
+    for (const f of it.warning_flags) acc[f] = (acc[f] || 0) + 1;
+    return acc;
+  }, {});
+  const flaggedCount = (itemsAnalysis ?? []).filter(it => it.warning_flags.length > 0).length;
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -208,6 +228,32 @@ export default function ExamDetailPage() {
                 <div className="space-y-1">
                   <p className="text-slate-500 dark:text-slate-400">Thời gian làm bài</p>
                   <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.duration_minutes !== null ? `${exam.duration_minutes} phút` : "Không giới hạn"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 dark:text-slate-400">Số lần thi tối đa</p>
+                  <div className="flex items-center gap-3">
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">{exam.max_attempts !== null ? `${exam.max_attempts} lần` : "Không giới hạn"}</p>
+                    {exam.status === 'DRAFT' && (
+                      <button
+                        onClick={async () => {
+                          const val = prompt('Nhập số lần thi tối đa (để trống nếu không giới hạn):', exam.max_attempts?.toString() || '');
+                          if (val !== null) {
+                            try {
+                              const max_attempts = val.trim() === '' ? null : parseInt(val, 10);
+                              await updateExam(exam.id, { max_attempts });
+                              toast.success('Đã cập nhật số lần thi');
+                              fetchExamData();
+                            } catch (e) {
+                              toast.error('Cập nhật thất bại');
+                            }
+                          }
+                        }}
+                        className="text-xs font-medium text-primary-600 hover:underline"
+                      >
+                        Sửa
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-slate-500 dark:text-slate-400">ID Ma trận</p>
@@ -308,62 +354,183 @@ export default function ExamDetailPage() {
           {activeTab === 'irt' && (
             <div className="space-y-6">
               <div className="p-6">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Tổng quan</h3>
-                {overview ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
-                      <div className="text-slate-500 dark:text-slate-400 mb-1">Số lượng</div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.total_participants}</div>
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tổng quan</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Kết quả chấm điểm toàn kỳ thi — thang điểm 1200</p>
+                </div>
+                {overview && overview.has_data ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2.5 mb-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 dark:bg-primary-500/10 shrink-0">
+                            <Users className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400">Số lượng</div>
+                        </div>
+                        <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">
+                          {overview.total_participants}
+                          <span className="ml-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">thí sinh</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2.5 mb-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info-500/10 shrink-0">
+                            <BarChart3 className="h-4 w-4 text-info-600 dark:text-info-500" />
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400">Điểm TB</div>
+                        </div>
+                        <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">
+                          {overview.average_score}
+                          <span className="ml-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">/ 1200</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2.5 mb-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success-500/10 shrink-0">
+                            <TrendingUp className="h-4 w-4 text-success-600 dark:text-success-500" />
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400">Điểm cao nhất</div>
+                        </div>
+                        <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">
+                          {overview.max_score}
+                          <span className="ml-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">/ 1200</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-2.5 mb-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning-500/10 shrink-0">
+                            <ArrowDown className="h-4 w-4 text-warning-600 dark:text-warning-500" />
+                          </div>
+                          <div className="text-slate-500 dark:text-slate-400">Điểm thấp nhất</div>
+                        </div>
+                        <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">
+                          {overview.min_score}
+                          <span className="ml-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">/ 1200</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
-                      <div className="text-slate-500 dark:text-slate-400 mb-1">Điểm TB</div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.average_score}</div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
-                      <div className="text-slate-500 dark:text-slate-400 mb-1">Điểm cao nhất</div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.max_score}</div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-white/5">
-                      <div className="text-slate-500 dark:text-slate-400 mb-1">Điểm thấp nhất</div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white">{overview.min_score}</div>
-                    </div>
-                  </div>
+
+                    {overview.distribution.some(d => d.count > 0) && (
+                      <div className="mt-6">
+                        <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Phổ điểm</div>
+                        <div className="h-56 -ml-2">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={overview.distribution} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#C7CCD4" strokeOpacity={0.5} />
+                              <XAxis
+                                dataKey="range"
+                                tick={{ fontSize: 11, fill: '#8A93A3' }}
+                                tickLine={false}
+                                axisLine={{ stroke: '#C7CCD4' }}
+                                interval={0}
+                              />
+                              <YAxis
+                                allowDecimals={false}
+                                tick={{ fontSize: 11, fill: '#8A93A3' }}
+                                tickLine={false}
+                                axisLine={false}
+                                width={36}
+                              />
+                              <Tooltip
+                                cursor={{ fill: 'rgba(45, 108, 255, 0.06)' }}
+                                formatter={(value) => [`${value} thí sinh`, 'Số lượng']}
+                              />
+                              <Bar dataKey="count" name="Số lượng" fill="#2D6CFF" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <p className="text-slate-500 text-sm">Chưa có dữ liệu thống kê.</p>
+                  <EmptyState
+                    icon={<BarChart3 className="h-8 w-8 text-slate-400 dark:text-slate-500" />}
+                    title="Chưa có dữ liệu thống kê"
+                    message="Số liệu sẽ xuất hiện sau khi có thí sinh nộp bài và bài làm được chấm điểm."
+                  />
                 )}
               </div>
               
               <div className="p-6">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Phân tích chất lượng câu hỏi (IRT)</h3>
-                {itemsAnalysis && itemsAnalysis.length > 0 ? (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                        <tr>
-                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">ID</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Độ khó (b)</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Phân biệt (a)</th>
-                          <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cảnh báo</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                        {itemsAnalysis.map(item => (
-                          <tr key={item.question_id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                            <td className="px-4 py-3 font-medium">{item.question_id}</td>
-                            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{item.difficulty_b}</td>
-                            <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{item.discrimination_a}</td>
-                            <td className="px-4 py-3">
-                              {item.warning_flags.map(f => (
-                                <span key={f} className="inline-block bg-danger-500/10 text-danger-600 dark:text-danger-400 border border-danger-500/20 text-xs px-2 py-1 rounded-md mr-1">{f}</span>
-                              ))}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Phân tích chất lượng câu hỏi (IRT)</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Tham số độ khó (b), độ phân biệt (a) ước lượng từ bài làm thực tế</p>
                   </div>
+                  {itemsAnalysis && itemsAnalysis.length > 0 && itemsAnalysis[0].computed_at && (
+                    <Badge variant="secondary" className="shrink-0">
+                      Phân tích lúc {new Date(itemsAnalysis[0].computed_at).toLocaleString('vi-VN')}
+                    </Badge>
+                  )}
+                </div>
+                {itemsAnalysis && itemsAnalysis.length > 0 ? (
+                  <>
+                    {flaggedCount > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 mb-4 px-3.5 py-2.5 rounded-lg bg-warning-500/5 border border-warning-500/20">
+                        <AlertTriangle className="h-4 w-4 text-warning-600 dark:text-warning-500 shrink-0" />
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          {flaggedCount}/{itemsAnalysis.length} câu cần lưu ý:
+                        </span>
+                        {Object.entries(flagCounts).map(([flag, count]) => {
+                          const meta = FLAG_META[flag];
+                          return (
+                            <Badge key={flag} variant={meta?.variant ?? 'warning'}>
+                              {meta?.label ?? flag} · {count}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">ID</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Độ khó (b)</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Phân biệt (a)</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">CTT (p đúng)</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">CTT (D-Index)</th>
+                            <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Cảnh báo</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                          {itemsAnalysis.map(item => (
+                            <tr
+                              key={item.question_id}
+                              className={`transition-colors ${item.warning_flags.length > 0 ? 'bg-warning-500/[0.04] hover:bg-warning-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                            >
+                              <td className="px-4 py-3 font-medium">{item.question_id}</td>
+                              <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono">{item.difficulty_b ?? '—'}</td>
+                              <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono">{item.discrimination_a ?? '—'}</td>
+                              <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono">{item.ctt_difficulty !== null ? item.ctt_difficulty.toFixed(3) : '—'}</td>
+                              <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono">{item.ctt_discrimination !== null ? item.ctt_discrimination.toFixed(3) : '—'}</td>
+                              <td className="px-4 py-3">
+                                {item.warning_flags.length > 0 ? item.warning_flags.map(f => (
+                                  <Badge key={f} variant={FLAG_META[f]?.variant ?? 'warning'} className="mr-1 mb-0.5">
+                                    {FLAG_META[f]?.label ?? f}
+                                  </Badge>
+                                )) : (
+                                  <Badge variant="success">Ổn định</Badge>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 ) : (
-                  <p className="text-slate-500 text-sm">Chưa có phân tích câu hỏi. Hãy chạy chấm điểm IRT.</p>
+                  <EmptyState
+                    icon={<FlaskConical className="h-8 w-8 text-slate-400 dark:text-slate-500" />}
+                    title="Chưa chạy phân tích IRT cho kỳ thi này"
+                    message="Chạy phân tích IRT để calibrate tham số độ khó (b) và độ phân biệt (a) từ bài làm thực tế của kỳ thi này. Yêu cầu ít nhất 200 bài làm đã được chấm điểm."
+                    action={
+                      <Button variant="default" onClick={handleRunIrt} className="shadow-lg shadow-primary-500/20">
+                        Chạy phân tích IRT
+                      </Button>
+                    }
+                  />
                 )}
               </div>
             </div>
@@ -428,6 +595,15 @@ export default function ExamDetailPage() {
                   className="w-full justify-center"
                 >
                   {isExportingLaTeX ? 'Đang xuất đề (LaTeX)...' : 'Xuất Đề (LaTeX)'}
+                </Button>
+            )}
+            {hasExistingForms && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsFormsViewerOpen(true)}
+                  className="w-full justify-center text-purple-700 border-purple-200 bg-purple-50 hover:bg-purple-100"
+                >
+                  <ListOrdered className="w-4 h-4 mr-2" /> Xem mã đề
                 </Button>
             )}
             {hasExistingForms && (
@@ -564,6 +740,14 @@ export default function ExamDetailPage() {
           examTitle={exam?.name}
         />
       </PrintPreviewModal>
+
+      {/* Exam Forms Viewer Modal */}
+      <ExamFormsViewer
+        isOpen={isFormsViewerOpen}
+        onClose={() => setIsFormsViewerOpen(false)}
+        examId={exam.id}
+        examName={exam.name}
+      />
 
     </div>
   );

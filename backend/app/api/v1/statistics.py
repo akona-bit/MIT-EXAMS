@@ -10,15 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Dict, Any
+import logging
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole
-from app.models.grading import ExamResult
-from app.models.exam import ExamSubmission, ExamParticipant, Exam, ExamForm, ExamFormQuestion
+from app.models.grading import ExamResult, ItemAnalysisResult
+from app.models.exam import ExamSubmission, ExamParticipant, Exam, ExamForm
 from app.models.question import Question
 from app.models.user import User, Role
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/overview", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -181,10 +183,11 @@ async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):
     if not submissions:
         return {
             "total_participants": 0,
-            "average_score": 0,
-            "max_score": 0,
-            "min_score": 0,
-            "distribution": []
+            "average_score": None,
+            "max_score": None,
+            "min_score": None,
+            "distribution": [],
+            "has_data": False
         }
         
     submission_ids = [s.id for s in submissions]
@@ -203,8 +206,15 @@ async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):
             total_scores.append(r.ctt_score_part1 + r.ctt_score_part2 + r.ctt_score_part3 + r.ctt_score_part4)
             
     if not total_scores:
-        return {"total_participants": len(submissions), "message": "No grading results found"}
-        
+        return {
+            "total_participants": len(submissions),
+            "average_score": None,
+            "max_score": None,
+            "min_score": None,
+            "distribution": [],
+            "has_data": False
+        }
+
     avg_score = sum(total_scores) / len(total_scores)
     
     # Phổ điểm trên thang 1200: 10 bucket mỗi bucket 120 điểm
@@ -222,44 +232,55 @@ async def get_exam_overview(exam_id: int, db: AsyncSession = Depends(get_db)):
         "average_score": round(avg_score, 2),
         "max_score": round(max(total_scores), 2),
         "min_score": round(min(total_scores), 2),
-        "distribution": distribution
+        "distribution": distribution,
+        "has_data": True
     }
 
 @router.get("/exams/{exam_id}/items", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def get_exam_item_analysis(exam_id: int, db: AsyncSession = Depends(get_db)):
-    # Tìm các mã đề của kỳ thi
+    # QUAN TRỌNG: chỉ trả về kết quả phân tích của kỳ thi này, lưu trong
+    # ItemAnalysisResult (được ghi bởi IRT background task sau khi chạy xong).
+    # KHÔNG đọc a_param/b_param trực tiếp từ bảng Question — các tham số đó là
+    # toàn cục của ngân hàng câu hỏi (có thể là số liệu từ lần chạy IRT của
+    # kỳ thi khác), sẽ gây hiển thị sai "chưa chạy IRT mà có sẵn kết quả".
     f_res = await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))
-    forms = f_res.scalars().all()
-    form_ids = [f.id for f in forms]
-    
-    if not form_ids:
+    if not f_res.scalars().first():
         return []
         
-    # Tìm các câu hỏi trong đề
-    q_res = await db.execute(
-        select(Question).join(ExamFormQuestion, ExamFormQuestion.question_id == Question.id)
-        .where(ExamFormQuestion.exam_form_id.in_(form_ids))
+    a_res = await db.execute(
+        select(ItemAnalysisResult, Question)
+        .join(Question, Question.id == ItemAnalysisResult.question_id)
+        .where(ItemAnalysisResult.exam_id == exam_id)
+        .order_by(ItemAnalysisResult.question_id)
     )
-    raw_questions = q_res.scalars().all()
-    questions = list({q.id: q for q in raw_questions}.values())
+    rows = a_res.all()
+    if not rows:
+        return []
     
     analysis = []
-    for q in questions:
+    for item, q in rows:
         flags = []
-        if q.a_param < 0.3:
+        if item.irt_a is not None and item.irt_a < 0.3:
             flags.append("POOR_DISCRIMINATION")
-        if q.b_param > 3.0:
-            flags.append("TOO_HARD")
-        elif q.b_param < -3.0:
-            flags.append("TOO_EASY")
+        if item.irt_b is not None:
+            if item.irt_b > 3.0:
+                flags.append("TOO_HARD")
+            elif item.irt_b < -3.0:
+                flags.append("TOO_EASY")
+        if item.chi_square_p is not None and item.chi_square_p < 0.05:
+            flags.append("MODEL_MISFIT")
             
         analysis.append({
-            "question_id": q.id,
-            "content": q.content[:50] + "...",
-            "difficulty_b": round(q.b_param, 2),
-            "discrimination_a": round(q.a_param, 2),
-            "guessing_c": round(q.c_param, 2),
-            "is_calibrated": q.is_calibrated,
+            "question_id": item.question_id,
+            "content": (q.content[:50] + "...") if q.content else None,
+            # IRT parameters calibrated trong kỳ thi này
+            "difficulty_b": round(item.irt_b, 2) if item.irt_b is not None else None,
+            "discrimination_a": round(item.irt_a, 2) if item.irt_a is not None else None,
+            # CTT metrics song song
+            "ctt_difficulty": round(item.ctt_difficulty, 3) if item.ctt_difficulty is not None else None,
+            "ctt_discrimination": round(item.ctt_discrimination, 3) if item.ctt_discrimination is not None else None,
+            "chi_square_p": round(item.chi_square_p, 4) if item.chi_square_p is not None else None,
+            "computed_at": item.computed_at.isoformat() if item.computed_at else None,
             "warning_flags": flags
         })
         

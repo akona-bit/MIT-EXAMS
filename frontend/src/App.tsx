@@ -28,7 +28,6 @@ const ExamFormPage = lazy(() => import("./pages/admin/ExamFormPage"));
 const StudentHomePage = lazy(() => import("./pages/student/StudentHomePage"));
 const StudentExamShell = lazy(() => import("./pages/student/StudentExamShell"));
 const StudentExamResultPage = lazy(() => import("./pages/student/StudentExamResultPage"));
-const StudentDetailPage = lazy(() => import("./pages/student/StudentDetailPage"));
 const StudentLeaderboardPage = lazy(() => import("./pages/student/StudentLeaderboardPage"));
 
 const KnowledgePage = lazy(() => import("./pages/admin/KnowledgePage"));
@@ -43,6 +42,7 @@ const AdvancedAnalyticsPage = lazy(() => import("./pages/admin/analytics/Advance
 const SystemSettingsPage = lazy(() => import("./pages/admin/settings/SystemSettingsPage"));
 const AdminFeedbacksPage = lazy(() => import("./pages/admin/AdminFeedbacksPage"));
 const AdminNotificationsPage = lazy(() => import("./pages/admin/AdminNotificationsPage"));
+const StoragePage = lazy(() => import("./pages/admin/StoragePage"));
 
 // Fallback khi đang tải chunk của route (khớp design system, không flash trắng)
 function RouteFallback() {
@@ -148,6 +148,7 @@ function AppRoutes() {
           <Route path="feedbacks" element={<AdminFeedbacksPage />} />
           <Route path="notifications" element={<AdminNotificationsPage />} />
           <Route path="settings" element={<SystemSettingsPage />} />
+          <Route path="storage" element={<StoragePage />} />
         </Route>
       </Route>
 

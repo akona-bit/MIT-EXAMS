@@ -30,25 +30,26 @@ async def seed_roles():
 
 
 async def seed_users():
+    import os
     demo_users = [
         {
             "username": "admin",
             "email": "admin@mitexams.com",
-            "password": "admin123",
+            "password": os.environ.get("SEED_ADMIN_PASSWORD", "admin_change_me"),
             "role_id": 1,
             "is_active": True,
         },
         {
             "username": "teacher",
             "email": "teacher@mitexams.com",
-            "password": "teacher123",
+            "password": os.environ.get("SEED_TEACHER_PASSWORD", "teacher_change_me"),
             "role_id": 2,
             "is_active": True,
         },
         {
             "username": "student",
             "email": "student@mitexams.com",
-            "password": "student123",
+            "password": os.environ.get("SEED_STUDENT_PASSWORD", "student_change_me"),
             "role_id": 4,
             "is_active": True,
         },
@@ -64,13 +65,7 @@ async def seed_users():
             )
             user = existing.scalars().first()
 
-            if user:
-                user.username = user_data["username"]
-                user.email = user_data["email"]
-                user.hashed_password = get_password_hash(user_data["password"])
-                user.role_id = user_data["role_id"]
-                user.is_active = user_data["is_active"]
-            else:
+            if not user:
                 session.add(
                     User(
                         username=user_data["username"],

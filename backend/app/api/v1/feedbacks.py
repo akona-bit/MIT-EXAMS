@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
+import logging
 
 from app.db.database import get_db
 from app.api.dependencies import get_current_user
@@ -10,6 +11,7 @@ from app.models.feedback import Feedback
 from app.schemas.feedback import FeedbackCreate, FeedbackResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=FeedbackResponse)
 async def create_feedback(

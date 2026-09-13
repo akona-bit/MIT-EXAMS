@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select, and_
 from sqlalchemy.orm import selectinload
+import logging
 
 from app.db.database import get_db
 from app.models.exam import Matrix, MatrixRule, ExamGenerationRun, ExamGenerationStatus
@@ -18,6 +19,7 @@ from app.api.dependencies import RequireRole
 from app.core.analytics import capture
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/")
 async def get_matrices(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):

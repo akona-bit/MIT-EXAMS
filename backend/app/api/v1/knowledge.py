@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, and_
 from sqlalchemy.sql import func
+import logging
 
 from app.db.database import get_db
 from app.models.question import KnowledgeNode, Question, QuestionStatus
@@ -12,6 +13,7 @@ from app.core.analytics import capture
 from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 LEVEL_NAMES = ("TOPIC", "CONCEPT", "SKILL", "SUB_SKILL")
 

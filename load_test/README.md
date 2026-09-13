@@ -1,26 +1,59 @@
-# Hướng dẫn Kiểm thử tải (Load Testing) với Locust
+# Load Testing with Locust
 
-Dự án sử dụng **Locust** để kiểm thử khả năng chịu tải của API, đặc biệt là kịch bản nhiều thí sinh cùng nộp bài / chọn đáp án đồng thời.
+## Setup
 
-## Cài đặt Locust
-Locust là công cụ viết bằng Python. Cài đặt thông qua pip:
 ```bash
 pip install locust
 ```
 
-## Cách chạy
-1. Đảm bảo backend đang chạy (VD: `http://localhost:8000`).
-2. Mở terminal, di chuyển vào thư mục `load_test`.
-3. Chạy lệnh:
-```bash
-locust -f locustfile.py
-```
-4. Mở trình duyệt truy cập: `http://localhost:8089` (Giao diện web của Locust).
-5. Điền thông tin:
-   - **Number of users**: Số lượng thí sinh mô phỏng (vd: 500)
-   - **Spawn rate**: Số lượng thí sinh tăng lên mỗi giây (vd: 10)
-   - **Host**: `http://localhost:8000` (URL của API)
-6. Bấm **Start swarming** để bắt đầu.
+## Configuration
 
-## Lưu ý
-Trước khi chạy thật, bạn cần cập nhật `MOCK_TOKEN_HERE` trong `locustfile.py` bằng một Token hợp lệ, hoặc viết hàm tự động gọi `/api/v1/auth/login` để lấy token ngẫu nhiên cho mỗi user.
+Set environment variables before running:
+
+```bash
+# Required for student simulation
+export TEST_EXAM_ID=1          # Exam ID to test against
+export TEST_TOKEN=<jwt_token>  # Student JWT token
+
+# Optional for teacher simulation
+export TEST_ADMIN_TOKEN=<admin_jwt_token>
+```
+
+Or create a `.env` file in this directory.
+
+## Running
+
+1. Start the backend:
+   ```bash
+   cd ../backend
+   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+
+2. Start Locust:
+   ```bash
+   locust -f locustfile.py
+   ```
+
+3. Open http://localhost:8089
+
+4. Configure:
+   - **Host**: `http://localhost:8000`
+   - **Number of users**: Start with 50, scale to 500+
+   - **Spawn rate**: 10 users/second
+
+## What's Tested
+
+| Endpoint | Weight | Description |
+|----------|--------|-------------|
+| `POST /exams/{id}/autosave` | 5 | Answer submission (most frequent) |
+| `GET /exams/{id}/session` | 3 | Session status check |
+| `GET /questions/{id}` | 1 | Question content fetch |
+| `POST /exams/{id}/track` | 1 | Anti-cheat tracking |
+| `GET /exams/{id}` | 3 | Teacher: exam detail |
+| `GET /statistics/...` | 2 | Teacher: analytics |
+
+## Expected Results
+
+- **Target**: 500 concurrent students, < 200ms p95 latency
+- **Bottleneck**: autosave endpoint (most frequent write)
+- **Scaling**: Celery workers handle IRT/OMR asynchronously

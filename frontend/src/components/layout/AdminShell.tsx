@@ -27,7 +27,7 @@ import {
   MessageSquare,
   ScanLine,
   Bell,
-  FileCheck,
+  Database,
 } from "lucide-react";
 
 interface AdminShellProps {
@@ -84,6 +84,7 @@ const navSections: NavSection[] = [
     icon: <BarChart3 className="h-4 w-4" />,
     items: [
       { label: "Phân tích DS", path: "/admin/analytics/ds", icon: <BarChart3 className="h-5 w-5" strokeWidth={1.8} /> },
+      { label: "Dữ liệu & Bộ nhớ", path: "/admin/storage", icon: <Database className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Quản lý Góp ý", path: "/admin/feedbacks", icon: <MessageSquare className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Thông báo", path: "/admin/notifications", icon: <Bell className="h-5 w-5" strokeWidth={1.8} /> },
       { label: "Cài đặt chung", path: "/admin/settings", icon: <Settings className="h-5 w-5" strokeWidth={1.8} /> },
@@ -228,6 +229,7 @@ export default function AdminShell({ children }: AdminShellProps) {
         {cmdOpen && (
           <>
             <motion.div
+              key="cmd-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -235,6 +237,7 @@ export default function AdminShell({ children }: AdminShellProps) {
               onClick={() => setCmdOpen(false)}
             />
             <motion.div
+              key="cmd-modal"
               initial={{ opacity: 0, scale: 0.96, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: -10 }}
@@ -288,6 +291,7 @@ export default function AdminShell({ children }: AdminShellProps) {
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
+            key="mobile-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

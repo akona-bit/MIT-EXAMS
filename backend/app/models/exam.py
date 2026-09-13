@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Float, Enum as SQLAlchemyEnum, JSON
+from sqlalchemy import String, Boolean, ForeignKey, Integer, DateTime, Text, Float, Enum as SQLAlchemyEnum, JSON, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -99,22 +99,28 @@ class Exam(Base):
     show_score_mode: Mapped[str] = mapped_column(String(50), default="NONE")
     show_answer_mode: Mapped[str] = mapped_column(String(50), default="NONE")
     status: Mapped[ExamStatus] = mapped_column(SQLAlchemyEnum(ExamStatus), default=ExamStatus.DRAFT)
+    max_attempts: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
 
     forms: Mapped[List["ExamForm"]] = relationship(back_populates="exam", cascade="all, delete-orphan")
     participants: Mapped[List["ExamParticipant"]] = relationship(back_populates="exam", cascade="all, delete-orphan")
 
 class ExamParticipant(Base):
+    __table_args__ = (
+        Index('ix_exam_participant_exam_user', 'exam_id', 'user_id'),
+        UniqueConstraint('exam_id', 'user_id', 'attempt_number', name='uq_exam_participant_exam_user_attempt'),
+    )
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
     sbd: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     target_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     exam_form_id: Mapped[Optional[int]] = mapped_column(ForeignKey("exam_form.id"), nullable=True)
     status: Mapped[ParticipantStatus] = mapped_column(SQLAlchemyEnum(ParticipantStatus), default=ParticipantStatus.NOT_STARTED)
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     submit_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    suspended_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), nullable=True)
+    suspended_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     device_fingerprint: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     exam_mode: Mapped[Optional[ExamMode]] = mapped_column(SQLAlchemyEnum(ExamMode), nullable=True, default=None)
@@ -129,6 +135,9 @@ class ExamParticipant(Base):
     tracking_logs: Mapped[List["ExamTrackingLog"]] = relationship(back_populates="participant", cascade="all, delete-orphan")
 
 class ExamForm(Base):
+    __table_args__ = (
+        UniqueConstraint('exam_id', 'code', name='uq_exam_form_exam_code'),
+    )
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     exam_id: Mapped[int] = mapped_column(ForeignKey("exam.id"))
     code: Mapped[str] = mapped_column(String(50)) # Mã đề, e.g. 101, 102
@@ -162,6 +171,9 @@ class ExamFormAnswer(Base):
     answer_ref: Mapped[Optional["Answer"]] = relationship("Answer", viewonly=True)
 
 class ExamSubmission(Base):
+    __table_args__ = (
+        Index('ix_exam_submission_participant', 'exam_participant_id'),
+    )
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     exam_participant_id: Mapped[int] = mapped_column(ForeignKey("exam_participant.id"))
     submit_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -171,6 +183,9 @@ class ExamSubmission(Base):
     answers: Mapped[List["ExamSubmissionAnswer"]] = relationship(back_populates="submission", cascade="all, delete-orphan")
 
 class ExamSubmissionAnswer(Base):
+    __table_args__ = (
+        UniqueConstraint('exam_submission_id', 'exam_form_question_id', name='uq_submission_answer_question'),
+    )
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     exam_submission_id: Mapped[int] = mapped_column(ForeignKey("exam_submission.id"))
     exam_form_question_id: Mapped[int] = mapped_column(ForeignKey("exam_form_question.id"))
@@ -184,6 +199,8 @@ class ExamSubmissionAnswer(Base):
     text_answer: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     # Điểm của riêng câu này (do scorer ghi, vd 0.25 cho 1 ý đúng/sai đúng)
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Nguồn câu trả lời: "manual" (thí sinh), "opencv" (OMR), "gemini" (AI review), "auto_submit" (hết giờ)
+    answer_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     submission: Mapped["ExamSubmission"] = relationship(back_populates="answers")
 

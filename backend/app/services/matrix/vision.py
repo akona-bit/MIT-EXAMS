@@ -1,24 +1,26 @@
 import os
 from typing import List, Dict, Any
-from google import genai
-from google.genai import types
 
-# Cấu hình API key từ biến môi trường
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
-else:
-    client = None
+_client = None
+
+def _get_client():
+    global _client
+    if _client is None:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY chưa được cấu hình trên server.")
+        from google import genai
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 class MatrixVisionService:
     @staticmethod
     async def parse_image_to_tsv(image_bytes: bytes) -> str:
         """
-        Gửi ảnh lên Gemini Vision để nhận diện bảng ma trận đặc tả,
-        buộc mô hình trả về định dạng TSV.
+        Gửi ảnh lên Gemini Vision để nhận diện bảng ma trận đề thi/đặc tả đề thi trắc nghiệm.
         """
-        if not GEMINI_API_KEY or not client:
-            raise ValueError("GEMINI_API_KEY chưa được cấu hình trên server.")
+        from google.genai import types
+        client = _get_client()
             
         prompt = """
         Bạn là một trợ lý ảo chuyên phân tích ảnh ma trận đề thi/đặc tả đề thi trắc nghiệm.

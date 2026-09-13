@@ -56,21 +56,21 @@ async def assign_participants(db: AsyncSession, exam_id: int, user_ids: List[int
     await db.commit()
     return participants
 
-async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) -> ExamForm:
-    # Get participant
+async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) -> Tuple[ExamForm, ExamParticipant]:
+    exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    exam = exam_result.scalars().first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+        
+    # Get the latest participant
     result = await db.execute(select(ExamParticipant).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
-    ))
+    ).order_by(ExamParticipant.attempt_number.desc()))
     participant = result.scalars().first()
 
     if not participant:
-        # Self-enrollment: học sinh bấm "Bắt đầu thi" từ trang chủ có thể tự
-        # ghi danh vào kỳ thi đã PUBLISHED mà không cần Admin gán trước.
-        exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
-        exam = exam_result.scalars().first()
-        if not exam:
-            raise HTTPException(status_code=404, detail="Exam not found")
+        # Self-enrollment for the first time
         if exam.status != ExamStatus.PUBLISHED:
             raise HTTPException(status_code=403, detail="Not a participant of this exam")
 
@@ -79,10 +79,27 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
             exam_id=exam_id,
             user_id=user_id,
             sbd=sbd,
+            attempt_number=1,
             status=ParticipantStatus.NOT_STARTED
         )
         db.add(participant)
         await db.flush()
+    elif participant.status == ParticipantStatus.SUBMITTED:
+        # Check if another attempt is allowed
+        if exam.max_attempts is not None and participant.attempt_number >= exam.max_attempts:
+            raise HTTPException(status_code=403, detail="Bạn đã hết số lần làm bài cho kỳ thi này.")
+            
+        # Create a new participant record for the next attempt
+        new_participant = ExamParticipant(
+            exam_id=exam_id,
+            user_id=user_id,
+            sbd=participant.sbd, # reuse same sbd
+            attempt_number=participant.attempt_number + 1,
+            status=ParticipantStatus.NOT_STARTED
+        )
+        db.add(new_participant)
+        await db.flush()
+        participant = new_participant
 
     if participant.exam_form_id:
         if participant.status == ParticipantStatus.NOT_STARTED:
@@ -93,7 +110,7 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
         result = await db.execute(select(ExamForm).options(
             selectinload(ExamForm.questions)
         ).where(ExamForm.id == participant.exam_form_id))
-        return result.scalars().first()
+        return result.scalars().first(), participant
         
     # Assign new form (excluding original if shuffled ones exist)
     result = await db.execute(select(ExamForm).where(
@@ -123,7 +140,7 @@ async def get_or_assign_exam_form(db: AsyncSession, exam_id: int, user_id: int) 
     result = await db.execute(select(ExamForm).options(
         selectinload(ExamForm.questions)
     ).where(ExamForm.id == selected_form.id))
-    return result.scalars().first()
+    return result.scalars().first(), participant
 
 from app.models.exam import ExamSubmission, ExamSubmissionAnswer, ExamTrackingLog
 from app.models.question import Question
@@ -144,7 +161,7 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
     ).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == user_id
-    )
+    ).order_by(ExamParticipant.attempt_number.desc())
     result = await db.execute(stmt)
     participant = result.scalars().first()
     
@@ -252,7 +269,9 @@ async def get_exam_session_info(db: AsyncSession, exam_id: int, user_id: int):
         "saved_answers": saved_answers,
         "exam_mode": participant.exam_mode.value if participant.exam_mode else None,
         "exam_mode_changed": participant.exam_mode_changed,
-        "sbd": participant.sbd
+        "sbd": participant.sbd,
+        "max_attempts": exam.max_attempts,
+        "current_attempt": participant.attempt_number,
     }
 
 async def autosave_answers(db: AsyncSession, exam_id: int, user_id: int, req: AutosaveRequest):
@@ -347,8 +366,9 @@ async def submit_exam(db: AsyncSession, exam_id: int, user_id: int, bypass_verif
         try:
             from app.services.omr.tasks import grade_student_omr_task
             grade_student_omr_task.delay(submission_id, enable_gemini=True)
-        except Exception:
-            pass  # Best-effort: don't fail the submission if Celery is unavailable
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to dispatch OMR grading task: {e}")
     
     return {"status": "success"}
 

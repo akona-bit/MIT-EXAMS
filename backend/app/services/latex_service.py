@@ -1,6 +1,7 @@
 import io
 import os
 import zipfile
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -8,6 +9,8 @@ import re
 import urllib.request
 import urllib.parse
 import uuid
+
+logger = logging.getLogger(__name__)
 import mimetypes
 from datetime import datetime
 from app.models.exam import Exam, ExamForm, ExamFormQuestion, ExamFormAnswer
@@ -123,7 +126,7 @@ class LatexService:
                 return replaced_str
                 
             except Exception as e:
-                print(f"LatexService: Failed to download/process image {img_url}: {e}")
+                logger.warning(f"LatexService: Failed to download/process image {img_url}: {e}")
                 return full_match
                 
         return re.sub(pattern, replacer, text)

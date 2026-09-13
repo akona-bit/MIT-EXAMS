@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
@@ -11,6 +13,7 @@ from app.models.user import User
 from app.models.notification import Notification, NotificationType
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class NotificationResponse(BaseModel):
@@ -42,26 +45,32 @@ class SendNotificationRequest(BaseModel):
 
 
 @router.get("/public")
+@limiter.limit("30/minute")
 async def get_public_notifications(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Notification).where(Notification.is_global == True).order_by(Notification.created_at.desc())
+    query = (
+        select(Notification)
+        .where(Notification.is_global == True)
+        .options(selectinload(Notification.sender))
+        .order_by(Notification.created_at.desc())
+    )
     
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_q)).scalar() or 0
     
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
-    notifications = result.scalars().all()
+    notifications = result.scalars().unique().all()
     
     items = []
     for n in notifications:
         sender_name = None
-        if n.sender_id:
-            sender = await db.get(User, n.sender_id)
-            sender_name = sender.full_name or sender.username if sender else None
+        if n.sender:
+            sender_name = n.sender.full_name or n.sender.username
         items.append({
             "id": n.id,
             "type": n.type.value if hasattr(n.type, "value") else n.type,
@@ -77,14 +86,20 @@ async def get_public_notifications(
     return {"total": total, "items": items}
 
 @router.get("/", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER", "STUDENT"]))])
+@limiter.limit("60/minute")
 async def get_notifications(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     unread_only: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = select(Notification).where(Notification.recipient_id == current_user.id)
+    query = (
+        select(Notification)
+        .where(Notification.recipient_id == current_user.id)
+        .options(selectinload(Notification.sender))
+    )
     if unread_only:
         query = query.where(Notification.is_read == False)
     query = query.order_by(Notification.created_at.desc())
@@ -94,14 +109,13 @@ async def get_notifications(
 
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
-    notifications = result.scalars().all()
+    notifications = result.scalars().unique().all()
 
     items = []
     for n in notifications:
         sender_name = None
-        if n.sender_id:
-            sender = await db.get(User, n.sender_id)
-            sender_name = sender.full_name or sender.username if sender else None
+        if n.sender:
+            sender_name = n.sender.full_name or n.sender.username
         items.append({
             "id": n.id,
             "type": n.type.value if hasattr(n.type, "value") else n.type,

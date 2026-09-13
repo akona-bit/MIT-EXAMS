@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     BREVO_API_KEY: str = ""
     BREVO_FROM_EMAIL: str = "noreply@mitexams.com"
 
+    # Gemini AI
+    GEMINI_API_KEY: str = ""
+
     # Frontend URL for password reset redirect
     FRONTEND_URL: str = "http://localhost:5173"
 
@@ -58,6 +61,12 @@ class Settings(BaseSettings):
 settings = Settings()
 
 if not settings.SECRET_KEY:
+    import os
+    if os.environ.get("ENVIRONMENT") == "production":
+        raise RuntimeError(
+            "SECRET_KEY is empty! Set SECRET_KEY in your .env or environment. "
+            "JWT signing will fail without a secret key."
+        )
     import warnings
     warnings.warn(
         "SECRET_KEY is empty! JWT signing will fail. Set SECRET_KEY in your .env or environment.",

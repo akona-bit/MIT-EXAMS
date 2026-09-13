@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from app.models.exam import ExamFormQuestion
+import logging
+import re
 
 from app.db.database import get_db
 from app.models.user import User
@@ -15,6 +17,7 @@ from app.core.analytics import capture
 from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/")
 async def get_questions(
@@ -199,7 +202,6 @@ async def create_question(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    import re
     # Validation for SINGLE_CHOICE
     if q_in.type == QuestionType.SINGLE_CHOICE:
         if q_in.render_style == "error_detection":
@@ -286,7 +288,7 @@ async def create_question(
         emb = await generate_embedding(db_question.content)
         await upsert_embedding(db, db_question.id, db_question.content, emb)
     except Exception as e:
-        print(f"Warning: Failed to generate embedding for question {db_question.id}: {e}")
+        logger.warning(f"Failed to generate embedding for question {db_question.id}: {e}")
 
     # Reload with answers and tags
     result = await db.execute(
@@ -306,7 +308,6 @@ async def update_question(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    import re
     # Find existing question
     result = await db.execute(
         select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.knowledge_node)).where(Question.id == question_id)
@@ -411,7 +412,7 @@ async def update_question(
             emb = await generate_embedding(new_q.content)
             await upsert_embedding(db, new_q.id, new_q.content, emb)
         except Exception as e:
-            print(f"Warning: Failed to generate embedding for question {new_q.id}: {e}")
+            logger.warning(f"Failed to generate embedding for question {new_q.id}: {e}")
         
         # Return the new version
         res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.knowledge_node)).where(Question.id == new_q.id))
@@ -465,8 +466,7 @@ async def update_question(
             emb = await generate_embedding(existing_q.content)
             await upsert_embedding(db, existing_q.id, existing_q.content, emb)
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to generate embedding for question {existing_q.id}: {e}")
+            logger.warning(f"Failed to generate embedding for question {existing_q.id}: {e}")
             
         res = await db.execute(select(Question).options(selectinload(Question.answers), selectinload(Question.sub_items), selectinload(Question.knowledge_node)).where(Question.id == existing_q.id))
         return res.scalars().first()
@@ -560,3 +560,49 @@ async def get_question_history(question_id: int, db: AsyncSession = Depends(get_
     # Sort by created_at
     history.sort(key=lambda x: x.created_at)
     return history
+
+
+# ─── Anchor Items (Câu neo IRT) ────────────────────────────────────────
+
+class AnchorToggleRequest(BaseModel):
+    is_anchor: bool
+
+@router.put("/{question_id}/anchor", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def toggle_anchor(
+    question_id: int,
+    req: AnchorToggleRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Đánh bỏ đánh dấu 1 câu hỏi là câu neo (anchor item).
+    Anchor items có tham số IRT cố định khi chạy MMLE trên kỳ thi mới.
+    """
+    result = await db.execute(select(Question).where(Question.id == question_id))
+    q = result.scalar_one_or_none()
+    if not q:
+        raise HTTPException(status_code=404, detail="Câu hỏi không tồn tại")
+
+    q.is_anchor = req.is_anchor
+    await db.commit()
+    await db.refresh(q)
+    return {"id": q.id, "is_anchor": q.is_anchor}
+
+
+class BulkAnchorRequest(BaseModel):
+    question_ids: List[int]
+    is_anchor: bool
+
+@router.post("/bulk-anchor", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def bulk_toggle_anchor(
+    req: BulkAnchorRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Đánh/bỏ đánh anchor cho nhiều câu hỏi cùng lúc."""
+    from sqlalchemy import update as sa_update
+    await db.execute(
+        sa_update(Question)
+        .where(Question.id.in_(req.question_ids))
+        .values(is_anchor=req.is_anchor)
+    )
+    await db.commit()
+    return {"updated": len(req.question_ids), "is_anchor": req.is_anchor}

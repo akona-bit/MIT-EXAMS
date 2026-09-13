@@ -413,11 +413,33 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
             
             # 5. Run MMLE to get a, b parameters
             await append_log(f"Bắt đầu ước lượng tham số (MMLE - Marginal Maximum Likelihood)...")
+
+            # Load anchor items from DB
+            anchor_result = await db.execute(
+                select(Question.id, Question.a_param, Question.b_param)
+                .where(Question.id.in_(unique_qids), Question.is_anchor == True)
+            )
+            anchor_rows = anchor_result.all()
+            anchor_mask = np.zeros(J, dtype=bool)
+            anchor_a = np.zeros(J, dtype=float)
+            anchor_b = np.zeros(J, dtype=float)
+            if anchor_rows:
+                for qid, a_val, b_val in anchor_rows:
+                    idx = qid_to_index.get(qid)
+                    if idx is not None:
+                        anchor_mask[idx] = True
+                        anchor_a[idx] = a_val or 1.0
+                        anchor_b[idx] = b_val or 0.0
+                await append_log(f"Đã tìm thấy {len(anchor_rows)} câu neo (anchor items) — tham số sẽ được giữ cố định.")
+
             try:
                 # K=41 to speed up, max_iter=30
                 # Chạy MMLE trong thread riêng để không block FastAPI event loop
                 a_est, b_est = await asyncio.to_thread(
-                    mmle, U, name=f"IRT_Exam_{exam_id}", max_iter=30, K=41, verbose=False
+                    mmle, U, name=f"IRT_Exam_{exam_id}", max_iter=30, K=41, verbose=False,
+                    anchor_mask=anchor_mask if anchor_rows else None,
+                    anchor_a=anchor_a if anchor_rows else None,
+                    anchor_b=anchor_b if anchor_rows else None,
                 )
                 item_params_for_se = [(float(a), float(b)) for a, b in zip(a_est, b_est)]
                 # all_item_se cũng có thể nặng, đưa vào thread

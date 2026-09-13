@@ -214,6 +214,7 @@ export interface Exam {
   show_answer_mode: string;
   allow_omr?: boolean;
   exam_pdf_url?: string | null;
+  max_attempts?: number | null;
   created_at: string;
   submission_count?: number;
 }
@@ -246,6 +247,66 @@ export interface ExamSessionInfo {
   participant_status: string;
 }
 
+// --- Student Exam Shell (full session data from /exams/{id}/session) ---
+export interface SessionQuestionOption {
+  id: number;
+  content: string;
+  position: number | null;
+}
+
+export interface SessionSubItemOption {
+  id: number;
+  content: string;
+  position: number | null;
+}
+
+export interface SessionSubItem {
+  id: number;
+  label: string;
+  prompt: string | null;
+  kind: string; // tf | single | multi
+  options: SessionSubItemOption[];
+}
+
+export interface SessionQuestion {
+  exam_form_question_id: number;
+  question_id: number;
+  public_code: string | null;
+  content: string;
+  type: string;
+  part: number;
+  position: number;
+  passage_id: number | null;
+  options: SessionQuestionOption[];
+  sub_items: SessionSubItem[];
+}
+
+export interface SavedAnswer {
+  exam_form_question_id: number;
+  selected_answer_id: number | null;
+  selected_answer_ids: number[] | null;
+  selected_subitem_answers: Record<number, any> | null;
+  text_answer: string | null;
+}
+
+export interface ExamSessionFull {
+  exam_id: number;
+  exam_name: string;
+  form_code: string;
+  remaining_seconds: number | null;
+  exam_end_time: string | null;
+  exam_pdf_url: string | null;
+  server_time: string;
+  participant_status: string;
+  questions: SessionQuestion[];
+  saved_answers: SavedAnswer[];
+  exam_mode: string | null;
+  exam_mode_changed: boolean;
+  sbd: string | null;
+  max_attempts: number | null;
+  current_attempt: number;
+}
+
 export interface ExamFormQuestion {
   id: number;
   position: number;
@@ -258,6 +319,34 @@ export interface ExamFormQuestion {
     content: string;
     position: number;
   }[];
+}
+
+// --- Exam Form Detail (xem danh sách mã đề + thứ tự câu) ---
+export interface ExamFormAnswerDetail {
+  id: number;
+  answer_id: number;
+  new_position: number;
+  original_position: number;
+  is_correct: boolean;
+  content: string | null;
+}
+
+export interface ExamFormQuestionDetail {
+  id: number;
+  position: number;
+  question_id: number;
+  part: number;
+  question_content: string | null;
+  answers: ExamFormAnswerDetail[];
+}
+
+export interface ExamFormDetail {
+  id: number;
+  code: string;
+  is_original: boolean;
+  created_at: string;
+  question_count: number;
+  questions: ExamFormQuestionDetail[];
 }
 
 // --- Statistics ---

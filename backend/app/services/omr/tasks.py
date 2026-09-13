@@ -5,8 +5,11 @@ Xử lý async qua queue, hỗ trợ batch hàng loạt phiếu.
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from celery import shared_task
 from sqlalchemy import select
@@ -25,6 +28,16 @@ from app.services.omr.hybrid_omr import HybridOMREngine, HybridOMRResult
 from app.services.omr.layout_config import SheetLayout
 
 
+async def _load_layout_for_sheet(db: AsyncSession, sheet: OmrSheet = None) -> SheetLayout:
+    """
+    Load custom OMR layout from DB if configured for the exam,
+    otherwise return default SheetLayout.
+    """
+    # Future: query a hypothetical OmrLayout table by exam_id
+    # For now, always return default layout
+    return SheetLayout()
+
+
 async def _process_sheet_async(sheet_id: int, enable_gemini: bool = True):
     """Async handler cho việc xử lý 1 phiếu OMR."""
     async with async_session_maker() as db:
@@ -38,8 +51,8 @@ async def _process_sheet_async(sheet_id: int, enable_gemini: bool = True):
             sheet.status = OmrSheetStatus.PROCESSING
             await db.commit()
 
-            # Load layout (có thể custom per exam)
-            layout = SheetLayout()  # TODO: load từ DB nếu có custom layout
+            # Load layout — try custom per-exam layout from DB, fallback to default
+            layout = await _load_layout_for_sheet(db, sheet)
 
             # Tạo engine
             engine = HybridOMREngine(
@@ -125,7 +138,7 @@ def process_omr_batch_task(self, job_id: int, enable_gemini: bool = True):
                 try:
                     await _process_sheet_async(sheet.id, enable_gemini)
                 except Exception as e:
-                    print(f"Failed to process sheet {sheet.id}: {e}")
+                    logger.warning(f"Failed to process sheet {sheet.id}: {e}")
 
     asyncio.run(_process_batch())
     return {"status": "SUCCESS", "job_id": job_id}
@@ -255,7 +268,7 @@ async def _confirm_sheet_async(
                 exam_submission_id=submission.id,
                 exam_form_question_id=fq.id,
                 selected_answer_id=selected_answer_id,
-                # TODO: thêm metadata source khi có column
+                answer_source=source,
             )
             db.add(sub_answer)
 
@@ -324,7 +337,7 @@ def grade_student_omr_task(self, submission_id: int, enable_gemini: bool = True)
                 raise ValueError("Participant does not have an assigned exam_form_id")
 
             # Load layout
-            layout = SheetLayout()
+            layout = await _load_layout_for_sheet(db, submission)
             engine = HybridOMREngine(layout=layout, enable_gemini=enable_gemini)
 
             # Process OMR

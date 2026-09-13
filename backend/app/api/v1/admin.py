@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, cast, Numeric
+from sqlalchemy import select, func, cast, Numeric, text
 from typing import List, Optional
 import os
+import logging
 import shutil
 from datetime import datetime
 from pydantic import BaseModel
@@ -18,6 +19,139 @@ from app.services.audit import log_audit
 from sqlalchemy.orm import selectinload
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+# ─── Supabase Usage Stats (DB + Storage) ────────────────────────────────────
+# Quota tham khảo Supabase Free plan
+DB_QUOTA_BYTES = 500 * 1024 * 1024            # 500 MB
+STORAGE_QUOTA_BYTES = 1 * 1024 * 1024 * 1024  # 1 GB
+
+
+@router.get("/storage-stats", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def get_storage_stats(db: AsyncSession = Depends(get_db)):
+    """
+    Thống kê dung lượng backend trên Supabase:
+    - Database: tổng dung lượng DB + top bảng theo size (kiểm tra table bự: embeddings, tracking logs...)
+    - Storage: dung lượng + số file theo bucket (resources, omr-sheets, exam-pdfs), top file lớn nhất
+    """
+    # 1. Tổng dung lượng database
+    db_size = (await db.execute(text("SELECT pg_database_size(current_database())"))).scalar_one()
+
+    # 2. Top bảng theo size (chỉ schema public — bảng của app)
+    tables_res = await db.execute(text(
+        """
+        SELECT c.relname AS table_name,
+               pg_total_relation_size(c.oid) AS total_size,
+               COALESCE(c.reltuples, 0)::bigint AS row_estimate
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r'
+        ORDER BY pg_total_relation_size(c.oid) DESC
+        """
+    ))
+    tables = [
+        {"name": r.table_name, "total_size": r.total_size, "row_estimate": r.row_estimate}
+        for r in tables_res.all()
+    ]
+
+    # 3. Danh sách bucket + dung lượng từng bucket (đọc từ storage.objects — nhanh hơn listing API)
+    buckets_res = await db.execute(text(
+        "SELECT id, name, public, created_at FROM storage.buckets ORDER BY name"
+    ))
+    buckets = {r.name: {"id": r.id, "public": r.public, "created_at": r.created_at} for r in buckets_res.all()}
+
+    usage_res = await db.execute(text(
+        """
+        SELECT bucket_id, COUNT(*) AS file_count, COALESCE(SUM((metadata->>'size')::bigint), 0) AS total_size
+        FROM storage.objects
+        GROUP BY bucket_id
+        """
+    ))
+    usage_by_bucket = {r.bucket_id: {"file_count": r.file_count, "total_size": r.total_size} for r in usage_res.all()}
+
+    bucket_items = []
+    total_storage_bytes = 0
+    total_files = 0
+    for name, meta in buckets.items():
+        u = usage_by_bucket.get(meta["id"], {"file_count": 0, "total_size": 0})
+        total_storage_bytes += u["total_size"]
+        total_files += u["file_count"]
+        bucket_items.append({
+            "name": name,
+            "public": meta["public"],
+            "file_count": u["file_count"],
+            "total_size": u["total_size"],
+            "created_at": meta["created_at"],
+        })
+    bucket_items.sort(key=lambda b: b["total_size"], reverse=True)
+
+    # 4. Top file lớn nhất (để kiểm tra & dọn dẹp)
+    top_res = await db.execute(text(
+        """
+        SELECT bucket_id, name, (metadata->>'size')::bigint AS size, created_at
+        FROM storage.objects
+        ORDER BY (metadata->>'size')::bigint DESC NULLS LAST
+        LIMIT 30
+        """
+    ))
+    top_objects = [
+        {"bucket": r.bucket_id, "name": r.name, "size": r.size, "created_at": r.created_at}
+        for r in top_res.all()
+    ]
+
+    # 5. Số user auth (Supabase Auth) — best effort
+    auth_users = None
+    try:
+        auth_users = (await db.execute(text("SELECT COUNT(*) FROM auth.users"))).scalar_one()
+    except Exception as e:
+        logger.warning(f"Cannot read auth.users count: {e}")
+
+    return {
+        "database": {
+            "total_bytes": db_size,
+            "quota_bytes": DB_QUOTA_BYTES,
+            "usage_pct": round(db_size / DB_QUOTA_BYTES * 100, 2) if DB_QUOTA_BYTES else 0,
+            "tables": tables,
+        },
+        "storage": {
+            "total_bytes": total_storage_bytes,
+            "total_files": total_files,
+            "quota_bytes": STORAGE_QUOTA_BYTES,
+            "usage_pct": round(total_storage_bytes / STORAGE_QUOTA_BYTES * 100, 2) if STORAGE_QUOTA_BYTES else 0,
+            "buckets": bucket_items,
+            "top_objects": top_objects,
+        },
+        "auth_users": auth_users,
+    }
+
+
+@router.delete("/storage/{bucket}/{object_path:path}", dependencies=[Depends(RequireRole(["ADMIN"]))])
+async def delete_storage_object(
+    bucket: str,
+    object_path: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Xoá 1 file trong bucket Supabase (dọn dung lượng). Chỉ ADMIN, log audit."""
+    exists = (await db.execute(
+        text("SELECT id FROM storage.buckets WHERE name = :b"), {"b": bucket}
+    )).first()
+    if not exists:
+        raise HTTPException(status_code=404, detail=f"Bucket '{bucket}' không tồn tại")
+
+    from app.core.supabase_client import supabase_client
+    try:
+        supabase_client.storage.from_(bucket).remove([object_path])
+    except Exception as e:
+        logger.error(f"Failed to delete storage object {bucket}/{object_path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Xoá file thất bại: {str(e)}")
+
+    await log_audit(
+        db, current_user.id, AuditAction.DELETE,
+        target_type="StorageObject", details=f"{bucket}/{object_path}",
+    )
+    return {"message": "Đã xoá file", "bucket": bucket, "path": object_path}
 
 
 @router.get("/exams/{exam_id}/participants-detail", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])

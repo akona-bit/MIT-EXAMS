@@ -73,6 +73,8 @@ class ExamSessionInfoResponse(BaseModel):
     exam_mode: Optional[str] = None
     exam_mode_changed: bool = False
     sbd: Optional[str] = None
+    max_attempts: Optional[int] = None
+    current_attempt: int = 1
 
 class UpdateExamModeRequest(BaseModel):
     exam_mode: str  # "ONLINE" or "PAPER"

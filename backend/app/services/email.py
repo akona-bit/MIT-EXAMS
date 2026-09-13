@@ -1,5 +1,8 @@
 import httpx
+import logging
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
@@ -21,12 +24,11 @@ def _send(to_email: str, subject: str, html: str) -> dict:
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        print(f"\n[DEV MODE] Gửi email thất bại ({e}).")
-        print(f"[DEV MODE] Nội dung email: {html[:200]}...")
+        logger.warning(f"Gửi email thất bại ({e}).")
+        logger.debug(f"Nội dung email: {html[:200]}...")
         if settings.DEBUG:
             return {"message": "Email sending failed, but suppressed in DEBUG mode."}
-        # In this specific case, we'll suppress it anyway to unblock the user if the key is dead
-        print("[DEV MODE] Bỏ qua lỗi gửi email để tiếp tục quy trình phát triển.")
+        logger.warning("Bỏ qua lỗi gửi email để tiếp tục quy trình phát triển.")
         return {"message": "Email suppressed due to invalid API key"}
 
 

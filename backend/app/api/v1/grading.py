@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
+import logging
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_active_user
@@ -11,6 +12,7 @@ from app.services.grading.scorer import grade_submission_ctt
 from app.models.grading import IrtTask
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class CttScoreResponse(BaseModel):
     submission_id: int

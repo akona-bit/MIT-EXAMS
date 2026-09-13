@@ -7,6 +7,7 @@ import QuestionNavStrip from "../../components/student/QuestionNavGrid";
 import { getMaintenanceStatus, type MaintenanceStatus } from "../../api/system";
 import MaintenanceScreen from "../../components/ui/MaintenanceScreen";
 import LoadingScreen from "../../components/ui/LoadingScreen";
+import { useOfflineSync } from "../../hooks/useOfflineSync";
 
 import { StudentFeedbackModal } from "../../components/student/StudentFeedbackModal";
 import { MessageSquare } from "lucide-react";
@@ -17,6 +18,7 @@ import { sanitizeHtml } from '../../utils/sanitize';
 import { supabase } from "../../lib/supabase";
 import { UploadCloud, Download, Printer } from "lucide-react";
 import { PrintPreviewModal, AnswerSheetPreview } from "../../components/print";
+import type { ExamSessionFull, SavedAnswer } from "../../types";
 
 // ─── Anti-cheat: blocked keys ───
 const BLOCKED_KEYS = new Set([
@@ -32,12 +34,12 @@ export default function StudentExamShell() {
   const location = useLocation();
   const examMode = location.state?.mode || 'online'; // 'online' or 'omr'
 
-  const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [sessionInfo, setSessionInfo] = useState<ExamSessionFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [savedAnswers, setSavedAnswers] = useState<any>({});
+  const [savedAnswers, setSavedAnswers] = useState<Record<number, SavedAnswer>>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(
     new Set()
   );
@@ -66,6 +68,12 @@ export default function StudentExamShell() {
 
   // Print Preview State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // ─── Offline sync ───
+  const { saveAnswer: saveAnswerOffline, loadOfflineAnswers, forceSync } = useOfflineSync({
+    examId: Number(id) || 0,
+    enabled: examMode === 'online',
+  });
 
   // ─── Fetch session ───
   useEffect(() => {
@@ -104,10 +112,26 @@ export default function StudentExamShell() {
         setTimeLeft(data.remaining_seconds);
       }
       
-      const answersMap: any = {};
-      data.saved_answers?.forEach((sa: any) => {
+      const answersMap: Record<number, SavedAnswer> = {};
+      data.saved_answers?.forEach((sa: SavedAnswer) => {
         answersMap[sa.exam_form_question_id] = sa;
       });
+
+      // Merge with offline answers (offline answers are newer if unsynced)
+      try {
+        const offlineAnswers = await loadOfflineAnswers();
+        for (const [questionId, answer] of offlineAnswers) {
+          if (!answersMap[questionId]) {
+            answersMap[questionId] = {
+              exam_form_question_id: questionId,
+              ...answer,
+            } as SavedAnswer;
+          }
+        }
+      } catch {
+        // IndexedDB not available — use server answers only
+      }
+
       setSavedAnswers(answersMap);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Không thể tải phiên thi");
@@ -120,14 +144,15 @@ export default function StudentExamShell() {
   const currentQuestion = sessionInfo?.questions?.[currentQuestionIndex];
   useEffect(() => {
     if (!currentQuestion?.passage_id) return;
-    if (passageCache[currentQuestion.passage_id]) return;
+    const pid = currentQuestion.passage_id;
+    if (passageCache[pid]) return;
     setLoadingPassage(true);
     api
-      .get(`/api/v1/passages/${currentQuestion.passage_id}`)
+      .get(`/api/v1/passages/${pid}`)
       .then((res) => {
         setPassageCache((prev) => ({
           ...prev,
-          [currentQuestion.passage_id]: res.data,
+          [pid]: res.data,
         }));
       })
       .catch(console.error)
@@ -238,15 +263,8 @@ export default function StudentExamShell() {
     if (sessionInfo?.participant_status !== "IN_PROGRESS") return;
     const newAnswers = { ...savedAnswers, [exam_form_question_id]: payload };
     setSavedAnswers(newAnswers);
-    try {
-      await api.post(`/api/v1/exams/${id}/autosave`, {
-        answers: [{ exam_form_question_id, ...payload }],
-      });
-    } catch (err: any) {
-      if (err.response?.status === 403) {
-        fetchSession();
-      }
-    }
+    // Save offline-first (IndexedDB + API)
+    await saveAnswerOffline(exam_form_question_id, payload);
   };
 
   const handleAutoSubmit = async () => {
@@ -580,11 +598,11 @@ export default function StudentExamShell() {
       <header className="relative z-20 bg-gradient-to-r from-blue-700 via-blue-600 to-blue-700 text-white shadow-lg shrink-0">
         <div className="flex items-center justify-between px-5 py-2.5">
           {/* Left: Student Info */}
-          <div className="flex items-center gap-6 text-sm">
-            <div className="font-bold text-base tracking-tight">
+          <div className="flex items-center gap-2 md:gap-6 text-sm min-w-0">
+            <div className="font-bold text-base tracking-tight truncate">
               {user?.full_name || user?.username}
             </div>
-            <div className="hidden md:flex items-center gap-4 text-blue-100 text-xs">
+            <div className="hidden sm:flex items-center gap-4 text-blue-100 text-xs">
               <span>
                 SBD:{" "}
                 <strong className="text-white">
@@ -598,8 +616,17 @@ export default function StudentExamShell() {
                   {sessionInfo?.form_code}
                 </strong>
               </span>
-              <span className="text-blue-300">|</span>
-              <span>{sessionInfo?.exam_name}</span>
+              <span className="text-blue-300 hidden md:inline">|</span>
+              <span className="hidden md:inline">{sessionInfo?.exam_name}</span>
+              {sessionInfo?.max_attempts && (
+                <>
+                  <span className="text-blue-300 hidden lg:inline">|</span>
+                  <span className="hidden lg:flex items-center gap-1 bg-amber-500/20 text-amber-100 px-2 py-0.5 rounded border border-amber-400/30">
+                    <Trophy className="w-3 h-3" />
+                    Lần thi {sessionInfo?.current_attempt}/{sessionInfo?.max_attempts}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -635,24 +662,24 @@ export default function StudentExamShell() {
             {/* Feedback Button */}
             <button
               onClick={() => setIsFeedbackOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs bg-white/10 text-blue-100 hover:bg-white/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs bg-white/10 text-blue-100 hover:bg-white/20 transition-colors"
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              Góp ý
+              <span className="hidden sm:inline">Góp ý</span>
             </button>
 
             {/* Connection indicator */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs text-blue-200">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-blue-200">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green-400" />
               </span>
-              Đang kết nối
+              <span className="hidden md:inline">Đang kết nối</span>
             </div>
 
             {/* Answered counter */}
-            <div className="hidden sm:block text-xs text-blue-100 bg-white/10 px-3 py-1.5 rounded-lg">
-              Đã trả lời:{" "}
+            <div className="text-xs text-blue-100 bg-white/10 px-3 py-1.5 rounded-lg">
+              <span className="hidden sm:inline">Đã trả lời: </span>
               <strong className="text-white">
                 {answeredCount}/{totalQuestions}
               </strong>

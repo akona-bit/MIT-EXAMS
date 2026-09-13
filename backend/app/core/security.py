@@ -23,7 +23,6 @@ def create_access_token(
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-import string
 import secrets
 
 def generate_complex_password(length: int = 8) -> str:

@@ -184,6 +184,24 @@ class OpenCVOMRPipeline:
             candidates.append((cx, cy, area))
 
         if len(candidates) < 4:
+            # Fallback: find the largest contour that might be the bounding box
+            largest_contour = None
+            max_c_area = 0
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if area > max_c_area:
+                    max_c_area = area
+                    largest_contour = contour
+                    
+            if largest_contour is not None and max_c_area > min_area * 50:
+                pts = largest_contour.reshape(-1, 2)
+                s = pts.sum(axis=1)
+                diff = np.diff(pts, axis=1)
+                tl = pts[np.argmin(s)]
+                br = pts[np.argmax(s)]
+                tr = pts[np.argmin(diff)]
+                bl = pts[np.argmax(diff)]
+                return [(tl[0], tl[1]), (tr[0], tr[1]), (br[0], br[1]), (bl[0], bl[1])]
             return None
 
         # Sắp xếp theo diện tích giảm dần, lấy 4 marker lớn nhất

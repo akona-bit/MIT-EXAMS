@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status, BackgroundTasks, File, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+import logging
 
 limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
 from app.models.exam import Exam, ExamStatus, Matrix, ExamForm, ExamParticipant
-from app.schemas.exam import ExamResponse, GenerateExamRequest, ExamPublishRequest, ExamUpdateRequest, ExamParticipantCreate, ExamParticipantResponse
+from app.schemas.exam import ExamResponse, GenerateExamRequest, ExamPublishRequest, ExamUpdateRequest, ExamParticipantCreate, ExamParticipantResponse, ExamFormDetail
 from app.schemas.exam_session import AutosaveRequest, AutosaveResponse, TrackingEventRequest, TrackingEventResponse, ExamSessionInfoResponse, SubmitExamRequest, UpdateExamModeRequest
 from app.api.dependencies import RequireRole, get_current_user
 from app.models.user import User
@@ -20,6 +21,7 @@ from app.services.exam_session import publish_exam, assign_participants, get_or_
 from app.core.analytics import capture
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/")
@@ -74,30 +76,83 @@ async def get_my_history(db: AsyncSession = Depends(get_db), current_user: User 
     rows = result.all()
 
     history = []
+    # Group by exam_id to find the best attempt
+    exam_groups = {}
     for participant, exam, submission, exam_result in rows:
         score = None
         max_score = 1200
         if exam_result and exam_result.total_score is not None:
             score = exam_result.total_score
-            max_score = 1200
         elif exam_result:
             score = (exam_result.ctt_score_part1 or 0) + (exam_result.ctt_score_part2 or 0) + (exam_result.ctt_score_part3 or 0) + (exam_result.ctt_score_part4 or 0)
-            max_score = 1200
-        else:
-            score = None
-            max_score = 1200
-
-        history.append({
+            
+        time_spent = round((participant.submit_time - participant.start_time).total_seconds() / 60) if participant.submit_time and participant.start_time else 0
+        
+        attempt_data = {
             "id": exam.id,
             "name": exam.name,
             "date": (participant.submit_time or exam.created_at).isoformat() if participant.submit_time else exam.created_at.isoformat(),
             "score": score,
             "max_score": max_score,
-            "time_spent": round((participant.submit_time - participant.start_time).total_seconds() / 60) if participant.submit_time and participant.start_time else 0,
+            "time_spent": time_spent,
             "status": participant.status.value if participant.status else "NOT_STARTED",
+            "max_attempts": exam.max_attempts,
+            "attempt_number": participant.attempt_number
+        }
+        
+        # Keep the attempt with the highest score
+        if exam.id not in exam_groups:
+            exam_groups[exam.id] = attempt_data
+        else:
+            current_best = exam_groups[exam.id]["score"] or 0
+            this_score = score or 0
+            if this_score > current_best:
+                exam_groups[exam.id] = attempt_data
+
+    history = list(exam_groups.values())
+    
+    return {"items": history}
+
+
+@router.get("/{exam_id}/my-attempts", dependencies=[Depends(RequireRole(["STUDENT"]))])
+async def get_my_attempts(exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    stmt = (
+        select(ExamParticipant, Exam, ExamSubmission, ExamResult)
+        .join(Exam, Exam.id == ExamParticipant.exam_id)
+        .outerjoin(ExamSubmission, ExamSubmission.exam_participant_id == ExamParticipant.id)
+        .outerjoin(ExamResult, ExamResult.exam_submission_id == ExamSubmission.id)
+        .where(ExamParticipant.user_id == current_user.id)
+        .where(ExamParticipant.exam_id == exam_id)
+        .where(ExamParticipant.status.in_(["SUBMITTED", "IN_PROGRESS"]))
+        .order_by(ExamParticipant.attempt_number.desc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    attempts = []
+    for participant, exam, submission, exam_result in rows:
+        score = None
+        max_score = 1200
+        if exam_result and exam_result.total_score is not None:
+            score = exam_result.total_score
+        elif exam_result:
+            score = (exam_result.ctt_score_part1 or 0) + (exam_result.ctt_score_part2 or 0) + (exam_result.ctt_score_part3 or 0) + (exam_result.ctt_score_part4 or 0)
+            
+        time_spent = round((participant.submit_time - participant.start_time).total_seconds() / 60) if participant.submit_time and participant.start_time else 0
+        
+        attempts.append({
+            "id": exam.id,
+            "name": exam.name,
+            "date": (participant.submit_time or exam.created_at).isoformat() if participant.submit_time else exam.created_at.isoformat(),
+            "score": score,
+            "max_score": max_score,
+            "time_spent": time_spent,
+            "status": participant.status.value if participant.status else "NOT_STARTED",
+            "max_attempts": exam.max_attempts,
+            "attempt_number": participant.attempt_number
         })
 
-    return {"items": history}
+    return {"items": attempts}
 
 
 @router.post("/generate", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -205,13 +260,21 @@ async def upload_exam_pdf(
 @router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireRole(["ADMIN"]))])
 async def delete_exam(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import delete as sa_delete
-    from app.models.exam import ExamFormQuestion, ExamParticipant as ExamParticipantModel
+    from app.models.exam import ExamFormQuestion, ExamParticipant as ExamParticipantModel, ExamSubmission, ExamSubmissionAnswer
     exam = await db.get(Exam, exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
     if exam.status == ExamStatus.PUBLISHED:
         raise HTTPException(status_code=400, detail="Không thể xóa exam đã phát hành")
-    # Delete related data
+    
+    # Delete in dependency order: submissions → participants → forms → exam
+    participant_ids = [p.id for p in (await db.execute(select(ExamParticipantModel).where(ExamParticipantModel.exam_id == exam_id))).scalars().all()]
+    if participant_ids:
+        submission_ids = [s.id for s in (await db.execute(select(ExamSubmission).where(ExamSubmission.exam_participant_id.in_(participant_ids)))).scalars().all()]
+        if submission_ids:
+            await db.execute(sa_delete(ExamSubmissionAnswer).where(ExamSubmissionAnswer.exam_submission_id.in_(submission_ids)))
+        await db.execute(sa_delete(ExamSubmission).where(ExamSubmission.exam_participant_id.in_(participant_ids)))
+    
     form_ids = [f.id for f in (await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))).scalars().all()]
     if form_ids:
         await db.execute(sa_delete(ExamFormQuestion).where(ExamFormQuestion.exam_form_id.in_(form_ids)))
@@ -242,6 +305,69 @@ async def get_exam_forms(exam_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ExamForm).where(ExamForm.exam_id == exam_id))
     forms = result.scalars().all()
     return [{"id": f.id, "code": f.code, "is_original": f.is_original, "created_at": f.created_at} for f in forms]
+
+
+@router.get("/{exam_id}/forms/detail", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
+async def get_exam_forms_detail(exam_id: int, db: AsyncSession = Depends(get_db)):
+    from app.models.exam import ExamFormQuestion, ExamFormAnswer
+    from app.models.question import Question
+
+    result = await db.execute(
+        select(ExamForm)
+        .where(ExamForm.exam_id == exam_id)
+        .options(
+            selectinload(ExamForm.questions)
+            .selectinload(ExamFormQuestion.answers),
+            selectinload(ExamForm.questions)
+            .selectinload(ExamFormQuestion.question_ref)
+            .selectinload(Question.answers),
+        )
+        .order_by(ExamForm.code)
+    )
+    forms = result.scalars().unique().all()
+
+    response = []
+    for form in forms:
+        questions = sorted(form.questions, key=lambda q: q.position)
+        question_details = []
+        for q in questions:
+            answers = sorted(q.answers, key=lambda a: a.new_position)
+            q_content = None
+            # Map đáp án gốc theo ID — để biết is_correct / vị trí gốc / nội dung
+            original_answers = {}
+            if q.question_ref:
+                q_content = q.question_ref.content[:100] if q.question_ref.content else None
+                original_answers = {a.id: a for a in q.question_ref.answers}
+            answer_details = []
+            for a in answers:
+                orig = original_answers.get(a.answer_id)
+                answer_details.append({
+                    "id": a.id,
+                    "answer_id": a.answer_id,
+                    "new_position": a.new_position,
+                    "original_position": orig.position if orig else 0,
+                    "is_correct": bool(orig.is_correct) if orig else False,
+                    "content": (orig.content[:80] if orig and orig.content else None),
+                })
+            question_details.append({
+                "id": q.id,
+                "position": q.position,
+                "question_id": q.question_id,
+                "part": q.part,
+                "question_content": q_content,
+                "answers": answer_details,
+            })
+
+        response.append({
+            "id": form.id,
+            "code": form.code,
+            "is_original": form.is_original,
+            "created_at": form.created_at,
+            "question_count": len(questions),
+            "questions": question_details,
+        })
+
+    return response
 
 
 @router.put("/{exam_id}/publish", response_model=ExamResponse, dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
@@ -338,9 +464,21 @@ async def assign_participants_compat(request: Request, exam_id: int, user_ids: L
 
 @router.post("/{exam_id}/start", dependencies=[Depends(RequireRole(["STUDENT"]))])
 async def start_exam(request: Request, exam_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    form = await get_or_assign_exam_form(db, exam_id, current_user.id)
-    capture(request, "exam_started", {"exam_id": exam_id, "form_code": form.code})
-    return {"message": "Exam started", "form_code": form.code, "form_id": form.id}
+    form, participant = await get_or_assign_exam_form(db, exam_id, current_user.id)
+    
+    # Get max attempts from exam
+    exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
+    exam = exam_result.scalars().first()
+    max_attempts = exam.max_attempts if exam else None
+
+    capture(request, "exam_started", {"exam_id": exam_id, "form_code": form.code, "attempt_number": participant.attempt_number})
+    return {
+        "message": "Exam started", 
+        "form_code": form.code, 
+        "form_id": form.id,
+        "attempt_number": participant.attempt_number,
+        "max_attempts": max_attempts
+    }
 
 from app.core.supabase_client import supabase_client
 from app.core.security import generate_complex_password, get_password_hash
@@ -394,7 +532,7 @@ async def generate_credentials(exam_id: int, db: AsyncSession = Depends(get_db))
                         attributes={"password": new_password}
                     )
                 except Exception as e:
-                    print(f"Failed to update Supabase password for {user.email}: {e}")
+                    logger.warning(f"Failed to update Supabase password for {user.email}: {e}")
                     
         export_data.append({
             "full_name": user.full_name,
@@ -517,7 +655,7 @@ async def get_student_leaderboard(exam_id: int, db: AsyncSession = Depends(get_d
     stmt = select(ExamParticipant).where(
         ExamParticipant.exam_id == exam_id,
         ExamParticipant.user_id == current_user.id
-    )
+    ).order_by(ExamParticipant.attempt_number.desc())
     result = await db.execute(stmt)
     participant = result.scalars().first()
     
@@ -547,20 +685,29 @@ async def get_student_leaderboard(exam_id: int, db: AsyncSession = Depends(get_d
         return {"status": "no_data"}
         
     # 3. Sort by total_score (IRT) or raw_total_score if IRT not available
-    students = []
+    students_dict = {}
     for r, u in records:
-        # User total score: use total_score if available (IRT), else fallback to CTT parts
+        # Determine raw score for comparison (to find the best attempt)
+        raw_score = r.raw_total_score
+        
+        # Determine display score
         if r.total_score is not None:
-            score = r.total_score
+            display_score = r.total_score
         else:
-            score = (r.ctt_score_part1 or 0) + (r.ctt_score_part2 or 0) + (r.ctt_score_part3 or 0) + (r.ctt_score_part4 or 0)
+            display_score = (r.ctt_score_part1 or 0) + (r.ctt_score_part2 or 0) + (r.ctt_score_part3 or 0) + (r.ctt_score_part4 or 0)
             
-        students.append({
-            "user_id": u.id,
-            "name": u.full_name or u.username,
-            "score": round(score, 2),
-            "submit_time": r.created_at.isoformat() if r.created_at else None
-        })
+        display_score = round(display_score, 2)
+        
+        if u.id not in students_dict or students_dict[u.id]["raw_score"] < raw_score:
+            students_dict[u.id] = {
+                "user_id": u.id,
+                "name": u.full_name or u.username,
+                "score": display_score,
+                "raw_score": raw_score,
+                "submit_time": r.created_at.isoformat() if r.created_at else None
+            }
+            
+    students = list(students_dict.values())
         
     # Sort by score descending
     students.sort(key=lambda x: x["score"], reverse=True)

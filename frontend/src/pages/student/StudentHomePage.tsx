@@ -74,6 +74,8 @@ interface MyExamInfo {
   score: number | null;
   max_score: number;
   time_spent: number;
+  max_attempts?: number | null;
+  attempt_number?: number;
 }
 
 export default function StudentHomePage() {
@@ -353,27 +355,51 @@ export default function StudentHomePage() {
                         <BookOpen className="h-3.5 w-3.5 text-slate-400" />
                         Mã #{exam.id}
                       </span>
+                      {exam.max_attempts && (
+                        <span className="flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
+                          <Trophy className="h-3.5 w-3.5" />
+                          Giới hạn {exam.max_attempts} lần thi
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <Button
-                  onClick={() => handleOpenWarning(exam)}
-                  disabled={startingExamId === exam.id}
-                  className="w-full sm:w-auto shrink-0 shadow-md shadow-primary-500/20"
-                >
-                  {startingExamId === exam.id ? (
-                    <>
-                      <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2" />
-                      Đang vào…
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-1.5" />
-                      Vào thi
-                    </>
-                  )}
-                </Button>
+                {(() => {
+                  const myAttempts = myExams.filter(m => m.id === exam.id);
+                  const latestAttempt = myAttempts.length > 0 ? myAttempts[0] : null;
+                  const isMaxReached = exam.max_attempts && myAttempts.length >= exam.max_attempts && latestAttempt?.status === "SUBMITTED";
+                  
+                  return (
+                    <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                      <Button
+                        onClick={() => handleOpenWarning(exam)}
+                        disabled={startingExamId === exam.id || isMaxReached}
+                        className={`w-full sm:w-auto shadow-md ${isMaxReached ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'shadow-primary-500/20'}`}
+                      >
+                        {startingExamId === exam.id ? (
+                          <>
+                            <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2" />
+                            Đang vào…
+                          </>
+                        ) : isMaxReached ? (
+                          <>Hết lượt thi</>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-1.5" />
+                            Vào thi
+                          </>
+                        )}
+                      </Button>
+                      
+                      {latestAttempt && latestAttempt.status === "SUBMITTED" && !isMaxReached && (
+                        <p className="text-[11px] text-slate-500 text-center sm:text-right font-medium">
+                          Đã thi {myAttempts.length} lần
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </motion.div>
             ))}
           </motion.div>
@@ -421,7 +447,7 @@ export default function StudentHomePage() {
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {e.status === "SUSPENDED"
                           ? "Bị đình chỉ"
-                          : `Đã nộp · ${formatDate(e.date)}`}
+                          : `Lần thi ${e.attempt_number || 1} · ${formatDate(e.date)}`}
                       </p>
                     </div>
                   </div>
