@@ -4,6 +4,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 import logging
+import asyncio
 
 from app.db.database import get_db
 from app.api.dependencies import RequireRole, get_current_active_user
@@ -51,7 +52,7 @@ import uuid
 
 @router.post("/exams/{exam_id}/run-irt", dependencies=[Depends(RequireRole(["ADMIN", "TEACHER"]))])
 async def run_irt(request: Request, exam_id: int, db: AsyncSession = Depends(get_db)):
-    from app.services.grading.scorer import run_irt_task
+    from app.services.grading.scorer import background_run_irt
     
     # Generate UUID for the task
     task_id = str(uuid.uuid4())
@@ -61,8 +62,8 @@ async def run_irt(request: Request, exam_id: int, db: AsyncSession = Depends(get
     db.add(irt_task)
     await db.commit()
     
-    # Dispatch to Celery worker (tách khỏi web process, không tranh CPU với request khác)
-    run_irt_task.apply_async(args=[exam_id, task_id])
+    # Run directly as async task (Render free tier has no Celery broker/worker)
+    asyncio.create_task(background_run_irt(exam_id, task_id))
     
     capture(request, "irt_calibration_started", {"exam_id": exam_id})
     
