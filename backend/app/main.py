@@ -2,7 +2,8 @@ import atexit
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-
+from app.api.v1.internal import router as internal_router
+app.include_router(internal_router, prefix="/api/v1/internal", tags=["Internal"])
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
