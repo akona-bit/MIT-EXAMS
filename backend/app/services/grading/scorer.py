@@ -1,5 +1,6 @@
 from typing import Any, Optional
 import asyncio
+import gc
 import logging
 
 logger = logging.getLogger(__name__)
@@ -413,6 +414,7 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
             
             # 5. Run MMLE to get a, b parameters
             await append_log(f"Bắt đầu ước lượng tham số (MMLE - Marginal Maximum Likelihood)...")
+            gc.collect()
 
             # Load anchor items from DB
             anchor_result = await db.execute(
@@ -433,10 +435,11 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                 await append_log(f"Đã tìm thấy {len(anchor_rows)} câu neo (anchor items) — tham số sẽ được giữ cố định.")
 
             try:
-                # K=41 to speed up, max_iter=30
+                # K=21 to reduce memory on Render free tier (512MB), max_iter=20
                 # Chạy MMLE trong thread riêng để không block FastAPI event loop
+                gc.collect()
                 a_est, b_est = await asyncio.to_thread(
-                    mmle, U, name=f"IRT_Exam_{exam_id}", max_iter=30, K=41, verbose=False,
+                    mmle, U, name=f"IRT_Exam_{exam_id}", max_iter=20, K=21, verbose=False,
                     anchor_mask=anchor_mask if anchor_rows else None,
                     anchor_a=anchor_a if anchor_rows else None,
                     anchor_b=anchor_b if anchor_rows else None,
@@ -453,6 +456,7 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                 se_a = item_se_matrix[:, 0]
                 se_b = item_se_matrix[:, 1]
                 await append_log(f"Ước lượng tham số MMLE thành công cho {J} câu hỏi.")
+                gc.collect()
             except Exception as e:
                 if task:
                     task.status = "FAILED"
@@ -536,6 +540,10 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
             if exam_result_updates:
                 await bulk_update(db, ExamResult, exam_result_updates)
                 await append_log(f"Đã cập nhật điểm chuẩn (True Score) cho {N} bài làm.")
+            
+            # Free memory before CTT analysis
+            del clean_responses
+            gc.collect()
             
             # Compute CTT and Chi-Square
             await append_log("Đang phân tích chất lượng câu hỏi (CTT & Chi-Square Fit)...")
