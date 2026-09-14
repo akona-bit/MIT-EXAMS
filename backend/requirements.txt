@@ -28,6 +28,7 @@ pygam
 tzdata
 supabase>=2.3.4
 pgvector>=0.2.4
+celery[redis]>=5.3.0
 
 # Dev/Lint
 ruff>=0.6.0

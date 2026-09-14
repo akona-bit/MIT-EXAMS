@@ -28,3 +28,4 @@ pygam
 tzdata
 supabase
 pgvector
+celery[redis]
