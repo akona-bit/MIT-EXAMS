@@ -631,11 +631,16 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
         except Exception:
             logger.exception(f"Could not mark IrtTask {task_id} as FAILED")
         raise
+
+
 from celery import shared_task
-import asyncio
 
 @shared_task(bind=True)
 def run_irt_task(self, exam_id: int, task_id: str):
-    """Celery task — thay cho FastAPI BackgroundTasks."""
+    """
+    Celery task — thay cho FastAPI BackgroundTasks.
+    Chạy trong Celery worker process riêng, không tranh CPU với web server.
+    """
     asyncio.run(background_run_irt(exam_id, task_id))
     return {"status": "SUCCESS", "exam_id": exam_id}
+
