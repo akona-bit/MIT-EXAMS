@@ -4,10 +4,16 @@ import App from './App.tsx'
 import './index.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+const suppressExtensionErrors = (msg: string | Event) => {
+  const text = typeof msg === 'string' ? msg : (msg as ErrorEvent).message || '';
+  return typeof text === 'string' && text.includes('message channel closed');
+};
+
 window.addEventListener('unhandledrejection', (e) => {
-  if (e.reason?.message?.includes('message channel closed')) {
-    e.preventDefault();
-  }
+  if (suppressExtensionErrors(e.reason?.message)) e.preventDefault();
+});
+window.addEventListener('error', (e) => {
+  if (suppressExtensionErrors(e.message)) e.preventDefault();
 });
 
 const queryClient = new QueryClient()
