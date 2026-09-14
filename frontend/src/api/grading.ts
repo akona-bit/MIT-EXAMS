@@ -4,6 +4,7 @@ export interface IrtTaskStatus {
   task_id: string;
   status: string;
   logs?: { time: string; msg: string }[];
+  error_details?: string | null;
 }
 
 export async function runIrtCalibration(examId: number): Promise<{ message: string; task_id: string }> {

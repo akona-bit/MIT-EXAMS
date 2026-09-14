@@ -36,6 +36,7 @@ export default function ExamDetailPage() {
   const [irtTaskId, setIrtTaskId] = useState<string | null>(null);
   const [irtStatus, setIrtStatus] = useState<string | null>(null);
   const [irtLogs, setIrtLogs] = useState<{time: string, msg: string}[]>([]);
+  const [irtError, setIrtError] = useState<string | null>(null);
   const [isIrtModalOpen, setIsIrtModalOpen] = useState(false);
   
   const [overview, setOverview] = useState<ExamOverview | null>(null);
@@ -114,13 +115,16 @@ export default function ExamDetailPage() {
         if (res.logs) {
           setIrtLogs(res.logs);
         }
+        if (res.error_details) {
+          setIrtError(res.error_details);
+        }
         if (res.status === 'SUCCESS' || res.status === 'FAILED') {
           clearInterval(interval);
           if (res.status === 'SUCCESS') {
             toast.success('Chấm điểm IRT hoàn tất!');
             fetchExamData();
           } else {
-            toast.error('Chấm điểm IRT thất bại!');
+            toast.error(res.error_details ? `IRT thất bại: ${res.error_details}` : 'Chấm điểm IRT thất bại!');
           }
         }
       } catch (error) {
@@ -183,6 +187,7 @@ export default function ExamDetailPage() {
         setIrtTaskId(res.task_id);
         setIrtStatus('PENDING');
         setIrtLogs([]);
+        setIrtError(null);
         setIsIrtModalOpen(true);
       }
     } catch (error) {
@@ -879,6 +884,7 @@ export default function ExamDetailPage() {
           onClose={() => setIsIrtModalOpen(false)}
           status={irtStatus}
           logs={irtLogs}
+          errorDetails={irtError}
         />
       )}
 

@@ -63,7 +63,26 @@ async def run_irt(request: Request, exam_id: int, db: AsyncSession = Depends(get
     await db.commit()
     
     # Run directly as async task (Render free tier has no Celery broker/worker)
-    asyncio.create_task(background_run_irt(exam_id, task_id))
+    async def _safe_run():
+        try:
+            await background_run_irt(exam_id, task_id)
+        except Exception as exc:
+            logger.exception(f"IRT task {task_id} crashed: {exc}")
+            try:
+                from app.db.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as s:
+                    from sqlalchemy import update as sa_update
+                    await s.execute(
+                        sa_update(IrtTask).where(IrtTask.celery_task_id == task_id).values(
+                            status="FAILED",
+                            error_details=f"Unhandled: {exc}",
+                        )
+                    )
+                    await s.commit()
+            except Exception:
+                logger.exception(f"Failed to mark task {task_id} as FAILED")
+    
+    asyncio.create_task(_safe_run())
     
     capture(request, "irt_calibration_started", {"exam_id": exam_id})
     
@@ -86,4 +105,4 @@ async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
         if datetime.now(timezone.utc) - irt_task.created_at > timedelta(minutes=15):
             task_status = "FAILED"
     
-    return {"task_id": task_id, "status": task_status, "logs": irt_task.logs or []}
+    return {"task_id": task_id, "status": task_status, "logs": irt_task.logs or [], "error_details": irt_task.error_details}

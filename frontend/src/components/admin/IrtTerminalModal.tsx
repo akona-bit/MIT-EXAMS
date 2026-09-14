@@ -20,6 +20,7 @@ interface IrtTerminalModalProps {
   onClose: () => void;
   status: string | null;
   logs: IrtLog[];
+  errorDetails?: string | null;
 }
 
 // 8 milestone khớp chính xác với các dòng log backend phát ra (scorer.py),
@@ -64,7 +65,7 @@ function fmtDuration(totalSec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function IrtTerminalModal({ isOpen, onClose, status, logs }: IrtTerminalModalProps) {
+export default function IrtTerminalModal({ isOpen, onClose, status, logs, errorDetails }: IrtTerminalModalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const isComplete = status === 'SUCCESS' || status === 'FAILED';
   const isRunning = status === 'PENDING' || status === 'STARTED';
@@ -341,7 +342,14 @@ export default function IrtTerminalModal({ isOpen, onClose, status, logs }: IrtT
               <div className="mt-auto">
                 <div className="p-3 bg-danger-500/10 border border-danger-500/25 rounded-lg text-danger-500 text-xs flex items-start gap-2">
                   <Circle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Quá trình phân tích thất bại. Điểm tạm thời vẫn theo CTT — có thể chạy lại IRT.</span>
+                  <div>
+                    <span>Quá trình phân tích thất bại. Điểm tạm thời vẫn theo CTT — có thể chạy lại IRT.</span>
+                    {errorDetails && (
+                      <div className="mt-2 p-2 bg-danger-500/10 rounded border border-danger-500/20 font-mono text-[11px] text-danger-400 break-all">
+                        {errorDetails}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
