@@ -228,6 +228,7 @@ class MatrixImportService:
                 "status": "match" if node_id else "new",
                 "node_id": node_id,
                 "note": row.get("note", ""),
+                "code": row.get("code", ""),
                 "suggestions": suggestions,
                 "distributed_rules": distributed_rules,
             })
@@ -308,7 +309,8 @@ class MatrixImportService:
                             level=rule_data.get("level", 1),
                             count=count,
                             part=rule_data.get("part", 1),
-                            note=rule_data.get("note") or None
+                            note=rule_data.get("note") or None,
+                            code=row.get("code") or None
                         ))
                 else:
                     db.add(MatrixRule(
@@ -318,7 +320,8 @@ class MatrixImportService:
                         level=rule_data.get("level", 1),
                         count=count,
                         part=rule_data.get("part", 1),
-                        note=rule_data.get("note") or None
+                        note=rule_data.get("note") or None,
+                        code=row.get("code") or None
                     ))
                 total_added += count
 

@@ -19,6 +19,7 @@ interface PreviewRow {
   original_count: number;
   status: string;
   node_id: number | null;
+  code?: string;
   suggestions: { id: number; name: string }[];
   distributed_rules: { level: number; question_type: string; count: number }[];
 }
@@ -83,12 +84,12 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
   const handleResolveNode = async (index: number, nodeId: number) => {
     const newRows = [...previewRows];
     newRows[index].node_id = nodeId;
-    newRows[index].status = "✅ Khớp chính xác";
+    newRows[index].status = "match";
     setPreviewRows(newRows);
   };
 
   const handleConfirmImport = async () => {
-    const unresolved = previewRows.some(r => r.status !== "✅ Khớp chính xác");
+    const unresolved = previewRows.some(r => !r.node_id);
     if (unresolved) {
       toast.warning("Vui lòng xử lý tất cả các dòng chưa khớp trước khi nhập");
       return;
@@ -266,6 +267,7 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
                   <tr>
+                    <th className="px-4 py-2 font-semibold">Mã</th>
                     <th className="px-4 py-2 font-semibold">Kiến thức</th>
                     <th className="px-4 py-2 font-semibold">SL</th>
                     <th className="px-4 py-2 font-semibold">Trạng thái</th>
@@ -275,6 +277,9 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
                 <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                   {previewRows.map((row, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-2 font-mono text-xs font-bold text-slate-600">
+                        {row.code || "—"}
+                      </td>
                       <td className="px-4 py-2">
                         <div className="font-medium">{row.skill}</div>
                         <div className="text-[10px] text-slate-400">{row.topic} &gt; {row.concept}</div>
@@ -282,14 +287,14 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
                       <td className="px-4 py-2 font-bold">{row.original_count}</td>
                       <td className="px-4 py-2">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          row.status.startsWith('✅') ? 'bg-green-100 text-green-700' :
-                          row.status.startsWith('⚠️') ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                          row.node_id ? 'bg-green-100 text-green-700' :
+                          row.status === 'new' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
                         }`}>
-                          {row.status}
+                          {row.node_id ? '✅ Khớp' : row.status === 'new' ? '⚠️ Mới' : '❌ Lỗi'}
                         </span>
                       </td>
                       <td className="px-4 py-2">
-                        {row.status === "✅ Khớp chính xác" ? (
+                        {row.node_id ? (
                           <CheckCircle2 className="w-4 h-4 text-green-500" />
                         ) : (
                           <select
@@ -316,7 +321,7 @@ export default function MatrixImportModal({ isOpen, onClose, matrixId, onSuccess
                 onClick={handleConfirmImport}
                 isLoading={isLoading}
                 size="lg"
-                disabled={previewRows.some(r => r.status !== "✅ Khớp chính xác")}
+                disabled={previewRows.some(r => !r.node_id)}
               >
                 Xác nhận nhập dữ liệu
               </Button>

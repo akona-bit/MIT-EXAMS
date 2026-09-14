@@ -411,24 +411,45 @@ async def load_pool_from_db(db: AsyncSession, matrix_rules: List[MatrixRule]) ->
     if not kn_ids:
         return []
 
-    query = text("""
-        SELECT
-            q.id, q.level, q.type as question_type, q.b_param as irt_b, q.status, q.passage_id,
-            kn.name as skill,
-            p1.name as concept,
-            p2.name as topic,
-            COALESCE(v.exposure_count, 0) as exposure_count
-        FROM question q
-        JOIN question_skill_tag qst ON q.id = qst.question_id
-        JOIN knowledge_node kn ON qst.knowledge_node_id = kn.id
-        LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
-        LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
-        LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
-        LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
-        LEFT JOIN v_question_exposure v ON v.question_id = q.id
-        WHERE q.status = 'APPROVED'
-        AND qst.knowledge_node_id IN :kn_ids
-    """)
+    # Check if knowledge_node_parent table exists
+    table_check = await db.execute(text(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema='public' AND table_name='knowledge_node_parent')"
+    ))
+    has_knp = table_check.scalar()
+
+    if has_knp:
+        query = text("""
+            SELECT
+                q.id, q.level, q.type as question_type, q.b_param as irt_b, q.status, q.passage_id,
+                kn.name as skill,
+                p1.name as concept,
+                p2.name as topic
+            FROM question q
+            JOIN knowledge_node kn ON q.knowledge_node_id = kn.id
+            LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
+            LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
+            LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
+            LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
+            WHERE q.status = 'APPROVED'
+            AND q.knowledge_node_id IN :kn_ids
+        """)
+    else:
+        # Fallback: use parent_id on knowledge_node (old schema)
+        query = text("""
+            SELECT
+                q.id, q.level, q.type as question_type, q.b_param as irt_b, q.status, q.passage_id,
+                kn.name as skill,
+                p1.name as concept,
+                p2.name as topic
+            FROM question q
+            JOIN knowledge_node kn ON q.knowledge_node_id = kn.id
+            LEFT JOIN knowledge_node p1 ON kn.parent_id = p1.id
+            LEFT JOIN knowledge_node p2 ON p1.parent_id = p2.id
+            WHERE q.status = 'APPROVED'
+            AND q.knowledge_node_id IN :kn_ids
+        """)
+
     query = query.bindparams(bindparam("kn_ids", expanding=True))
     result = await db.execute(query, {"kn_ids": tuple(kn_ids)})
     rows = result.fetchall()
@@ -445,7 +466,7 @@ async def load_pool_from_db(db: AsyncSession, matrix_rules: List[MatrixRule]) ->
             question_type=r.question_type.value if hasattr(r.question_type, 'value') else r.question_type,
             passage_id=r.passage_id,
             irt_b=r.irt_b,
-            exposure_count=r.exposure_count,
+            exposure_count=0,
             status=r.status.value if hasattr(r.status, 'value') else r.status
         ))
     return pool
@@ -470,20 +491,40 @@ async def parse_matrix_rules(db: AsyncSession, rules: List[MatrixRule]) -> List[
                 "group_mode": row.group_mode or "ATOMIC"
             }
 
+    # Check if knowledge_node_parent table exists
+    table_check = await db.execute(text(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema='public' AND table_name='knowledge_node_parent')"
+    ))
+    has_knp = table_check.scalar()
+
     for r in rules:
         # Load knowledge node hierarchy to get topic, concept, skill names via SQL
-        query = text("""
-            SELECT
-                kn.name as skill_name,
-                p1.name as concept_name,
-                p2.name as topic_name
-            FROM knowledge_node kn
-            LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
-            LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
-            LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
-            LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
-            WHERE kn.id = :kn_id
-        """)
+        if has_knp:
+            query = text("""
+                SELECT
+                    kn.name as skill_name,
+                    p1.name as concept_name,
+                    p2.name as topic_name
+                FROM knowledge_node kn
+                LEFT JOIN knowledge_node_parent knp1 ON knp1.child_id = kn.id AND knp1.is_primary = TRUE
+                LEFT JOIN knowledge_node p1 ON knp1.parent_id = p1.id
+                LEFT JOIN knowledge_node_parent knp2 ON knp2.child_id = p1.id AND knp2.is_primary = TRUE
+                LEFT JOIN knowledge_node p2 ON knp2.parent_id = p2.id
+                WHERE kn.id = :kn_id
+            """)
+        else:
+            # Fallback: use parent_id on knowledge_node (old schema)
+            query = text("""
+                SELECT
+                    kn.name as skill_name,
+                    p1.name as concept_name,
+                    p2.name as topic_name
+                FROM knowledge_node kn
+                LEFT JOIN knowledge_node p1 ON kn.parent_id = p1.id
+                LEFT JOIN knowledge_node p2 ON p1.parent_id = p2.id
+                WHERE kn.id = :kn_id
+            """)
         result = await db.execute(query, {"kn_id": r.knowledge_node_id})
         row = result.fetchone()
 

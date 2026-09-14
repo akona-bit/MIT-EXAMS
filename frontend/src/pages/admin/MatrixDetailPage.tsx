@@ -42,9 +42,15 @@ export default function MatrixDetailPage() {
         shortages: result.shortages,
       });
     } catch (error: any) {
+      const detail = error.response?.data?.detail;
+      const msg = typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d: any) => d.msg || JSON.stringify(d)).join("; ")
+          : "Có lỗi xảy ra khi kiểm tra";
       setFeasibilityResult({
         feasible: false,
-        message: error.response?.data?.detail || "Có lỗi xảy ra khi kiểm tra",
+        message: msg,
       });
     } finally {
       setIsChecking(false);

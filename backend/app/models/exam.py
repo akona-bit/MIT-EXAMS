@@ -49,6 +49,8 @@ class MatrixRule(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
     group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("matrix_rule_group.id"), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Mã ô ma trận (A1, A2, B1, C5, D12...) từ file DGNL
+    code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     matrix: Mapped["Matrix"] = relationship(back_populates="rules")
     group: Mapped[Optional["MatrixRuleGroup"]] = relationship(back_populates="rules")

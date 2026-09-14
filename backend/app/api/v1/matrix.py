@@ -439,8 +439,11 @@ async def check_matrix_feasibility(matrix_id: int, db: AsyncSession = Depends(ge
             "total_shortage": 0
         }
 
-    pool = await load_pool_from_db(db, matrix.rules)
-    matrix_cells = await parse_matrix_rules(db, matrix.rules)
+    try:
+        pool = await load_pool_from_db(db, matrix.rules)
+        matrix_cells = await parse_matrix_rules(db, matrix.rules)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi đọc dữ liệu ma trận: {str(e)}")
 
     report = generate_exam(matrix=matrix_cells, pool=pool)
 
@@ -494,8 +497,11 @@ async def generate_exam_from_matrix(matrix_id: int, req: GenerateExamFormsReques
     # Create ExamGenerationRun (status RUNNING initially, but we don't have RUNNING enum, so just create later)
 
     # Load rules and pool
-    pool = await load_pool_from_db(db, matrix.rules)
-    matrix_cells = await parse_matrix_rules(db, matrix.rules)
+    try:
+        pool = await load_pool_from_db(db, matrix.rules)
+        matrix_cells = await parse_matrix_rules(db, matrix.rules)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi đọc dữ liệu ma trận: {str(e)}")
     # Bất biến khung xương: ô được xử lý theo đúng thứ tự (part, position)
     matrix_cells.sort(key=lambda c: (c.part, c.position))
     reports = generate_multiple_versions(
@@ -766,8 +772,11 @@ async def check_matrix_feasibility_local(payload: CheckFeasibilityLocalRequest, 
             target_irt_b=r.target_irt_b
         ))
 
-    pool = await load_pool_from_db(db, rules_in_memory)
-    matrix_cells = await parse_matrix_rules(db, rules_in_memory)
+    try:
+        pool = await load_pool_from_db(db, rules_in_memory)
+        matrix_cells = await parse_matrix_rules(db, rules_in_memory)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi khi đọc dữ liệu ma trận: {str(e)}")
 
     report = generate_exam(matrix=matrix_cells, pool=pool)
 
