@@ -5,7 +5,7 @@
 ## Trạng thái tổng quan
 
 **Giai đoạn hiện tại:** ĐÃ HOÀN THÀNH 11 CẢI TIẾN 4 GIAI ĐOẠN
-**Cập nhật lần cuối:** 2026-09-13
+**Cập nhật lần cuối:** 2026-09-14
 
 ## Checklist theo giai đoạn (đồng bộ với build-plan.md)
 
@@ -91,6 +91,10 @@
 - [x] Hệ thống Feedback (Góp ý/Báo lỗi)
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
+
+- `2026-09-14` — **Cleanup duplicate Internal.py (case-sensitivity)**:
+  - [x] Deleted stale `Internal.py` (uppercase I) which was a ghost entry from Windows case-insensitive filesystem — actual file is tracked as `internal.py` (lowercase) in git.
+  - [x] Both IRT and OMR reconciliation endpoints (`/process-pending-irt`, `/process-pending-omr`) confirmed present in `internal.py`.
 
 - `2026-09-13` — **Cải thiện tính năng Search trên trang Đăng nhập**:
   - [x] **Backend**: Xóa email khỏi response API search để bảo mật thông tin.
