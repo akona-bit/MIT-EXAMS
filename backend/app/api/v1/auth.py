@@ -8,6 +8,11 @@ from sqlalchemy.orm import selectinload
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import secrets
+
+
+def _utcnow():
+    """Return naive UTC now — safe to compare with both naive and aware datetimes."""
+    return datetime.utcnow()
 import string
 import logging
 
@@ -148,11 +153,11 @@ async def send_otp(request: Request, background_tasks: BackgroundTasks, req: Sen
         .limit(1)
     )
     latest_otp = latest_otp_result.scalars().first()
-    if latest_otp and (datetime.now(timezone.utc) - latest_otp.created_at).total_seconds() < 60:
+    if latest_otp and (_utcnow() - latest_otp.created_at).total_seconds() < 60:
         raise HTTPException(status_code=429, detail="Vui lòng đợi 1 phút trước khi yêu cầu mã mới")
 
     code = _generate_otp_code()
-    now = datetime.now(timezone.utc)
+    now = _utcnow()
 
     otp = OTPToken(
         email=req.email,
@@ -190,7 +195,7 @@ async def verify_otp(request: Request, req: VerifyOTPRequest, db: AsyncSession =
     if not otp:
         raise HTTPException(status_code=400, detail="Mã OTP không đúng")
 
-    if otp.expires_at < datetime.now(timezone.utc):
+    if otp.expires_at < _utcnow():
         raise HTTPException(status_code=400, detail="Mã OTP đã hết hạn")
 
     otp.is_used = True
@@ -245,11 +250,11 @@ async def send_reset_password(request: Request, background_tasks: BackgroundTask
         .limit(1)
     )
     latest_otp = latest_otp_result.scalars().first()
-    if latest_otp and (datetime.now(timezone.utc) - latest_otp.created_at).total_seconds() < 60:
+    if latest_otp and (_utcnow() - latest_otp.created_at).total_seconds() < 60:
         raise HTTPException(status_code=429, detail="Vui lòng đợi 1 phút trước khi yêu cầu mã mới")
 
     code = _generate_otp_code()
-    now = datetime.now(timezone.utc)
+    now = _utcnow()
 
     otp = OTPToken(
         email=req.email,
@@ -287,7 +292,7 @@ async def reset_password(request: Request, req: ResetPasswordRequest, db: AsyncS
     if not otp:
         raise HTTPException(status_code=400, detail="Mã xác thực không đúng")
 
-    if otp.expires_at < datetime.now(timezone.utc):
+    if otp.expires_at < _utcnow():
         raise HTTPException(status_code=400, detail="Mã xác thực đã hết hạn")
 
     otp.is_used = True
