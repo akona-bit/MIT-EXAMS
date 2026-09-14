@@ -3,15 +3,13 @@ Celery tasks cho OMR processing.
 Xử lý async qua queue, hỗ trợ batch hàng loạt phiếu.
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-from celery import shared_task
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +36,7 @@ async def _load_layout_for_sheet(db: AsyncSession, sheet: OmrSheet = None) -> Sh
     return SheetLayout()
 
 
-async def _process_sheet_async(sheet_id: int, enable_gemini: bool = True):
+async def process_sheet_async(sheet_id: int, enable_gemini: bool = True):
     """Async handler cho việc xử lý 1 phiếu OMR."""
     async with async_session_maker() as db:
         # Load sheet
@@ -105,46 +103,22 @@ def _calculate_overall_confidence(result: HybridOMRResult) -> float:
     return max(0.0, min(1.0, avg_confidence - review_penalty))
 
 
-@shared_task(bind=True)
-def process_omr_sheet_task(self, sheet_id: int, enable_gemini: bool = True):
-    """
-    Celery task xử lý 1 phiếu OMR.
-    
-    Args:
-        sheet_id: ID của OmrSheet
-        enable_gemini: Bật/tắt Gemini layer
-    """
-    asyncio.run(_process_sheet_async(sheet_id, enable_gemini))
-    return {"status": "SUCCESS", "sheet_id": sheet_id}
-
-
-@shared_task(bind=True)
-def process_omr_batch_task(self, job_id: int, enable_gemini: bool = True):
-    """
-    Celery task xử lý batch nhiều phiếu OMR.
-    """
-    async def _process_batch():
-        async with async_session_maker() as db:
-            # Get all pending sheets for this job
-            result = await db.execute(
-                select(OmrSheet).where(
-                    OmrSheet.job_id == job_id,
-                    OmrSheet.status == OmrSheetStatus.PENDING,
-                )
+async def process_batch_async(job_id: int, enable_gemini: bool = True):
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(OmrSheet).where(
+                OmrSheet.job_id == job_id,
+                OmrSheet.status == OmrSheetStatus.PENDING,
             )
-            sheets = result.scalars().all()
+        )
+        sheets = result.scalars().all()
+        for sheet in sheets:
+            try:
+                await process_sheet_async(sheet.id, enable_gemini)
+            except Exception as e:
+                logger.warning(f"Failed to process sheet {sheet.id}: {e}")
 
-            for sheet in sheets:
-                try:
-                    await _process_sheet_async(sheet.id, enable_gemini)
-                except Exception as e:
-                    logger.warning(f"Failed to process sheet {sheet.id}: {e}")
-
-    asyncio.run(_process_batch())
-    return {"status": "SUCCESS", "job_id": job_id}
-
-
-async def _confirm_sheet_async(
+async def confirm_sheet_async(
     sheet_id: int,
     user_id: int,
     answers_override: Optional[Dict[int, str]] = None,
@@ -294,22 +268,6 @@ async def _confirm_sheet_async(
         return submission.id
 
 
-@shared_task(bind=True)
-def confirm_omr_sheet_task(
-    self,
-    sheet_id: int,
-    user_id: int,
-    answers_override: Optional[Dict[int, str]] = None,
-):
-    """
-    Celery task xác nhận phiếu OMR sau review thủ công.
-    """
-    submission_id = asyncio.run(
-        _confirm_sheet_async(sheet_id, user_id, answers_override)
-    )
-    return {"status": "SUCCESS", "sheet_id": sheet_id, "submission_id": submission_id}
-
-
 async def grade_student_omr_async(submission_id: int, enable_gemini: bool = True):
     """Async function to grade student OMR, can be called directly from FastAPI"""
     async with async_session_maker() as db:
@@ -397,10 +355,4 @@ async def grade_student_omr_async(submission_id: int, enable_gemini: bool = True
         await grade_submission_ctt(db, submission_id)
         return submission_id
 
-@shared_task(bind=True)
-def grade_student_omr_task(self, submission_id: int, enable_gemini: bool = True):
-    """
-    Celery task để tự động chấm bài OMR do học sinh upload.
-    Dùng form_code có sẵn từ ExamParticipant.
-    """
-    return asyncio.run(grade_student_omr_async(submission_id, enable_gemini))
+

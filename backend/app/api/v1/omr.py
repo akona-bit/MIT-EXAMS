@@ -3,7 +3,7 @@ API endpoints cho OMR processing.
 Upload ảnh, theo dõi job, review thủ công, confirm kết quả.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -20,9 +20,9 @@ from app.models.omr import OmrJob, OmrSheet, OmrJobStatus, OmrSheetStatus
 from app.models.exam import Exam, ExamForm
 from app.models.user import User
 from app.services.omr.tasks import (
-    process_omr_sheet_task,
-    process_omr_batch_task,
-    confirm_omr_sheet_task,
+    process_sheet_async,
+    process_batch_async,
+    confirm_sheet_async,
 )
 
 router = APIRouter()
@@ -33,6 +33,7 @@ router = APIRouter()
 @router.post("/upload")
 async def upload_omr_sheets(
     request: Request,
+    background_tasks: BackgroundTasks,
     exam_id: int,
     files: List[UploadFile] = File(...),
     enable_gemini: bool = Query(True, description="Bật Gemini layer cho needs_review"),
@@ -81,9 +82,7 @@ async def upload_omr_sheets(
         await db.refresh(sheet)
 
         created_sheets.append(sheet.id)
-
-        # Trigger Celery task
-        process_omr_sheet_task.delay(sheet.id, enable_gemini)
+        background_tasks.add_task(process_sheet_async, sheet.id, enable_gemini)
 
     capture(request, "omr_upload_started", {
         "exam_id": exam_id,
@@ -188,6 +187,7 @@ async def get_omr_sheet(
 @router.post("/sheets/{sheet_id}/review")
 async def review_omr_sheet(
     request: Request,
+    background_tasks: BackgroundTasks,
     sheet_id: int,
     answers_override: Optional[Dict[int, str]] = None,
     db: AsyncSession = Depends(get_db),
@@ -211,10 +211,7 @@ async def review_omr_sheet(
             detail=f"Sheet status is {sheet.status.value}, cannot review"
         )
 
-    # Trigger confirm task
-    task = confirm_omr_sheet_task.delay(
-        sheet_id, current_user.id, answers_override
-    )
+    background_tasks.add_task(confirm_sheet_async, sheet_id, current_user.id, answers_override)
 
     capture(request, "omr_sheet_review_started", {
         "sheet_id": sheet_id,
@@ -223,7 +220,6 @@ async def review_omr_sheet(
 
     return {
         "data": {
-            "task_id": task.id,
             "message": "Đang xác nhận phiếu, vui lòng đợi.",
         }
     }
@@ -323,6 +319,7 @@ async def calibrate_layout(
 @router.post("/grade-submission/{submission_id}")
 async def grade_student_submission(
     request: Request,
+    background_tasks: BackgroundTasks,
     submission_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(RequireRole(["ADMIN", "TEACHER"])),
@@ -331,9 +328,8 @@ async def grade_student_submission(
     Chấm điểm OMR cho một bài làm của học sinh đã nộp ảnh OMR.
     """
     from app.models.exam import ExamSubmission
-    from app.services.omr.tasks import grade_student_omr_task
+    from app.services.omr.tasks import grade_student_omr_async
 
-    # Validate
     result = await db.execute(select(ExamSubmission).where(ExamSubmission.id == submission_id))
     submission = result.scalars().first()
     if not submission:
@@ -342,17 +338,14 @@ async def grade_student_submission(
     if not submission.omr_image_url:
         raise HTTPException(status_code=400, detail="Submission does not have an OMR image")
 
-    # Trigger task
-    task = grade_student_omr_task.delay(submission_id)
+    background_tasks.add_task(grade_student_omr_async, submission_id)
 
     capture(request, "grade_student_submission_started", {
         "submission_id": submission_id,
-        "task_id": task.id
     })
 
     return {
         "data": {
-            "task_id": task.id,
             "message": "Đang chấm điểm bài OMR, vui lòng đợi."
         }
     }

@@ -6,8 +6,6 @@ aiosqlite
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
-celery
-redis
 opencv-python-headless
 numpy
 PyMuPDF

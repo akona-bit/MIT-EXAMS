@@ -21,14 +21,8 @@ from app.schemas.user import UserCreate, UserResponse, Token
 from app.api.dependencies import get_current_active_user
 from app.core.analytics import capture
 from app.services.email import send_otp_email, send_password_reset_email, send_credentials_email
+from fastapi import BackgroundTasks
 import os
-
-# On local (no Redis), call email functions directly
-# On production (REDIS_URL set), use Celery background tasks
-_use_celery = os.getenv("REDIS_URL", "redis://localhost:6379/0") != "redis://localhost:6379/0"
-
-if _use_celery:
-    from app.services.email_tasks import send_otp_email_task, send_password_reset_email_task
 from pydantic import BaseModel
 
 
@@ -144,7 +138,7 @@ async def update_current_user(
 
 @router.post("/send-otp")
 @limiter.limit("5/minute")
-async def send_otp(request: Request, req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
+async def send_otp(request: Request, background_tasks: BackgroundTasks, req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
     """Send OTP code to email for guest login."""
     # Check cooldown (60 seconds)
     latest_otp_result = await db.execute(
@@ -171,16 +165,7 @@ async def send_otp(request: Request, req: SendOTPRequest, db: AsyncSession = Dep
     db.add(otp)
     await db.commit()
 
-    # Dispatch email: Celery on production, direct call on local
-    if _use_celery:
-        try:
-            send_otp_email_task.delay(req.email, code)
-        except Exception as e:
-            # Fallback if Redis is down on production
-            logger.warning(f"Celery dispatch failed: {e}. Falling back to sync email.")
-            send_otp_email(req.email, code)
-    else:
-        send_otp_email(req.email, code)
+    background_tasks.add_task(send_otp_email, req.email, code)
 
     return {"message": f"Mã OTP đã gửi tới {req.email}"}
 
@@ -244,7 +229,7 @@ async def verify_otp(request: Request, req: VerifyOTPRequest, db: AsyncSession =
 
 @router.post("/send-reset-password")
 @limiter.limit("3/minute")
-async def send_reset_password(request: Request, req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
+async def send_reset_password(request: Request, background_tasks: BackgroundTasks, req: SendOTPRequest, db: AsyncSession = Depends(get_db)):
     """Send password reset code to email."""
     # Check user exists
     result = await db.execute(select(User).where(User.email == req.email))
@@ -277,15 +262,7 @@ async def send_reset_password(request: Request, req: SendOTPRequest, db: AsyncSe
     db.add(otp)
     await db.commit()
 
-    # Dispatch email: Celery on production, direct call on local
-    if _use_celery:
-        try:
-            send_password_reset_email_task.delay(req.email, code)
-        except Exception as e:
-            logger.warning(f"Celery dispatch failed: {e}. Falling back to sync email.")
-            send_password_reset_email(req.email, code)
-    else:
-        send_password_reset_email(req.email, code)
+    background_tasks.add_task(send_password_reset_email, req.email, code)
 
     return {"message": f"Mã xác thực đã gửi tới {req.email}"}
 

@@ -16,7 +16,6 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import get_settings
 from app.core.error_log import log_error
 from app.schemas.user import TokenPayload
-from app.worker import celery_app
 
 logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
@@ -201,6 +200,9 @@ app.include_router(student_profile.router, prefix="/api/v1", tags=["Student Prof
 app.include_router(search.router, prefix="/api/v1/search", tags=["Search"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI Assistant"])
 
+from app.api.v1 import internal
+app.include_router(internal.router, prefix="/api/v1/internal", tags=["Internal"])
+
 resource_upload_dir = Path(__file__).resolve().parents[1] / "uploads" / "resources"
 resource_upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads/resources", StaticFiles(directory=resource_upload_dir), name="resource-files")
@@ -222,7 +224,6 @@ async def health_check():
 
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Set
-import asyncio
 
 class ConnectionManager:
     def __init__(self):

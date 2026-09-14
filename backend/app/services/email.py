@@ -24,11 +24,11 @@ def _send(to_email: str, subject: str, html: str) -> dict:
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        logger.warning(f"Gửi email thất bại ({e}).")
-        logger.debug(f"Nội dung email: {html[:200]}...")
+        logger.warning("Email send failed: %s", e)
+        logger.debug("Email content: %s", html[:200])
         if settings.DEBUG:
             return {"message": "Email sending failed, but suppressed in DEBUG mode."}
-        logger.warning("Bỏ qua lỗi gửi email để tiếp tục quy trình phát triển.")
+        logger.warning("Skipping email error to continue development flow.")
         return {"message": "Email suppressed due to invalid API key"}
 
 

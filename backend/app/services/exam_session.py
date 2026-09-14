@@ -362,11 +362,11 @@ async def submit_exam(db: AsyncSession, exam_id: int, user_id: int, bypass_verif
     
     await db.commit()
     
-    # Auto-dispatch OMR grading task if student submitted OMR image
     if submission_id and omr_image_url:
         try:
-            from app.services.omr.tasks import grade_student_omr_task
-            grade_student_omr_task.delay(submission_id, enable_gemini=True)
+            import asyncio
+            from app.services.omr.tasks import grade_student_omr_async
+            asyncio.create_task(grade_student_omr_async(submission_id, enable_gemini=True))
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f"Failed to dispatch OMR grading task: {e}")

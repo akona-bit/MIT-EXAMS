@@ -25,31 +25,5 @@ services:
         sync: false
       - key: BREVO_FROM_EMAIL
         sync: false
-
-  # 2. Celery Worker Service
-  - type: worker
-    name: mit-exams-celery
-    env: docker
-    dockerContext: ./backend
-    dockerfilePath: ./backend/Dockerfile
-    dockerCommand: celery -A app.worker.celery_app worker --loglevel=info
-    plan: free
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        sync: false
-      - key: SUPABASE_JWT_SECRET
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: SECRET_KEY
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_KEY
-        sync: false
-      - key: BREVO_API_KEY
-        sync: false
-      - key: BREVO_FROM_EMAIL
+      - key: INTERNAL_TASK_TOKEN
         sync: false
