@@ -24,6 +24,7 @@ import cv2
 from app.services.grading.irt_engine import (
     mmle,
     theta_estimate,
+    theta_estimate_eap,
     chi_square,
     item_se,
     all_ability_se,
@@ -75,12 +76,19 @@ def verify_irt() -> None:
     theta_idx = np.arange(0, N, 10)  # lấy 60 thí sinh đại diện cho nhanh
     theta_est = np.array(theta_estimate(U[theta_idx], [item_params[j] for j in range(J)]))
     corr_theta = float(np.corrcoef(true_theta[theta_idx], theta_est)[0, 1])
-    check("Theta estimate khớp năng lực thật (corr > 0.85)", corr_theta > 0.85, f"corr={corr_theta:.3f}")
+    check("Theta MLE khớp năng lực thật (corr > 0.85)", corr_theta > 0.85, f"corr={corr_theta:.3f}")
+
+    # 1.2b EAP theta — vectorized, nhanh
+    theta_eap_all = np.array(theta_estimate_eap(U, item_params, K=41))
+    corr_eap = float(np.corrcoef(true_theta, theta_eap_all)[0, 1])
+    check("Theta EAP khớp năng lực thật (corr > 0.85)", corr_eap > 0.85, f"corr={corr_eap:.3f}")
+    check("Theta EAP có SE hợp lý (std > 0.3)", float(np.std(theta_eap_all)) > 0.3,
+          f"std={np.std(theta_eap_all):.3f}")
 
     # 1.3 Kiểm định chi-square (df cần cột "Theta" + các cột item trùng index item_param)
     cols = [f"Cau{j + 1}" for j in range(J)]
     df_chi = pd.DataFrame(U, columns=cols)
-    df_chi["Theta"] = theta_estimate(U, item_params)
+    df_chi["Theta"] = theta_eap_all
     item_param_df = pd.DataFrame({"a": a_est, "b": b_est}, index=cols)
     chi_df = chi_square(df_chi, item_param_df)
     check("chi_square trả kết quả đủ J item", len(chi_df) == J, f"rows={len(chi_df)}")
@@ -94,14 +102,14 @@ def verify_irt() -> None:
     se_a, se_b = item_se(a_est[0], b_est[0])
     check("item_se trả SE hữu hạn, dương", np.isfinite(se_a) and se_a > 0 and np.isfinite(se_b) and se_b > 0,
           f"se_a={se_a:.3f}, se_b={se_b:.3f}")
-    ses = all_ability_se(U[theta_idx][:5], item_params, theta_est[:5])
+    ses = all_ability_se(U[theta_idx][:5], item_params, theta_eap_all[theta_idx][:5])
     check("ability_se trả SE hữu hạn, dương", bool(np.all(np.isfinite(ses)) and np.all(ses > 0)),
           f"SE range=[{ses.min():.3f}, {ses.max():.3f}]")
 
     # 1.5 true_score: quy đổi 0-300
     one = pd.Series(U[0], index=cols)
     raw = int(one.sum())
-    ts = true_score(theta_est[0], raw, one, item_param_df)
+    ts = true_score(theta_eap_all[0], raw, one, item_param_df)
     check("true_score trả điểm trong [0, 300]", 0 <= ts <= 300, f"raw={raw}/20 → irt_scaled={ts}")
 
 

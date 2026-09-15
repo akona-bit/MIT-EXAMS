@@ -9,17 +9,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.database import AsyncSessionLocal
 from app.models.exam import ExamForm, ExamFormQuestion, ExamSubmission, ExamParticipant, ExamSubmissionAnswer
 from app.models.grading import ExamResult, IrtTask, ItemAnalysisResult
 from app.models.question import Answer, Question, QuestionType
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import update, delete
+from sqlalchemy import delete
 from app.db.bulk import bulk_insert, bulk_update
-from app.services.grading.irt_engine import mmle, theta_estimate, true_score, all_item_se, chi_square
-from app.services.grading.ctt_engine import cal_diff, cal_disc, label_distractor, cal_pbcc
+from app.services.grading.irt_engine import mmle, theta_estimate_eap, true_score, all_item_se, chi_square
+from app.services.grading.ctt_engine import cal_diff, cal_disc
 from datetime import datetime, timezone
 
 # ─── Luật chấm điểm theo dạng câu (đồng bộ comment trong models/grading.py) ───
@@ -299,8 +298,6 @@ async def grade_submission_ctt(db: AsyncSession, submission_id: int) -> ExamResu
     return exam_result
 
 
-import asyncio
-
 async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
     from contextlib import asynccontextmanager
     
@@ -399,7 +396,7 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
 
             await append_log(f"Tìm thấy {N} bài làm. Đang trích xuất ma trận phản hồi (Response Matrix)...")
             
-            # 4. Build response matrix U (N x J)
+            # 4. Build full response matrix U (N x J) + group questions by part
             U = np.full((N, J), -1, dtype=int)
             for i, (exam_result, submission) in enumerate(records):
                 item_scores = exam_result.item_scores or {}
@@ -412,128 +409,154 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                     except ValueError:
                         pass
             
-            # 5. Run MMLE to get a, b parameters
-            await append_log(f"Bắt đầu ước lượng tham số (MMLE - Marginal Maximum Likelihood)...")
-            gc.collect()
+            # Group question indices by part (1-4)
+            part_groups: dict[int, list[int]] = {1: [], 2: [], 3: [], 4: []}
+            for j, qid in enumerate(unique_qids):
+                p = qid_to_part.get(qid)
+                if p in part_groups:
+                    part_groups[p].append(j)
+            
+            active_parts = [p for p in [1, 2, 3, 4] if part_groups[p]]
+            await append_log(f"Phát hiện {len(active_parts)} phần thi: {', '.join(f'P{p}({len(part_groups[p])}câu)' for p in active_parts)}")
 
-            # Load anchor items from DB
+            # Load anchor items from DB (once, shared across parts)
             anchor_result = await db.execute(
                 select(Question.id, Question.a_param, Question.b_param)
                 .where(Question.id.in_(unique_qids), Question.is_anchor == True)
             )
             anchor_rows = anchor_result.all()
-            anchor_mask = np.zeros(J, dtype=bool)
-            anchor_a = np.zeros(J, dtype=float)
-            anchor_b = np.zeros(J, dtype=float)
+            anchor_map = {}
             if anchor_rows:
                 for qid, a_val, b_val in anchor_rows:
-                    idx = qid_to_index.get(qid)
-                    if idx is not None:
-                        anchor_mask[idx] = True
-                        anchor_a[idx] = a_val or 1.0
-                        anchor_b[idx] = b_val or 0.0
+                    anchor_map[qid] = (a_val or 1.0, b_val or 0.0)
                 await append_log(f"Đã tìm thấy {len(anchor_rows)} câu neo (anchor items) — tham số sẽ được giữ cố định.")
-
-            try:
-                # K=21 to reduce memory on Render free tier (512MB), max_iter=20
-                # Chạy MMLE trong thread riêng để không block FastAPI event loop
+            
+            # 5-8. Run MMLE + Theta + TrueScore PER PART
+            all_a_est = np.zeros(J, dtype=float)
+            all_b_est = np.zeros(J, dtype=float)
+            all_se_a = np.full(J, np.inf, dtype=float)
+            all_se_b = np.full(J, np.inf, dtype=float)
+            part_theta: dict[int, np.ndarray] = {}  # per-part theta for chi-square
+            
+            for part_num in active_parts:
+                part_indices = part_groups[part_num]
+                J_part = len(part_indices)
+                part_qids = [unique_qids[j] for j in part_indices]
+                
+                # Skip parts with too few items for stable MMLE (< 5 items)
+                if J_part < 5:
+                    await append_log(f"--- Phần {part_num}: bỏ qua ({J_part} câu < 5 câu tối thiểu) ---")
+                    continue
+                
+                await append_log(f"--- Phần {part_num}: {J_part} câu hỏi ---")
+                
+                # Build U_part (N x J_part)
+                U_part = U[:, part_indices]
+                
+                # 5. Run MMLE per-part
                 gc.collect()
-                a_est, b_est = await asyncio.to_thread(
-                    mmle, U, name=f"IRT_Exam_{exam_id}", max_iter=20, K=21, verbose=False,
-                    anchor_mask=anchor_mask if anchor_rows else None,
-                    anchor_a=anchor_a if anchor_rows else None,
-                    anchor_b=anchor_b if anchor_rows else None,
+                try:
+                    # Anchor mask for this part
+                    p_anchor_mask = np.zeros(J_part, dtype=bool)
+                    p_anchor_a = np.zeros(J_part, dtype=float)
+                    p_anchor_b = np.zeros(J_part, dtype=float)
+                    has_anchors = False
+                    for local_j, global_j in enumerate(part_indices):
+                        qid = unique_qids[global_j]
+                        if qid in anchor_map:
+                            p_anchor_mask[local_j] = True
+                            p_anchor_a[local_j] = anchor_map[qid][0]
+                            p_anchor_b[local_j] = anchor_map[qid][1]
+                            has_anchors = True
+                    
+                    a_part, b_part = await asyncio.to_thread(
+                        mmle, U_part, name=f"IRT_Exam_{exam_id}_P{part_num}",
+                        max_iter=20, K=21, verbose=False,
+                        anchor_mask=p_anchor_mask if has_anchors else None,
+                        anchor_a=p_anchor_a if has_anchors else None,
+                        anchor_b=p_anchor_b if has_anchors else None,
+                    )
+                    
+                    # Store results back to global arrays
+                    for local_j, global_j in enumerate(part_indices):
+                        all_a_est[global_j] = a_part[local_j]
+                        all_b_est[global_j] = b_part[local_j]
+                    
+                    # Item SE per-part
+                    item_params_part = [(float(a_part[k]), float(b_part[k])) for k in range(J_part)]
+                    se_matrix_part = await asyncio.to_thread(all_item_se, item_params_part)
+                    se_matrix_part = np.asarray(se_matrix_part)
+                    if se_matrix_part.ndim == 2 and se_matrix_part.shape[1] >= 2:
+                        for local_j, global_j in enumerate(part_indices):
+                            all_se_a[global_j] = se_matrix_part[local_j, 0]
+                            all_se_b[global_j] = se_matrix_part[local_j, 1]
+                    
+                    await append_log(f"  MMLE P{part_num} thành công: a=[{a_part.min():.2f},{a_part.max():.2f}], b=[{b_part.min():.2f},{b_part.max():.2f}]")
+                except Exception as e:
+                    await append_log(f"  MMLE P{part_num} lỗi: {e} — bỏ qua phần này")
+                    gc.collect()
+                    continue
+                
+                # 6. Update Question parameters for this part
+                question_updates_part = []
+                for local_j, global_j in enumerate(part_indices):
+                    qid = unique_qids[global_j]
+                    question_updates_part.append({
+                        "id": qid,
+                        "a_param": float(a_part[local_j]),
+                        "b_param": float(b_part[local_j]),
+                        "is_calibrated": True
+                    })
+                if question_updates_part:
+                    await bulk_update(db, Question, question_updates_part)
+                
+                # 7. Estimate Theta per-part (EAP)
+                U_part_float = U_part.astype(float)
+                U_part_float[U_part_float == -1] = 0
+                item_params_part_list = [(float(a_part[k]), float(b_part[k])) for k in range(J_part)]
+                
+                try:
+                    theta_part = await asyncio.to_thread(
+                        theta_estimate_eap, U_part_float, item_params_part_list, 41
+                    )
+                    theta_part = np.array(theta_part)
+                except Exception as e:
+                    await append_log(f"  Theta P{part_num} lỗi: {e} — dùng theta=0")
+                    theta_part = np.zeros(N)
+                
+                part_theta[part_num] = theta_part  # store for chi-square
+                
+                # 8. Compute true_score per-part per-student
+                cau_names_part = [f"Q_{unique_qids[gj]}" for gj in part_indices]
+                item_params_df_part = pd.DataFrame(
+                    [(float(a_part[k]), float(b_part[k])) for k in range(J_part)],
+                    columns=["a", "b"], index=cau_names_part
                 )
-                item_params_for_se = [(float(a), float(b)) for a, b in zip(a_est, b_est)]
-                # all_item_se cũng có thể nặng, đưa vào thread
-                # LƯU Ý: all_item_se trả về mảng shape (J, 2) — mỗi dòng là (se_a, se_b)
-                # của từng câu hỏi. KHÔNG unpack trực tiếp thành 2 biến
-                # (trước đây gây lỗi "too many values to unpack (expected 2)").
-                item_se_matrix = await asyncio.to_thread(all_item_se, item_params_for_se)
-                item_se_matrix = np.asarray(item_se_matrix)
-                if item_se_matrix.ndim != 2 or item_se_matrix.shape[1] < 2:
-                    raise ValueError(f"all_item_se returned unexpected shape: {item_se_matrix.shape}")
-                se_a = item_se_matrix[:, 0]
-                se_b = item_se_matrix[:, 1]
-                await append_log(f"Ước lượng tham số MMLE thành công cho {J} câu hỏi.")
+                
+                for i in range(N):
+                    student_part_data = pd.Series(U_part_float[i], index=cau_names_part)
+                    part_raw = int(student_part_data.sum())
+                    p_score = true_score(float(theta_part[i]), part_raw, student_part_data, item_params_df_part)
+                    setattr(records[i][0], f"irt_score_part{part_num}", p_score)
+                
+                del U_part_float, item_params_df_part, cau_names_part
                 gc.collect()
-            except Exception as e:
-                if task:
-                    task.status = "FAILED"
-                    task.error_details = f"MMLE/SE failed: {str(e)}"
-                    await append_log(f"Lỗi MMLE: {str(e)}")
-                    await db.commit()
-                return {"status": "FAILED", "reason": f"MMLE failed: {str(e)}"}
+                await append_log(f"  True Score P{part_num} tính xong cho {N} thí sinh.")
             
-            # 6. Update Question parameters in DB
-            item_params_list = []
-            question_updates = []
-            for j in range(J):
-                qid = unique_qids[j]
-                a_val, b_val = float(a_est[j]), float(b_est[j])
-                item_params_list.append((a_val, b_val))
-                question_updates.append({
-                    "id": qid,
-                    "a_param": a_val,
-                    "b_param": b_val,
-                    "is_calibrated": True
-                })
-            if question_updates:
-                await bulk_update(db, Question, question_updates)
-                await append_log(f"Đã cập nhật tham số a, b vào ngân hàng câu hỏi gốc.")
-            
-            # 7. Estimate Theta for all students
-            await append_log("Đang ước lượng năng lực Theta cho thí sinh (EAP)...")
-            # Prepare clean responses for theta estimation (replace -1 with 0)
-            clean_responses = []
-            for i in range(N):
-                row = U[i, :].copy()
-                row[row == -1] = 0
-                clean_responses.append(row)
-                
-            try:
-                # Chạy Theta estimation trong thread riêng
-                theta_est = await asyncio.to_thread(theta_estimate, clean_responses, item_params_list)
-            except Exception as e:
-                if task:
-                    task.status = "FAILED"
-                    task.error_details = f"Theta estimation failed: {str(e)}"
-                    await db.commit()
-                return {"status": "FAILED", "reason": f"Theta estimation failed: {str(e)}"}
-            
-            # 8. Calculate true scores and update ExamResult
-            await append_log("Tính toán điểm chuẩn (True Score) theo năng lực Theta...")
-            cau_names = [f"Q_{qid}" for qid in unique_qids]
-            item_params_df = pd.DataFrame(item_params_list, columns=["a", "b"], index=cau_names)
-            
+            # Finalize: total_score + score_method
             exam_result_updates = []
-            for i, (exam_result, submission) in enumerate(records):
-                theta = float(theta_est[i])
-                student_responses = clean_responses[i]
-                student_data = pd.Series(student_responses, index=cau_names)
-                
-                # Split into 4 parts based on qid_to_part mapping
-                parts_scores = [0.0, 0.0, 0.0, 0.0]
-                for p in [1, 2, 3, 4]:
-                    part_indices = [j for j, qid in enumerate(unique_qids) if qid_to_part.get(qid) == p]
-                    if not part_indices:
-                        continue
-                        
-                    part_cau_names = [cau_names[j] for j in part_indices]
-                    part_data = student_data[part_cau_names]
-                    part_params = item_params_df.loc[part_cau_names]
-                    part_raw = int(part_data.sum())
-                    
-                    p_score = true_score(theta, part_raw, part_data, part_params)
-                    parts_scores[p-1] = p_score
-                    
+            for exam_result, submission in records:
+                s1 = getattr(exam_result, 'irt_score_part1', 0) or 0
+                s2 = getattr(exam_result, 'irt_score_part2', 0) or 0
+                s3 = getattr(exam_result, 'irt_score_part3', 0) or 0
+                s4 = getattr(exam_result, 'irt_score_part4', 0) or 0
                 exam_result_updates.append({
                     "id": exam_result.id,
-                    "irt_score_part1": parts_scores[0],
-                    "irt_score_part2": parts_scores[1],
-                    "irt_score_part3": parts_scores[2],
-                    "irt_score_part4": parts_scores[3],
-                    "total_score": sum(parts_scores),
+                    "irt_score_part1": s1,
+                    "irt_score_part2": s2,
+                    "irt_score_part3": s3,
+                    "irt_score_part4": s4,
+                    "total_score": s1 + s2 + s3 + s4,
                     "score_method": "IRT"
                 })
             
@@ -541,60 +564,69 @@ async def background_run_irt(exam_id: int, task_id: str) -> dict[str, Any]:
                 await bulk_update(db, ExamResult, exam_result_updates)
                 await append_log(f"Đã cập nhật điểm chuẩn (True Score) cho {N} bài làm.")
             
-            # Free memory before CTT analysis
-            del clean_responses
+            # Keep U for CTT — delete after
             gc.collect()
             
-            # Compute CTT and Chi-Square
+            # Compute CTT and Chi-Square (per-part)
             await append_log("Đang phân tích chất lượng câu hỏi (CTT & Chi-Square Fit)...")
             try:
-                # Calculate CTT trong thread
-                def run_ctt():
-                    U_df = pd.DataFrame(U, columns=cau_names)
-                    U_df['SBD'] = range(1, N + 1)
-                    U_df['Raw'] = U.sum(axis=1)
-                    U_df['Null'] = (U == -1).sum(axis=1)
-                    U_df['MaDe'] = 'default'
-                    U_df['Gioi'] = 0
-                    diff = cal_diff(U_df)
-                    disc = cal_disc(U_df)
-                    df_for_chi2 = U_df.copy()
-                    df_for_chi2["Theta"] = theta_est
-                    chi2 = chi_square(df_for_chi2, item_params_df)
-                    return diff, disc, chi2
-
-                ctt_diff, ctt_disc, chi2_df = await asyncio.to_thread(run_ctt)
-                
                 # Clear previous results for this exam
                 await db.execute(delete(ItemAnalysisResult).where(ItemAnalysisResult.exam_id == exam_id))
                 
-                # Save into ItemAnalysisResult
                 analysis_inserts = []
-                for j in range(J):
-                    qid = unique_qids[j]
-                    cau_name = cau_names[j]
+                for part_num in active_parts:
+                    part_indices = part_groups[part_num]
+                    part_qids = [unique_qids[j] for j in part_indices]
+                    cau_names_part = [f"Q_{qid}" for qid in part_qids]
                     
-                    c_p_val = chi2_df.loc[cau_name, "p_value"] if cau_name in chi2_df.index else np.nan
+                    U_part = U[:, part_indices]
+                    U_df = pd.DataFrame(U_part, columns=cau_names_part)
+                    U_df['SBD'] = range(1, N + 1)
+                    U_df['Raw'] = U_part.sum(axis=1)
+                    U_df['Null'] = (U_part == -1).sum(axis=1)
+                    U_df['MaDe'] = 'default'
+                    U_df['Gioi'] = 0
                     
-                    analysis_inserts.append({
-                        "exam_id": exam_id,
-                        "question_id": qid,
-                        "ctt_difficulty": float(ctt_diff[cau_name]) if cau_name in ctt_diff and not pd.isna(ctt_diff[cau_name]) else None,
-                        "ctt_discrimination": float(ctt_disc[cau_name]) if cau_name in ctt_disc and not pd.isna(ctt_disc[cau_name]) else None,
-                        "ctt_distractor_label": "Bình thường", # Mocking for now as full distractor calculation needs more DB queries
-                        "irt_a": float(a_est[j]),
-                        "irt_b": float(b_est[j]),
-                        "irt_a_se": float(se_a[j]),
-                        "irt_b_se": float(se_b[j]),
-                        "chi_square_p": float(c_p_val) if not pd.isna(c_p_val) else None
-                    })
+                    diff = cal_diff(U_df)
+                    disc = cal_disc(U_df)
+                    
+                    # Chi-square per-part
+                    item_params_part_df = pd.DataFrame(
+                        [(float(all_a_est[j]), float(all_b_est[j])) for j in part_indices],
+                        columns=["a", "b"], index=cau_names_part
+                    )
+                    df_for_chi2 = U_df.copy()
+                    # Use theta from this part's own IRT model
+                    df_for_chi2["Theta"] = part_theta.get(part_num, np.zeros(N))
+                    chi2 = chi_square(df_for_chi2, item_params_part_df)
+                    
+                    for local_j, global_j in enumerate(part_indices):
+                        qid = unique_qids[global_j]
+                        cau_name = cau_names_part[local_j]
+                        c_p_val = chi2.loc[cau_name, "p_value"] if cau_name in chi2.index else np.nan
+                        
+                        analysis_inserts.append({
+                            "exam_id": exam_id,
+                            "question_id": qid,
+                            "ctt_difficulty": float(diff[cau_name]) if cau_name in diff and not pd.isna(diff[cau_name]) else None,
+                            "ctt_discrimination": float(disc[cau_name]) if cau_name in disc and not pd.isna(disc[cau_name]) else None,
+                            "ctt_distractor_label": "Bình thường",
+                            "irt_a": float(all_a_est[global_j]),
+                            "irt_b": float(all_b_est[global_j]),
+                            "irt_a_se": float(all_se_a[global_j]),
+                            "irt_b_se": float(all_se_b[global_j]),
+                            "chi_square_p": float(c_p_val) if not pd.isna(c_p_val) else None
+                        })
+                
                 if analysis_inserts:
                     await bulk_insert(db, ItemAnalysisResult, analysis_inserts)
                     await append_log(f"Đã lưu {len(analysis_inserts)} kết quả phân tích (Item Analysis) vào lưu trữ.")
             except Exception as e:
-                # Log but do not fail the whole task if just analysis generation fails
                 if task:
                     task.error_details = f"Item analysis generation failed: {str(e)}"
+            
+            del U
+            gc.collect()
                 
             # 9. Mark success
             await append_log("Hoàn tất quá trình IRT!")

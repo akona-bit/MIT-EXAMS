@@ -92,6 +92,22 @@
 
 ## Nhật ký (agent thêm dòng mới nhất lên đầu)
 
+- `2026-09-15` — **Fix 4 bugs IRT engine + thêm EAP theta estimation**:
+  - [x] **Bug 1 — `theta_estimate` crash**: `float(result.x)` fail trên NumPy 2.x vì `result.x` là ndarray, không phải scalar → sửa thành `float(result.x[0])`.
+  - [x] **Bug 2 — `np.trapz` removed trong NumPy 2.0**: thay toàn bộ `np.trapz` → `np.trapezoid` (5 chỗ active trong irt_engine.py).
+  - [x] **Bug 3 — `true_score` crash**: `irt_probability()` trả ndarray 2D ngay cả với scalar theta → thêm `.item()` để extract scalar.
+  - [x] **Bug 4 — `neg_log_likelihood` cực chậm**: Python for-loop từng item × từng thí sinh → vectorized bằng numpy broadcasting.
+  - [x] **Thêm `theta_estimate_eap()`**: Ước lượng theta bằng EAP (Expected A Posteriori) sử dụng Gauss-Hermite quadrature, vectorized toàn bộ — nhanh gấp ~100x so với MLE từng thí sinh (phù hợp N≥200 trên Render free tier 512MB).
+  - [x] **Cập nhật `scorer.py`**: chuyển từ `theta_estimate` (MLE) sang `theta_estimate_eap` (EAP) cho production pipeline.
+  - [x] **Kết quả verify**: 30/30 PASS (IRT MMLE corr=0.998, EAP corr=0.953, chi-square 95% fit, SE OK, true_score OK, CTT OK, OMR OK).
+  - [x] **Bug 5 — MMLE chạy trên 120 câu cùng lúc**: vi phạm giả thiết đơn nguyên (unidimensionality) + gây áp lực memory lớn trên Render 512MB. Restructure `background_run_irt`: chạy MMLE + EAP + TrueScore **riêng từng phần** (P1: 30c Tiếng Việt, P2: 30c Tiếng Anh, P3: 30c Toán, P4: 30c TDKH). Memory mỗi phần: (N, 30) thay vì (N, 120) — giảm 75%.
+  - [x] **Bug 6 — np.trapz numpy version compat**: Render dùng numpy 1.25.2 (có trapz), local numpy 2.x (đã xóa). Thêm shim `if not hasattr(np, 'trapezoid'): np.trapezoid = np.trapz` —兼容 cả 2 version.
+  - [x] **Bug 7 — Chi-square dùng theta trung bình**: Chi-square cần theta từ model IRT cùng phần, không phải theta trung bình. Store `part_theta[part_num]` dict, dùng đúng theta per-part.
+  - [x] **Guard: part < 5 items**: MMLE không ổn định với < 5 items → skip phần đó.
+  - [x] **Frontend impact check**: Không affected — frontend đã đọc `irt_score_part1..4` và `total_score` đúng cách.
+  - [x] **Kết quả test**: verify_irt_omr 30/30 PASS + test_per_part_irt 41/41 PASS = **71/71 PASS**.
+  - [x] **Cleanup**: Xóa 5 unused imports trong scorer.py (AsyncSessionLocal, update, label_distractor, cal_pbcc, duplicate asyncio). Xóa dead `cal_disc` trong irt_engine.py (trùng tên ctt_engine.cal_disc). Fix broken import + indentation trong scripts/seed_demo_exam.py.
+
 - `2026-09-14` — **Cleanup duplicate Internal.py (case-sensitivity)**:
   - [x] Deleted stale `Internal.py` (uppercase I) which was a ghost entry from Windows case-insensitive filesystem — actual file is tracked as `internal.py` (lowercase) in git.
   - [x] Both IRT and OMR reconciliation endpoints (`/process-pending-irt`, `/process-pending-omr`) confirmed present in `internal.py`.

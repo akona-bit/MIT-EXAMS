@@ -10,11 +10,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Hàm tính độ phân biệt bằng point-biserial correlation
-def cal_disc(r):
-    r = np.nan_to_num(r, nan=1e-6) 
-    return r/np.sqrt(1-r**2)
-    
+# NumPy 2.0 removed np.trapz → np.trapezoid; shim for backward compat
+if not hasattr(np, 'trapezoid'):
+    np.trapezoid = np.trapz
+
 # Tính độ khó
 def cal_diff(p) -> float:
     if p <= 0:
@@ -33,14 +32,16 @@ def irt_probability(theta, a, b):
     return 1 / (1 + np.exp(-z))
 
 def neg_log_likelihood(theta, responses, item_params):
-    ll = 0.0
-    for j, u in enumerate(responses):
-        a, b = item_params[j]
-        p = irt_probability(theta, a, b)
-        if u == 1:
-            ll += np.log(p + 1e-9)
-        else:
-            ll += np.log(1 - p + 1e-9)
+    theta_arr = np.atleast_1d(np.asarray(theta, dtype=float))
+    a_arr = np.array([ip[0] for ip in item_params], dtype=float)
+    b_arr = np.array([ip[1] for ip in item_params], dtype=float)
+    P = irt_probability(theta_arr, a_arr, b_arr).flatten()
+    P = np.clip(P, 1e-9, 1 - 1e-9)
+    u = np.asarray(responses, dtype=float)
+    mask = u != -1
+    u_v = u[mask]
+    p_v = P[mask]
+    ll = np.sum(u_v * np.log(p_v) + (1 - u_v) * np.log(1 - p_v))
     return -ll
 
 def log_likelihood(U, a_list, b_list, theta_grid, gh_weights, eps=1e-12):
@@ -236,12 +237,57 @@ def theta_estimate(responses, item_params):
         result = minimize(
             neg_log_likelihood,
             x0=0,
-            args=(student_responses, item_params),  # tuple
+            args=(student_responses, item_params),
             bounds=[(-6, 6)],
             method="L-BFGS-B"
         )
-        theta_estimates.append(float(result.x))  # kết quả theta
+        theta_estimates.append(float(result.x[0]))
     return theta_estimates
+
+
+def theta_estimate_eap(responses_matrix, item_params, K=41):
+    """
+    Ước lượng theta bằng EAP (Expected A Posteriori) — vectorized, rất nhanh cho N≥200.
+    Dùng Gauss-Hermite quadrature thay vì gọi scipy.minimize từng thí sinh.
+
+    Args:
+        responses_matrix: ndarray shape (N, J) với 0/1/-1
+        item_params: list of (a, b) tuples length J
+        K: số nút Gauss-Hermite (41 đủ chính xác, nhanh hơn 81)
+    Returns:
+        ndarray shape (N,) chứa EAP theta cho từng thí sinh
+    """
+    U = np.asarray(responses_matrix, dtype=float)
+    N, J = U.shape
+    a_arr = np.array([ip[0] for ip in item_params], dtype=float)
+    b_arr = np.array([ip[1] for ip in item_params], dtype=float)
+
+    theta_grid, gh_weights = np.polynomial.hermite.hermgauss(K)
+    theta_grid = theta_grid * np.sqrt(2)
+    gh_weights = gh_weights / np.sqrt(np.pi)
+
+    P_kj = irt_probability(theta_grid, a_arr, b_arr)
+    P_kj = np.clip(P_kj, 1e-12, 1 - 1e-12)
+    logP = np.log(P_kj)
+    log1mP = np.log1p(-P_kj)
+
+    mask = (U != -1)
+
+    L = np.zeros((N, K))
+    for k in range(K):
+        L[:, k] = (mask * U) @ logP[k, :].T + (mask * (1 - U)) @ log1mP[k, :].T
+        L[:, k] += np.log(gh_weights[k] + 1e-12)
+
+    log_max = np.max(L, axis=1, keepdims=True)
+    L_shifted = L - log_max
+    W = np.exp(L_shifted)
+    denom = np.sum(W, axis=1, keepdims=True)
+    denom = np.maximum(denom, 1e-300)
+    W_norm = W / denom
+
+    theta_eap = W_norm @ theta_grid
+    return theta_eap.tolist()
+
 
 def posterior(theta_grid, responses, item_params, prior_mean=0, prior_std=1, eps=1e-12):
     """
@@ -255,7 +301,7 @@ def posterior(theta_grid, responses, item_params, prior_mean=0, prior_std=1, eps
 
     # prior (normalize)
     prior = norm.pdf(theta_grid, loc=prior_mean, scale=prior_std)
-    prior_sum = np.trapz(prior, theta_grid)
+    prior_sum = np.trapezoid(prior, theta_grid)
     if prior_sum <= 0:
         prior = np.ones_like(prior)
     else:
@@ -275,11 +321,11 @@ def posterior(theta_grid, responses, item_params, prior_mean=0, prior_std=1, eps
         lik *= (p_j ** (r)) * ((1.0 - p_j) ** (1 - r))
 
     post_unnorm = prior * lik
-    integral = np.trapz(post_unnorm, theta_grid)
+    integral = np.trapezoid(post_unnorm, theta_grid)
     if integral <= 0:
         # fallback
         post = prior.copy()
-        post /= np.trapz(post, theta_grid)
+        post /= np.trapezoid(post, theta_grid)
     else:
         post = post_unnorm / integral
 
@@ -294,10 +340,10 @@ def ability_se(responses, item_params, theta_estimate, prior_mean=0, prior_std=1
     theta_grid = np.linspace(theta_min, theta_max, num_points)
     post = posterior(theta_grid, responses, item_params, prior_mean, prior_std)
     # đảm bảo posterior chuẩn hoá
-    post /= np.trapz(post, theta_grid)
+    post /= np.trapezoid(post, theta_grid)
 
 
-    var = np.trapz((theta_grid - theta_estimate)**2 * post, theta_grid)
+    var = np.trapezoid((theta_grid - theta_estimate)**2 * post, theta_grid)
     if var < 0 and var > -1e-12:
         var = 0.0
     return np.sqrt(var)
@@ -323,7 +369,7 @@ def item_se(a, b, prior_mean=0, prior_std=1, theta_min=-6, theta_max=6, num_quad
     # theta_grid = np.linspace(theta_min, theta_max, num_points)
     # # prior normalized
     # prior = norm.pdf(theta_grid, loc=prior_mean, scale=prior_std)
-    # prior /= np.trapz(prior, theta_grid)
+    # prior /= np.trapezoid(prior, theta_grid)
 
     # Sử dụng tích phân Gauss-Hermite (n điểm) cho prior normal
     nodes, weights = herm.hermgauss(num_quad)  # nút trong không gian normal chuẩn
@@ -345,9 +391,9 @@ def item_se(a, b, prior_mean=0, prior_std=1, theta_min=-6, theta_max=6, num_quad
         I_bb_theta = (dp_db ** 2) / (p * q + 1e-300)
 
     # marginalize over theta with prior
-    # I_aa = np.trapz(I_aa_theta * prior, theta_grid)
-    # I_ab = np.trapz(I_ab_theta * prior, theta_grid)
-    # I_bb = np.trapz(I_bb_theta * prior, theta_grid)
+    # I_aa = np.trapezoid(I_aa_theta * prior, theta_grid)
+    # I_ab = np.trapezoid(I_ab_theta * prior, theta_grid)
+    # I_bb = np.trapezoid(I_bb_theta * prior, theta_grid)
 
     I_aa = np.sum(I_aa_theta * prior)
     I_ab = np.sum(I_ab_theta * prior)
@@ -461,7 +507,7 @@ def true_score(theta, raw, data: pd.Series, item_params: pd.DataFrame) -> int:
         a = item_params.loc[cau, "a"]
         b = item_params.loc[cau, "b"]
 
-        p = irt_probability(theta, a, b)
+        p = irt_probability(theta, a, b).item()
         
         if data[cau] == 1:
             converted_score += p

@@ -13,28 +13,31 @@ from app.models.question import Question, Answer
 from app.models.passage import Passage
 from app.models.grading import ExamResult
 from sqlalchemy import select
-from app.services.grading.scorer import run_irt_calibration_task
+from app.services.grading.scorer import run_irt_task
 from app.models.grading import IrtTask
 
 DATA_DIR = r"d:\MIT\data"
+
 
 def safe_float(val):
     try:
         if pd.isna(val) or val == "":
             return None
         return float(val)
-    except:
+    except Exception:
         return None
+
 
 async def seed_demo():
     print("Seeding demo exam from CSV...")
-    
+
     # 1. Read CSV
     students_df = pd.read_csv(os.path.join(DATA_DIR, "raw_students.csv"), header=None)
     data_rows = students_df.iloc[2:]
-    
+
     resp_df = pd.read_csv(os.path.join(DATA_DIR, "raw_student_responses.csv"))
-    
+
+    async with AsyncSessionLocal() as db:
         # 0. Ensure user exists
         from app.models.user import User
         from app.models.exam import Matrix
@@ -43,13 +46,13 @@ async def seed_demo():
             user = User(id=1, username="demo_user", email="demo@example.com", hashed_password="pw")
             db.add(user)
             await db.flush()
-            
+
         matrix = await db.get(Matrix, 1)
         if not matrix:
             matrix = Matrix(id=1, name="Ma trận Demo", description="")
             db.add(matrix)
             await db.flush()
-            
+
         # Create a Demo Exam
         exam = Exam(
             name="[Demo] Kỳ thi Đánh giá Năng lực - Dữ liệu Mẫu",
@@ -60,42 +63,45 @@ async def seed_demo():
         )
         db.add(exam)
         await db.flush()
-        
+
         exam_form = ExamForm(exam_id=exam.id, code="DEMO_101", is_original=True)
         db.add(exam_form)
         await db.flush()
-        
+
         # We need 120 questions. Let's fetch 120 existing questions or create dummies
         q_result = await db.execute(select(Question).limit(120))
         questions = q_result.scalars().all()
-        
+
         while len(questions) < 120:
             q = Question(content=f"Câu hỏi Demo {len(questions)+1}", level=1)
             db.add(q)
             await db.flush()
-            
+
             # 4 answers
             for idx in range(4):
-                a = Answer(question_id=q.id, content=f"Đáp án {idx+1}", is_correct=(idx==0))
+                a = Answer(question_id=q.id, content=f"Đáp án {idx+1}", is_correct=(idx == 0))
                 db.add(a)
             questions.append(q)
             await db.flush()
-            
+
         # Create form questions
         form_questions = []
         for i in range(120):
             part = 1
-            if i >= 30: part = 2
-            if i >= 60: part = 3
-            if i >= 90: part = 4
-            fq = ExamFormQuestion(exam_form_id=exam_form.id, question_id=questions[i].id, position=i+1, part=part)
+            if i >= 30:
+                part = 2
+            if i >= 60:
+                part = 3
+            if i >= 90:
+                part = 4
+            fq = ExamFormQuestion(exam_form_id=exam_form.id, question_id=questions[i].id, position=i + 1, part=part)
             db.add(fq)
             form_questions.append(fq)
-        
+
         await db.flush()
-        
+
         print(f"Created Exam {exam.id} with Form {exam_form.id}")
-        
+
         # 2. Add Participants & Submissions
         participants_count = 0
         participants = []
@@ -105,10 +111,10 @@ async def seed_demo():
             name = str(row[1]).strip()
             if pd.isna(name) or name == "nan" or name == "None":
                 continue
-                
+
             participant = ExamParticipant(
                 exam_id=exam.id,
-                user_id=1, # Mock user id
+                user_id=1,  # Mock user id
                 sbd=f"SBD_{stt}",
                 exam_form_id=exam_form.id,
                 status="SUBMITTED",
@@ -117,10 +123,10 @@ async def seed_demo():
             )
             participants.append(participant)
             rows_to_process.append((stt, row))
-            
+
         db.add_all(participants)
         await db.flush()
-        
+
         submissions = []
         for p in participants:
             submission = ExamSubmission(
@@ -128,16 +134,16 @@ async def seed_demo():
                 submit_time=p.submit_time
             )
             submissions.append(submission)
-            
+
         db.add_all(submissions)
         await db.flush()
-        
+
         results = []
         for sub, (stt, row) in zip(submissions, rows_to_process):
             # Add ExamResult (CTT scores)
             tho_toan = safe_float(row[2]) or 0
             tho_tdkh = safe_float(row[3]) or 0
-            
+
             # Extract responses if available
             resp_row = resp_df[resp_df['STT'] == float(stt)]
             item_scores = {}
@@ -151,7 +157,7 @@ async def seed_demo():
                         item_scores[str(i)] = int(val)
                 else:
                     item_scores[str(i)] = -1
-                    
+
             exam_result = ExamResult(
                 exam_submission_id=sub.id,
                 ctt_score_part1=tho_toan,
@@ -162,20 +168,21 @@ async def seed_demo():
             )
             results.append(exam_result)
             participants_count += 1
-            
+
         db.add_all(results)
         await db.flush()
         # 3. Mark exam as COMPLETED to trigger IRT
         exam.status = ExamStatus.COMPLETED
         await db.commit()
-        
+
         print(f"Finished inserting {participants_count} participants. Triggering Celery Task...")
-        task = run_irt_calibration_task.delay(exam.id)
+        task = run_irt_task.delay(exam.id, "demo-irt-task")
         irt_task = IrtTask(exam_id=exam.id, celery_task_id=task.id, status="PENDING")
         db.add(irt_task)
         await db.commit()
-        
+
         print(f"Task triggered! Task ID: {task.id}")
+
 
 if __name__ == "__main__":
     asyncio.run(seed_demo())
